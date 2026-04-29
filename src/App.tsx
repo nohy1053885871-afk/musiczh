@@ -7,10 +7,7 @@ import {
   type NcmErrorCode,
 } from './lib/ncm'
 
-// ========== 限制 ==========
-// 一次最多处理多少个文件（保护浏览器内存 + UI 性能）
 const MAX_FILES = 50
-// 单个文件最大字节数（100MB，覆盖 99% NCM 文件）
 const MAX_FILE_SIZE = 100 * 1024 * 1024
 
 type FileStatus = 'pending' | 'decrypting' | 'done' | 'failed'
@@ -50,10 +47,7 @@ function triggerDownload(blob: Blob, filename: string) {
 }
 
 function dedupeName(name: string, used: Set<string>): string {
-  if (!used.has(name)) {
-    used.add(name)
-    return name
-  }
+  if (!used.has(name)) { used.add(name); return name }
   const dot = name.lastIndexOf('.')
   const base = dot > 0 ? name.slice(0, dot) : name
   const ext = dot > 0 ? name.slice(dot) : ''
@@ -64,17 +58,548 @@ function dedupeName(name: string, used: Set<string>): string {
   return final
 }
 
+// ── VinylRecord ────────────────────────────────────────────────────────────
+function VinylRecord({
+  spinning,
+  size = 340,
+  currentCoverUrl,
+  currentTitle,
+}: {
+  spinning: boolean
+  size?: number
+  currentCoverUrl: string | null
+  currentTitle: string
+}) {
+  const labelBg = 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14 95%)'
+  const labelShadow =
+    'inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -3px 8px rgba(0,0,0,0.35), 0 0 0 2px rgba(0,0,0,0.5)'
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      {/* drop shadow */}
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 55%, rgba(0,0,0,0.18), rgba(0,0,0,0) 65%)',
+          filter: 'blur(8px)',
+          transform: 'translateY(8px) scale(0.96)',
+        }}
+      />
+      {/* disc */}
+      <div
+        className={`absolute inset-0 rounded-full ${spinning ? 'vinyl-spin' : ''}`}
+        style={{
+          background:
+            'radial-gradient(circle at 30% 25%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 28%), radial-gradient(circle at 50% 50%, #1a1a1a 0%, #0a0a0a 100%)',
+          boxShadow:
+            'inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 -10px 30px rgba(0,0,0,0.6), 0 14px 30px -10px rgba(0,0,0,0.45), 0 2px 0 rgba(255,255,255,0.5)',
+        }}
+      >
+        {/* groove rings */}
+        <svg
+          viewBox="0 0 200 200"
+          className="absolute inset-0 w-full h-full"
+          aria-hidden
+        >
+          <defs>
+            <radialGradient id="grooveSheen" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+              <stop offset="48%" stopColor="rgba(255,255,255,0.04)" />
+              <stop offset="50%" stopColor="rgba(255,255,255,0.10)" />
+              <stop offset="52%" stopColor="rgba(255,255,255,0.04)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+            </radialGradient>
+          </defs>
+          {Array.from({ length: 32 }).map((_, i) => (
+            <circle
+              key={i}
+              cx="100"
+              cy="100"
+              r={38 + i * 1.6}
+              fill="none"
+              stroke="rgba(255,255,255,0.04)"
+              strokeWidth="0.3"
+            />
+          ))}
+          <circle cx="100" cy="100" r="92" fill="url(#grooveSheen)" />
+        </svg>
+
+        {/* center label */}
+        {currentCoverUrl ? (
+          <div
+            className="absolute rounded-full overflow-hidden"
+            style={{ inset: '32%', background: labelBg, boxShadow: labelShadow }}
+          >
+            <img
+              src={currentCoverUrl}
+              alt={currentTitle}
+              className="absolute inset-0 w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+            <div
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full z-10"
+              style={{
+                width: size * 0.05,
+                height: size * 0.05,
+                background: '#0a0a0a',
+                boxShadow:
+                  'inset 0 1px 2px rgba(255,255,255,0.4), 0 0 0 1px rgba(0,0,0,0.6)',
+              }}
+            />
+          </div>
+        ) : (
+          <div
+            className="absolute rounded-full flex items-center justify-center"
+            style={{ inset: '32%', background: labelBg, boxShadow: labelShadow }}
+          >
+            <div className="text-center" style={{ color: '#F4E4C8' }}>
+              <div
+                className="leading-none"
+                style={{
+                  fontSize: size * 0.085,
+                  fontFamily: "'Noto Serif SC', serif",
+                  fontWeight: 600,
+                }}
+              >
+                拾音
+              </div>
+              <div
+                className="mt-1.5 uppercase opacity-70"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: size * 0.022,
+                  letterSpacing: '0.3em',
+                }}
+              >
+                music_X → mp3
+              </div>
+              <div
+                className="mt-2 mx-auto rounded-full"
+                style={{
+                  width: size * 0.05,
+                  height: size * 0.05,
+                  background: '#0a0a0a',
+                  boxShadow:
+                    'inset 0 1px 2px rgba(255,255,255,0.4), 0 0 0 1px rgba(0,0,0,0.6)',
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── DropZone ───────────────────────────────────────────────────────────────
+function DropZone({
+  onFiles,
+  isDragging,
+  setIsDragging,
+  queueLeft,
+}: {
+  onFiles: (files: FileList | File[]) => void
+  isDragging: boolean
+  setIsDragging: (v: boolean) => void
+  queueLeft: number
+}) {
+  const embossedShadow =
+    'inset 0 2px 4px rgba(120,90,50,0.18), inset 0 -1px 0 rgba(255,255,255,0.7), 0 1px 0 rgba(255,255,255,0.9)'
+  const dragShadow =
+    'inset 0 2px 8px rgba(200,102,44,0.25), inset 0 0 0 2px rgba(200,102,44,0.4), 0 0 0 6px rgba(200,102,44,0.08)'
+
+  return (
+    <label
+      onDragOver={(e) => {
+        e.preventDefault()
+        setIsDragging(true)
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault()
+        setIsDragging(false)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        setIsDragging(false)
+        if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files)
+      }}
+      className="relative rounded-3xl cursor-pointer transition-all duration-300 select-none group flex flex-col items-center justify-center w-full"
+      style={{
+        background: isDragging
+          ? 'linear-gradient(180deg, #FCEFD9 0%, #F8E3BF 100%)'
+          : 'linear-gradient(180deg, #F4EAD5 0%, #ECDFC4 100%)',
+        boxShadow: isDragging ? dragShadow : embossedShadow,
+        padding: '40px 28px',
+        minHeight: '260px',
+      }}
+    >
+      <input
+        type="file"
+        multiple
+        accept=".ncm"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) onFiles(e.target.files)
+          e.target.value = ''
+        }}
+      />
+      <div className="flex flex-col items-center justify-center text-center gap-3.5">
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
+          style={{
+            background: isDragging
+              ? 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)'
+              : 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+            boxShadow: isDragging
+              ? 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.15), 0 4px 12px rgba(200,102,44,0.35)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -2px 4px rgba(120,90,50,0.15), 0 2px 6px rgba(120,90,50,0.1)',
+          }}
+        >
+          {/* upload arrow */}
+          <svg
+            viewBox="0 0 24 24"
+            className="w-7 h-7"
+            fill="none"
+            stroke={isDragging ? '#FFF' : '#7B3A14'}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 16V4" />
+            <path d="M6 10l6-6 6 6" />
+            <path d="M4 20h16" />
+          </svg>
+        </div>
+        <div>
+          <div className="text-lg sm:text-xl font-semibold text-stone-800 mb-0.5">
+            {isDragging
+              ? '松手即可开始转换'
+              : '把 .ncm 文件拖到这里或点击上传，转为 MP3'}
+          </div>
+          <div
+            className="text-[12px] text-stone-500"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            支持多文件 · 单个最大 100MB ·{' '}
+            {queueLeft === MAX_FILES ? '每次最多 50 个' : `还可上传 ${queueLeft} 个`}
+          </div>
+        </div>
+      </div>
+    </label>
+  )
+}
+
+// ── FileRow ────────────────────────────────────────────────────────────────
+function FileRow({
+  file,
+  onRetry,
+  onRemove,
+  onNotify,
+}: {
+  file: TrackedFile
+  onRetry: (id: string) => void
+  onRemove: (id: string) => void
+  onNotify: (msg: string) => void
+}) {
+  const meta = file.result?.meta
+  const title = meta?.musicName || file.file.name.replace(/\.ncm$/i, '')
+  const artist = meta?.artist?.map((a) => a[0]).join(', ')
+  const isFailed = file.status === 'failed'
+  const isDecrypting = file.status === 'decrypting'
+  const isDone = file.status === 'done'
+  const format = file.result?.format
+  const [justDownloaded, setJustDownloaded] = useState(false)
+
+  useEffect(() => {
+    if (!justDownloaded) return
+    const t = setTimeout(() => setJustDownloaded(false), 1500)
+    return () => clearTimeout(t)
+  }, [justDownloaded])
+
+  return (
+    <div
+      className="px-4 py-3 rounded-2xl flex items-center gap-3 sm:gap-4 transition-all"
+      style={{
+        background: isDone
+          ? 'linear-gradient(180deg, #F6EFE0 0%, #EFE4CD 100%)'
+          : isFailed
+            ? 'linear-gradient(180deg, #FBEEE6 0%, #F4E0D2 100%)'
+            : 'linear-gradient(180deg, #FBF6EC 0%, #F2EADB 100%)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(120,90,50,0.06), 0 1px 2px rgba(120,90,50,0.08)',
+      }}
+    >
+      {/* cover or mini disc */}
+      <div className="relative shrink-0">
+        {isDone && file.coverUrl ? (
+          <img
+            src={file.coverUrl}
+            alt=""
+            className="w-12 h-12 rounded-lg object-cover"
+            style={{
+              boxShadow:
+                'inset 0 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.15)',
+            }}
+          />
+        ) : (
+          <div
+            className={`w-12 h-12 rounded-full relative ${isDecrypting ? 'vinyl-spin-fast' : ''}`}
+            style={{
+              background: 'radial-gradient(circle at 35% 30%, #2a2a2a, #0a0a0a 80%)',
+              boxShadow:
+                'inset 0 -2px 4px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div
+              className="absolute rounded-full"
+              style={{
+                inset: '28%',
+                background: isFailed
+                  ? 'radial-gradient(circle at 35% 30%, #B85A4A, #6B2A22)'
+                  : isDone
+                    ? 'radial-gradient(circle at 35% 30%, #4D8B5C, #2A5238)'
+                    : 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14)',
+              }}
+            />
+            <div
+              className="absolute rounded-full"
+              style={{ inset: '44%', background: '#0a0a0a' }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* title + meta */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <div className="text-[14px] font-medium text-stone-800 truncate">{title}</div>
+          {format && (
+            <span
+              className="text-[10px] uppercase px-1.5 py-0.5 rounded shrink-0"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                background: 'rgba(120,90,50,0.1)',
+                color: '#7B3A14',
+              }}
+            >
+              {format}
+            </span>
+          )}
+        </div>
+        {isDecrypting ? (
+          <div className="mt-1.5 flex items-center gap-2">
+            <div
+              className="flex-1 h-1.5 rounded-full overflow-hidden"
+              style={{
+                background: 'rgba(120,90,50,0.15)',
+                boxShadow: 'inset 0 1px 1px rgba(120,90,50,0.18)',
+              }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-150"
+                style={{
+                  width: `${file.progress * 100}%`,
+                  background: 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)',
+                }}
+              />
+            </div>
+            <span
+              className="text-[11px] text-stone-500 shrink-0 w-10 text-right"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              {Math.round(file.progress * 100)}%
+            </span>
+          </div>
+        ) : isFailed ? (
+          <div
+            className="mt-0.5 text-[11px] truncate"
+            style={{ color: '#A53D2A' }}
+          >
+            {file.errorMessage || '解析失败'}
+          </div>
+        ) : (
+          <div
+            className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500 truncate"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            {artist && <span className="truncate text-stone-600">{artist}</span>}
+            {artist && <span className="text-stone-300">·</span>}
+            <span>{formatSize(file.file.size)}</span>
+            {file.status === 'pending' && (
+              <>
+                <span className="text-stone-300">·</span>
+                <span style={{ color: '#A89272' }}>排队中</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* actions */}
+      <div className="shrink-0 flex items-center gap-1.5">
+        {isDone && file.result && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              triggerDownload(file.result!.audio, file.result!.suggestedName)
+              onNotify('已开始下载')
+              setJustDownloaded(true)
+            }}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+            style={{
+              background: justDownloaded
+                ? 'linear-gradient(180deg, #5DAA70 0%, #3A6B4A 100%)'
+                : 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)',
+              boxShadow: justDownloaded
+                ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 1px rgba(0,0,0,0.15), 0 1px 3px rgba(58,107,74,0.3)'
+                : 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 1px rgba(0,0,0,0.15), 0 1px 3px rgba(200,102,44,0.3)',
+            }}
+          >
+            <span className="inline-flex items-center gap-1">
+              {justDownloaded ? (
+                <>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12l5 5L20 7" />
+                  </svg>
+                  已下载
+                </>
+              ) : (
+                <>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 4v12" />
+                    <path d="M6 10l6 6 6-6" />
+                    <path d="M4 20h16" />
+                  </svg>
+                  下载
+                </>
+              )}
+            </span>
+          </button>
+        )}
+        {isFailed && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRetry(file.id)
+            }}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700"
+            style={{
+              background: 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+              boxShadow:
+                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(120,90,50,0.15), 0 1px 2px rgba(120,90,50,0.15)',
+            }}
+          >
+            重试
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove(file.id)
+          }}
+          className="w-7 h-7 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-900/5 transition-colors"
+          aria-label="移除"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 6l12 12M6 18L18 6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── ClearAllButton ─────────────────────────────────────────────────────────
+function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const t = setTimeout(() => setOpen(false), 4000)
+    return () => clearTimeout(t)
+  }, [open])
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(true)}
+        className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-600 hover:text-stone-900 transition"
+      >
+        全部清空
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 top-full z-20 mt-2 w-48 rounded-2xl p-3"
+            style={{
+              background: 'linear-gradient(180deg, #FBF6EC 0%, #F2EADB 100%)',
+              boxShadow:
+                '0 12px 24px -8px rgba(120,90,50,0.35), 0 0 0 1px rgba(120,90,50,0.1), inset 0 1px 0 rgba(255,255,255,0.9)',
+            }}
+          >
+            <div className="text-xs text-stone-700">确认清空所有文件？</div>
+            <div className="mt-2.5 flex justify-end gap-3">
+              <button
+                onClick={() => setOpen(false)}
+                className="text-xs text-stone-500 hover:text-stone-700"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  onConfirm()
+                  setOpen(false)
+                }}
+                className="text-xs font-semibold"
+                style={{ color: '#A53D2A' }}
+              >
+                清空
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const [files, setFiles] = useState<TrackedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [isZipping, setIsZipping] = useState(false)
   const [zipProgress, setZipProgress] = useState(0)
-  // 文件被拒绝时的提示横幅，5 秒后自动消失
   const [warning, setWarning] = useState<string | null>(null)
-  // 底部 toast，2 秒后自动消失
   const [toast, setToast] = useState<string | null>(null)
-  // 「全部清空」二次确认状态，4 秒后自动取消
-  const [confirmingClear, setConfirmingClear] = useState(false)
 
   const notify = useCallback((msg: string) => setToast(msg), [])
 
@@ -103,13 +628,8 @@ function App() {
           })
           const coverUrl = result.cover
             ? URL.createObjectURL(result.cover)
-            : undefined
-          updateFile(next.id, {
-            status: 'done',
-            result,
-            coverUrl,
-            progress: 1,
-          })
+            : result.meta.albumPic || undefined
+          updateFile(next.id, { status: 'done', result, coverUrl, progress: 1 })
         } catch (err) {
           let code: NcmErrorCode = 'UNKNOWN'
           let message = '未知错误'
@@ -119,11 +639,7 @@ function App() {
           } else if (err instanceof Error) {
             message = `出错了：${err.message}`
           }
-          updateFile(next.id, {
-            status: 'failed',
-            errorCode: code,
-            errorMessage: message,
-          })
+          updateFile(next.id, { status: 'failed', errorCode: code, errorMessage: message })
         }
       }
     } finally {
@@ -131,41 +647,29 @@ function App() {
     }
   }, [updateFile])
 
-  // 添加文件，应用限制规则，返回被跳过的原因
   const addFiles = useCallback(
     (incoming: FileList | File[]) => {
       const reasons: string[] = []
       let candidates = Array.from(incoming)
-
-      // 1. 过滤非 .ncm 文件
       const wrongExt = candidates.filter((f) => !/\.ncm$/i.test(f.name))
       if (wrongExt.length) reasons.push(`${wrongExt.length} 个非 .ncm 文件`)
       candidates = candidates.filter((f) => /\.ncm$/i.test(f.name))
-
-      // 2. 过滤超大文件
       const oversize = candidates.filter((f) => f.size > MAX_FILE_SIZE)
-      if (oversize.length) {
-        reasons.push(`${oversize.length} 个文件超过 100MB`)
-      }
+      if (oversize.length) reasons.push(`${oversize.length} 个文件超过 100MB`)
       candidates = candidates.filter((f) => f.size <= MAX_FILE_SIZE)
-
-      // 3. 限制队列总数
       const currentCount = filesRef.current.length
       const remaining = MAX_FILES - currentCount
+      let hitLimit = false
       if (candidates.length > remaining) {
-        const skipped = candidates.length - remaining
-        reasons.push(`${skipped} 个文件超过 50 个上限`)
+        hitLimit = true
+        reasons.push(`${candidates.length - remaining} 个文件超过 50 个上限`)
         candidates = candidates.slice(0, Math.max(0, remaining))
       }
-
       if (reasons.length) {
-        setWarning(`已跳过：${reasons.join('；')}`)
-      } else {
-        setWarning(null)
-      }
-
+        const suffix = hitLimit ? '，请下载并清空当前列表后继续' : ''
+        setWarning(`已跳过：${reasons.join('；')}${suffix}`)
+      } else setWarning(null)
       if (candidates.length === 0) return
-
       const list: TrackedFile[] = candidates.map((f) => ({
         id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
         file: f,
@@ -178,43 +682,17 @@ function App() {
     [processQueue],
   )
 
-  // 警告横幅 5 秒自动消失
   useEffect(() => {
     if (!warning) return
     const t = setTimeout(() => setWarning(null), 5000)
     return () => clearTimeout(t)
   }, [warning])
 
-  // toast 2 秒自动消失
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(null), 2000)
     return () => clearTimeout(t)
   }, [toast])
-
-  // 二次确认 4 秒后自动取消
-  useEffect(() => {
-    if (!confirmingClear) return
-    const t = setTimeout(() => setConfirmingClear(false), 4000)
-    return () => clearTimeout(t)
-  }, [confirmingClear])
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLLabelElement>) => {
-      e.preventDefault()
-      setIsDragging(false)
-      if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files)
-    },
-    [addFiles],
-  )
-
-  const handleSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.length) addFiles(e.target.files)
-      e.target.value = ''
-    },
-    [addFiles],
-  )
 
   const retryFile = useCallback(
     (id: string) => {
@@ -229,7 +707,6 @@ function App() {
     [updateFile, processQueue],
   )
 
-  // 删除单条记录
   const removeFile = useCallback((id: string) => {
     setFiles((prev) => {
       const target = prev.find((f) => f.id === id)
@@ -252,7 +729,6 @@ function App() {
   const overallProgress = total === 0 ? 0 : (doneCount + failedCount) / total
   const allDone = total > 0 && doneCount + failedCount === total
 
-  // 下载全部已完成文件（每个之间留一点间隔，避免浏览器拒绝多文件下载）
   const downloadAllSeparate = async () => {
     const doneFiles = files.filter((f) => f.status === 'done' && f.result)
     if (doneFiles.length === 0) return
@@ -263,7 +739,6 @@ function App() {
     }
   }
 
-  // 打包成 ZIP 一次下载
   const downloadAllAsZip = async () => {
     const doneFiles = files.filter((f) => f.status === 'done' && f.result)
     if (doneFiles.length === 0) return
@@ -280,10 +755,7 @@ function App() {
         { type: 'blob', compression: 'STORE' },
         (m) => setZipProgress(m.percent / 100),
       )
-      triggerDownload(
-        blob,
-        `音乐转换_${doneFiles.length}首_${todayStamp()}.zip`,
-      )
+      triggerDownload(blob, `音乐转换_${doneFiles.length}首_${todayStamp()}.zip`)
       notify('ZIP 已开始下载')
     } finally {
       setIsZipping(false)
@@ -296,143 +768,232 @@ function App() {
       if (f.coverUrl) URL.revokeObjectURL(f.coverUrl)
     })
     setFiles([])
-    setConfirmingClear(false)
+  }
+
+  const anyDecrypting = files.some((f) => f.status === 'decrypting')
+  const showVinylSpin = anyDecrypting || isDragging
+  const queueLeft = MAX_FILES - files.length
+  const currentlyDecrypting = files.find((f) => f.status === 'decrypting')
+  const currentCoverUrl = currentlyDecrypting?.coverUrl ?? null
+  const currentTitle = currentlyDecrypting?.result?.meta?.musicName ?? ''
+
+  const secondaryBtnStyle = {
+    background: 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+    boxShadow:
+      'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(120,90,50,0.15), 0 1px 2px rgba(120,90,50,0.15)',
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <header className="mb-10 text-center">
-          <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-            NCM 转 MP3 转换工具
-          </h1>
-          <p className="mt-3 text-sm text-slate-500 sm:text-base">
-            文件全部在你的浏览器本地处理，不会上传到任何服务器。
-          </p>
+    <div
+      className="min-h-screen w-full"
+      style={{
+        background:
+          'radial-gradient(ellipse 120% 80% at 50% 0%, #FBF4E4 0%, #F4EAD5 60%, #ECDFC4 100%)',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      {/* paper noise texture */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.35]"
+        aria-hidden
+        style={{
+          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.35 0 0 0 0 0.20 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")`,
+        }}
+      />
+
+      <div className="relative max-w-5xl mx-auto px-5 sm:px-8 pt-7 pb-16">
+        {/* Header */}
+        <header className="flex items-start justify-between mb-8 sm:mb-12 gap-4">
+          <div className="flex items-center gap-3">
+            {/* mini vinyl logo */}
+            <div className="relative w-10 h-10 shrink-0">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'radial-gradient(circle at 35% 30%, #2a2a2a, #0a0a0a 80%)',
+                  boxShadow:
+                    'inset 0 -1px 2px rgba(0,0,0,0.5), 0 2px 4px rgba(120,90,50,0.2)',
+                }}
+              />
+              <div
+                className="absolute rounded-full"
+                style={{
+                  inset: '28%',
+                  background: 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14)',
+                }}
+              />
+              <div
+                className="absolute rounded-full"
+                style={{ inset: '44%', background: '#0a0a0a' }}
+              />
+            </div>
+            <div className="min-w-0">
+              <div
+                className="text-[18px] font-semibold text-stone-800 tracking-tight leading-tight"
+                style={{ fontFamily: "'Noto Serif SC', serif" }}
+              >
+                拾音
+              </div>
+              <div className="text-[12px] text-stone-600 leading-snug">
+                打破音频格式壁垒 ·{' '}
+                <span className="text-stone-500">永无广告 · 永久免费</span>
+              </div>
+            </div>
+          </div>
+          <div
+            className="text-[11px] text-stone-500 shrink-0 mt-1"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            v0.1
+          </div>
         </header>
 
-        <label
-          onDragOver={(e) => {
-            e.preventDefault()
-            setIsDragging(true)
-          }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          className={[
-            'flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed bg-white px-6 py-16 text-center transition',
-            isDragging
-              ? 'border-indigo-500 bg-indigo-50'
-              : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50',
-          ].join(' ')}
-        >
-          <input
-            type="file"
-            multiple
-            accept=".ncm"
-            className="hidden"
-            onChange={handleSelect}
-          />
-          <div className="text-5xl">🎵</div>
-          <div className="mt-4 text-base font-medium text-slate-700">
-            把 .ncm 文件拖到这里，或点击选择
+        {/* Hero: vinyl left, drop zone right */}
+        <section className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 items-stretch mb-8 sm:mb-12">
+          <div className="flex justify-center md:justify-start items-center">
+            <div className="block sm:hidden">
+              <VinylRecord
+                spinning={showVinylSpin}
+                size={220}
+                currentCoverUrl={currentCoverUrl}
+                currentTitle={currentTitle}
+              />
+            </div>
+            <div className="hidden sm:block md:hidden">
+              <VinylRecord
+                spinning={showVinylSpin}
+                size={300}
+                currentCoverUrl={currentCoverUrl}
+                currentTitle={currentTitle}
+              />
+            </div>
+            <div className="hidden md:block">
+              <VinylRecord
+                spinning={showVinylSpin}
+                size={340}
+                currentCoverUrl={currentCoverUrl}
+                currentTitle={currentTitle}
+              />
+            </div>
           </div>
-          <div className="mt-1 text-xs text-slate-400">
-            支持多文件 · 单个最大 100MB · 一次最多 50 个
-          </div>
-        </label>
 
+          <div className="flex flex-col gap-3 max-w-xl w-full">
+            <div className="flex-1 flex">
+              <DropZone
+                onFiles={addFiles}
+                isDragging={isDragging}
+                setIsDragging={setIsDragging}
+                queueLeft={queueLeft}
+              />
+            </div>
+            <div
+              className="flex items-center justify-between gap-3 flex-wrap text-[11px] text-stone-500"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              <span>
+                目前支持 网易云 .ncm
+                <span className="mx-1.5 text-stone-300">·</span>
+                <span className="text-stone-400">QQ 音乐 / 酷我 即将到来</span>
+              </span>
+              {currentlyDecrypting && (
+                <span className="text-stone-600">
+                  正在转换 ·{' '}
+                  <span className="text-stone-800">{currentTitle}</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Warning banner */}
         {warning && (
-          <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            {warning}
+          <div
+            className="mb-4 rounded-2xl px-4 py-2.5 text-[12px]"
+            style={{
+              background: 'linear-gradient(180deg, #FBF1DC 0%, #F5E5BE 100%)',
+              color: '#7B5A14',
+              boxShadow:
+                'inset 0 1px 0 rgba(255,255,255,0.7), inset 0 0 0 1px rgba(180,130,40,0.15)',
+            }}
+          >
+            ⚠ {warning}
           </div>
         )}
 
+        {/* Batch list */}
         {files.length > 0 && (
-          <section className="mt-8">
-            <div className="mb-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-medium text-slate-600">
+          <section
+            className="rounded-3xl p-4 sm:p-5"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(248,238,218,0.5) 100%)',
+              boxShadow:
+                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(120,90,50,0.08), 0 1px 2px rgba(120,90,50,0.06)',
+            }}
+          >
+            {/* list header */}
+            <div className="flex items-center justify-between mb-3 px-1 gap-2 flex-wrap">
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <h2 className="text-sm font-semibold text-stone-800">转换队列</h2>
+                <span
+                  className="text-[11px] text-stone-500"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
                   {total} 个文件 · 已完成 {doneCount}
                   {failedCount > 0 && (
-                    <span className="ml-1 text-rose-600">
-                      · {failedCount} 失败
-                    </span>
+                    <span style={{ color: '#A53D2A' }}> · {failedCount} 失败</span>
                   )}
-                </h2>
-                <div className="flex items-center gap-3">
-                  {doneCount >= 2 && (
-                    <>
-                      <button
-                        onClick={downloadAllSeparate}
-                        disabled={isZipping}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:text-slate-400"
-                      >
-                        下载全部
-                      </button>
-                      <button
-                        onClick={downloadAllAsZip}
-                        disabled={isZipping}
-                        className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:text-slate-400"
-                      >
-                        {isZipping
-                          ? `打包中… ${Math.round(zipProgress * 100)}%`
-                          : '打包下载 (ZIP)'}
-                      </button>
-                    </>
-                  )}
-                  <div className="relative">
-                    <button
-                      onClick={() => setConfirmingClear(true)}
-                      className="text-xs text-slate-500 hover:text-rose-600"
-                    >
-                      全部清空
-                    </button>
-                    {confirmingClear && (
-                      <>
-                        {/* 透明背景层，点击空白处关闭气泡 */}
-                        <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setConfirmingClear(false)}
-                        />
-                        {/* 浮出确认气泡 */}
-                        <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
-                          <div className="text-xs text-slate-700">
-                            确认清空所有文件？
-                          </div>
-                          <div className="mt-3 flex justify-end gap-3">
-                            <button
-                              onClick={() => setConfirmingClear(false)}
-                              className="text-xs text-slate-500 hover:text-slate-700"
-                            >
-                              取消
-                            </button>
-                            <button
-                              onClick={handleClearAll}
-                              className="text-xs font-medium text-rose-600 hover:text-rose-700"
-                            >
-                              清空
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+                </span>
               </div>
-              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className={[
-                    'h-full transition-all duration-300',
-                    allDone && failedCount === 0
-                      ? 'bg-emerald-500'
-                      : 'bg-indigo-500',
-                  ].join(' ')}
-                  style={{ width: `${overallProgress * 100}%` }}
-                />
+              <div className="flex items-center gap-1">
+                {doneCount >= 2 && (
+                  <>
+                    <button
+                      onClick={downloadAllSeparate}
+                      disabled={isZipping}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                      style={secondaryBtnStyle}
+                    >
+                      下载全部
+                    </button>
+                    <button
+                      onClick={downloadAllAsZip}
+                      disabled={isZipping}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                      style={secondaryBtnStyle}
+                    >
+                      {isZipping
+                        ? `打包中… ${Math.round(zipProgress * 100)}%`
+                        : '打包下载 (ZIP)'}
+                    </button>
+                  </>
+                )}
+                <ClearAllButton onConfirm={handleClearAll} />
               </div>
             </div>
 
-            <ul className="divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {/* overall progress bar */}
+            <div
+              className="mx-1 mb-3 h-1.5 rounded-full overflow-hidden"
+              style={{
+                background: 'rgba(120,90,50,0.12)',
+                boxShadow: 'inset 0 1px 1px rgba(120,90,50,0.15)',
+              }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: `${overallProgress * 100}%`,
+                  background:
+                    allDone && failedCount === 0
+                      ? 'linear-gradient(180deg, #5DAA70 0%, #3A6B4A 100%)'
+                      : 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)',
+                }}
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
               {files.map((f) => (
                 <FileRow
                   key={f.id}
@@ -442,151 +1003,30 @@ function App() {
                   onNotify={notify}
                 />
               ))}
-            </ul>
+            </div>
           </section>
         )}
 
-        <footer className="mt-12 text-center text-xs text-slate-400">
+        <footer className="mt-12 sm:mt-16 text-center text-[11px] text-stone-500">
           仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
         </footer>
       </div>
 
-      {/* 底部 toast */}
+      {/* Toast */}
       {toast && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+        <div
+          className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 py-2 rounded-full text-sm"
+          style={{
+            background: '#1a1a1a',
+            color: '#F4EAD5',
+            boxShadow:
+              '0 8px 24px -4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+          }}
+        >
           {toast}
         </div>
       )}
     </div>
-  )
-}
-
-function FileRow({
-  file: f,
-  onRetry,
-  onRemove,
-  onNotify,
-}: {
-  file: TrackedFile
-  onRetry: (id: string) => void
-  onRemove: (id: string) => void
-  onNotify: (msg: string) => void
-}) {
-  const meta = f.result?.meta
-  const title = meta?.musicName || f.file.name.replace(/\.ncm$/i, '')
-  const artist = meta?.artist?.map((a) => a[0]).join(', ')
-  const isFailed = f.status === 'failed'
-  // 下载按钮点击后的"已下载"状态，1.5 秒后恢复
-  const [justDownloaded, setJustDownloaded] = useState(false)
-  useEffect(() => {
-    if (!justDownloaded) return
-    const t = setTimeout(() => setJustDownloaded(false), 1500)
-    return () => clearTimeout(t)
-  }, [justDownloaded])
-
-  return (
-    <li className="px-4 py-3">
-      <div className="flex items-center gap-3">
-        <div
-          className={[
-            'h-12 w-12 flex-shrink-0 overflow-hidden rounded',
-            isFailed ? 'bg-rose-50' : 'bg-slate-100',
-          ].join(' ')}
-        >
-          {f.coverUrl ? (
-            <img
-              src={f.coverUrl}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div
-              className={[
-                'flex h-full w-full items-center justify-center text-lg',
-                isFailed ? 'text-rose-400' : 'text-slate-300',
-              ].join(' ')}
-            >
-              {isFailed ? '⚠' : '🎵'}
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-slate-800">
-            {title}
-          </div>
-          <div className="truncate text-xs text-slate-500">
-            {artist ? `${artist} · ` : ''}
-            {formatSize(f.file.size)}
-            {f.result?.format ? ` · ${f.result.format.toUpperCase()}` : ''}
-          </div>
-          {isFailed && f.errorMessage && (
-            <div
-              title={f.errorMessage}
-              className="mt-1 truncate text-xs text-rose-600"
-            >
-              {f.errorMessage}
-            </div>
-          )}
-        </div>
-
-        {/* 主操作 + 清除按钮 */}
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {f.status === 'pending' && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-              排队中
-            </span>
-          )}
-          {f.status === 'decrypting' && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
-              {Math.round(f.progress * 100)}%
-            </span>
-          )}
-          {f.status === 'done' && f.result && (
-            <button
-              onClick={() => {
-                triggerDownload(f.result!.audio, f.result!.suggestedName)
-                onNotify('已开始下载')
-                setJustDownloaded(true)
-              }}
-              className={[
-                'rounded-full px-3 py-1 text-xs font-medium text-white transition-all duration-200 active:scale-95',
-                justDownloaded
-                  ? 'bg-emerald-500 hover:bg-emerald-500'
-                  : 'bg-indigo-600 hover:bg-indigo-700',
-              ].join(' ')}
-            >
-              {justDownloaded ? '✓ 已下载' : '下载'}
-            </button>
-          )}
-          {isFailed && (
-            <button
-              onClick={() => onRetry(f.id)}
-              className="rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-700 transition hover:bg-rose-100"
-            >
-              重试
-            </button>
-          )}
-          {/* 清除按钮：始终显示 */}
-          <button
-            onClick={() => onRemove(f.id)}
-            title="移除此项"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-rose-600"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-
-      {f.status === 'decrypting' && (
-        <div className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full bg-amber-400 transition-all duration-150"
-            style={{ width: `${f.progress * 100}%` }}
-          />
-        </div>
-      )}
-    </li>
   )
 }
 
