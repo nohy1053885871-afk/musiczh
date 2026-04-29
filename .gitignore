@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+*.zip
+
+# Claude Code 本地工作目录（worktrees、会话状态）
+.claude/
 
 # Editor directories and files
 .vscode/*
