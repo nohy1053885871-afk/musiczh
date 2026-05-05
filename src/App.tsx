@@ -72,7 +72,7 @@ function VinylRecord({
   currentCoverUrl: string | null
   currentTitle: string
 }) {
-  const labelBg = 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14 95%)'
+  const labelBg = 'radial-gradient(circle at 35% 30%, #D42B10, #8A1A08 95%)'
   const labelShadow =
     'inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -3px 8px rgba(0,0,0,0.35), 0 0 0 2px rgba(0,0,0,0.5)'
 
@@ -95,7 +95,7 @@ function VinylRecord({
           background:
             'radial-gradient(circle at 30% 25%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 28%), radial-gradient(circle at 50% 50%, #1a1a1a 0%, #0a0a0a 100%)',
           boxShadow:
-            'inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 -10px 30px rgba(0,0,0,0.6), 0 14px 30px -10px rgba(0,0,0,0.45), 0 2px 0 rgba(255,255,255,0.5)',
+            'inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 -10px 30px rgba(0,0,0,0.6), 0 14px 30px -10px rgba(0,0,0,0.45), 0 2px 0 rgba(255,255,255,0.08)',
         }}
       >
         {/* groove rings */}
@@ -158,7 +158,7 @@ function VinylRecord({
             className="absolute rounded-full flex items-center justify-center"
             style={{ inset: '32%', background: labelBg, boxShadow: labelShadow }}
           >
-            <div className="text-center" style={{ color: '#F4E4C8' }}>
+            <div className="text-center" style={{ color: '#F4E0D8' }}>
               <div
                 className="leading-none"
                 style={{
@@ -210,9 +210,9 @@ function DropZone({
   queueLeft: number
 }) {
   const embossedShadow =
-    'inset 0 2px 4px rgba(120,90,50,0.18), inset 0 -1px 0 rgba(255,255,255,0.7), 0 1px 0 rgba(255,255,255,0.9)'
+    'inset 0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)'
   const dragShadow =
-    'inset 0 2px 8px rgba(200,102,44,0.25), inset 0 0 0 2px rgba(200,102,44,0.4), 0 0 0 6px rgba(200,102,44,0.08)'
+    'inset 0 2px 8px rgba(232,67,26,0.15), inset 0 0 0 2px rgba(232,67,26,0.4), 0 0 0 6px rgba(232,67,26,0.1)'
 
   return (
     <label
@@ -229,11 +229,11 @@ function DropZone({
         setIsDragging(false)
         if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files)
       }}
-      className="relative rounded-3xl cursor-pointer transition-all duration-300 select-none group flex flex-col items-center justify-center w-full"
+      className="relative rounded-2xl cursor-pointer transition-all duration-300 select-none group flex flex-col items-center justify-center w-full"
       style={{
         background: isDragging
-          ? 'linear-gradient(180deg, #FCEFD9 0%, #F8E3BF 100%)'
-          : 'linear-gradient(180deg, #F4EAD5 0%, #ECDFC4 100%)',
+          ? 'linear-gradient(180deg, #E2E0DA 0%, #DAD8D2 100%)'
+          : 'linear-gradient(180deg, #ECEAE6 0%, #E4E2DC 100%)',
         boxShadow: isDragging ? dragShadow : embossedShadow,
         padding: '40px 28px',
         minHeight: '260px',
@@ -251,14 +251,14 @@ function DropZone({
       />
       <div className="flex flex-col items-center justify-center text-center gap-3.5">
         <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
+          className="w-14 h-14 rounded-lg flex items-center justify-center transition-transform group-hover:-translate-y-0.5"
           style={{
             background: isDragging
-              ? 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)'
-              : 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+              ? 'linear-gradient(180deg, #E8431A 0%, #C4310E 100%)'
+              : 'linear-gradient(180deg, #F8F6F2 0%, #EAE8E4 100%)',
             boxShadow: isDragging
-              ? 'inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -2px 4px rgba(0,0,0,0.15), 0 4px 12px rgba(200,102,44,0.35)'
-              : 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -2px 4px rgba(120,90,50,0.15), 0 2px 6px rgba(120,90,50,0.1)',
+              ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 12px rgba(232,67,26,0.35)'
+              : 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -2px 4px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.1)',
           }}
         >
           {/* upload arrow */}
@@ -266,7 +266,7 @@ function DropZone({
             viewBox="0 0 24 24"
             className="w-7 h-7"
             fill="none"
-            stroke={isDragging ? '#FFF' : '#7B3A14'}
+            stroke={isDragging ? '#FFF' : '#1C1A18'}
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -277,14 +277,20 @@ function DropZone({
           </svg>
         </div>
         <div>
-          <div className="text-lg sm:text-xl font-semibold text-stone-800 mb-0.5">
+          <div
+            className="text-lg sm:text-xl font-medium mb-0.5"
+            style={{ color: '#1C1A18' }}
+          >
             {isDragging
               ? '松手即可开始转换'
               : '把音频文件拖到这里或点击上传，转为 MP3'}
           </div>
           <div
-            className="text-[12px] text-stone-500"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            className="text-[12px]"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              color: '#8A8680',
+            }}
           >
             支持多文件 · 单个最大 100MB ·{' '}
             {queueLeft === MAX_FILES ? '每次最多 50 个' : `还可上传 ${queueLeft} 个`}
@@ -328,15 +334,15 @@ function FileRow({
 
   return (
     <div
-      className="px-4 py-3 rounded-2xl flex items-center gap-3 sm:gap-4 transition-all"
+      className="px-4 py-3 rounded-xl flex items-center gap-3 sm:gap-4 transition-all"
       style={{
         background: isDone
-          ? 'linear-gradient(180deg, #F6EFE0 0%, #EFE4CD 100%)'
+          ? 'linear-gradient(180deg, #F0EEE9 0%, #E8E6E0 100%)'
           : isFailed
-            ? 'linear-gradient(180deg, #FBEEE6 0%, #F4E0D2 100%)'
-            : 'linear-gradient(180deg, #FBF6EC 0%, #F2EADB 100%)',
+            ? 'linear-gradient(180deg, #F4EEEC 0%, #EBE4E2 100%)'
+            : 'linear-gradient(180deg, #F8F6F2 0%, #F0EEE9 100%)',
         boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(120,90,50,0.06), 0 1px 2px rgba(120,90,50,0.08)',
+          'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.07)',
       }}
     >
       {/* cover / placeholder / mini disc */}
@@ -345,7 +351,7 @@ function FileRow({
           <img
             src={file.coverUrl}
             alt=""
-            className="w-12 h-12 rounded-lg object-cover"
+            className="w-12 h-12 rounded object-cover"
             style={{
               boxShadow:
                 'inset 0 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.15)',
@@ -354,11 +360,11 @@ function FileRow({
         ) : isDone ? (
           // 完成态但没拿到封面（如 KGM/VPR）：用音符占位，外形和封面一致
           <div
-            className="w-12 h-12 rounded-lg flex items-center justify-center"
+            className="w-12 h-12 rounded flex items-center justify-center"
             style={{
-              background: 'linear-gradient(180deg, #F4E4C8 0%, #E0CCA4 100%)',
+              background: 'linear-gradient(180deg, #ECEAE6 0%, #DDDAD3 100%)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 1px rgba(120,90,50,0.18), 0 1px 2px rgba(120,90,50,0.15)',
+                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.08)',
             }}
             aria-hidden
           >
@@ -366,7 +372,7 @@ function FileRow({
               viewBox="0 0 24 24"
               className="w-6 h-6"
               fill="none"
-              stroke="#7B3A14"
+              stroke="#1C1A18"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -405,14 +411,19 @@ function FileRow({
       {/* title + meta */}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
-          <div className="text-[14px] font-medium text-stone-800 truncate">{title}</div>
+          <div
+            className="text-[14px] font-medium truncate"
+            style={{ color: '#1C1A18' }}
+          >
+            {title}
+          </div>
           {format && (
             <span
               className="text-[10px] uppercase px-1.5 py-0.5 rounded shrink-0"
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                background: 'rgba(120,90,50,0.1)',
-                color: '#7B3A14',
+                background: 'rgba(232,67,26,0.10)',
+                color: '#C4310E',
               }}
             >
               {format}
@@ -424,22 +435,25 @@ function FileRow({
             <div
               className="flex-1 h-1.5 rounded-full overflow-hidden"
               style={{
-                background: 'rgba(120,90,50,0.15)',
-                boxShadow: 'inset 0 1px 1px rgba(120,90,50,0.18)',
+                background: 'rgba(0,0,0,0.08)',
+                boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.1)',
               }}
             >
               <div
                 className="h-full rounded-full transition-all duration-150"
                 style={{
                   width: `${file.progress * 100}%`,
-                  background: 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)',
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)',
+                  background: 'linear-gradient(180deg, #F05A2A 0%, #C4310E 100%)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2)',
                 }}
               />
             </div>
             <span
-              className="text-[11px] text-stone-500 shrink-0 w-14 text-right"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="text-[11px] shrink-0 w-14 text-right"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                color: '#8A8680',
+              }}
             >
               {isTranscoding && '转码 '}
               {Math.round(file.progress * 100)}%
@@ -448,22 +462,29 @@ function FileRow({
         ) : isFailed ? (
           <div
             className="mt-0.5 text-[11px] truncate"
-            style={{ color: '#A53D2A' }}
+            style={{ color: '#B83020' }}
           >
             {file.errorMessage || '解析失败'}
           </div>
         ) : (
           <div
-            className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500 truncate"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            className="mt-0.5 flex items-center gap-1.5 text-[11px] truncate"
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              color: '#8A8680',
+            }}
           >
-            {artist && <span className="truncate text-stone-600">{artist}</span>}
-            {artist && <span className="text-stone-300">·</span>}
+            {artist && (
+              <span className="truncate" style={{ color: '#8A8680' }}>
+                {artist}
+              </span>
+            )}
+            {artist && <span style={{ color: 'rgba(28,26,24,0.2)' }}>·</span>}
             <span>{formatSize(file.file.size)}</span>
             {file.status === 'pending' && (
               <>
-                <span className="text-stone-300">·</span>
-                <span style={{ color: '#A89272' }}>排队中</span>
+                <span style={{ color: 'rgba(28,26,24,0.2)' }}>·</span>
+                <span style={{ color: '#A0988E' }}>排队中</span>
               </>
             )}
           </div>
@@ -478,11 +499,12 @@ function FileRow({
               e.stopPropagation()
               onTranscode(file.id)
             }}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700 transition-all hover:-translate-y-0.5 active:translate-y-0"
+            className="px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-0.5 active:translate-y-0"
             style={{
-              background: 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+              color: '#1C1A18',
+              background: 'linear-gradient(180deg, #F4F2EE 0%, #EAE8E4 100%)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(120,90,50,0.15), 0 1px 2px rgba(120,90,50,0.15)',
+                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.1)',
             }}
             title={`将当前 ${format} 强制转码为 MP3（有损）`}
           >
@@ -497,14 +519,14 @@ function FileRow({
               onNotify('已开始下载')
               setJustDownloaded(true)
             }}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
+            className="px-3 py-1.5 rounded-md text-xs font-medium text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
             style={{
               background: justDownloaded
-                ? 'linear-gradient(180deg, #5DAA70 0%, #3A6B4A 100%)'
-                : 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)',
+                ? 'linear-gradient(180deg, #3A9B5C 0%, #236B3A 100%)'
+                : 'linear-gradient(180deg, #F05A2A 0%, #C4310E 100%)',
               boxShadow: justDownloaded
-                ? 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 1px rgba(0,0,0,0.15), 0 1px 3px rgba(58,107,74,0.3)'
-                : 'inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 1px rgba(0,0,0,0.15), 0 1px 3px rgba(200,102,44,0.3)',
+                ? 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 1px rgba(0,0,0,0.2), 0 1px 3px rgba(58,107,74,0.4)'
+                : 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -1px 1px rgba(0,0,0,0.2), 0 1px 3px rgba(232,67,26,0.35)',
             }}
           >
             <span className="inline-flex items-center gap-1">
@@ -550,11 +572,12 @@ function FileRow({
               e.stopPropagation()
               onRetry(file.id)
             }}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700"
+            className="px-3 py-1.5 rounded-md text-xs font-medium"
             style={{
-              background: 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+              color: '#B83020',
+              background: 'linear-gradient(180deg, #F4F2EE 0%, #EAE8E4 100%)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(120,90,50,0.15), 0 1px 2px rgba(120,90,50,0.15)',
+                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.1)',
             }}
           >
             重试
@@ -565,7 +588,8 @@ function FileRow({
             e.stopPropagation()
             onRemove(file.id)
           }}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 hover:bg-stone-900/5 transition-colors"
+          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 transition-colors"
+          style={{ color: '#A0988E' }}
           aria-label="移除"
         >
           <svg
@@ -598,7 +622,8 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
     <div className="relative">
       <button
         onClick={() => setOpen(true)}
-        className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-600 hover:text-stone-900 transition"
+        className="px-3 py-1.5 rounded-md text-xs font-medium transition"
+        style={{ color: '#8A8680' }}
       >
         全部清空
       </button>
@@ -606,18 +631,21 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div
-            className="absolute right-0 top-full z-20 mt-2 w-48 rounded-2xl p-3"
+            className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl p-3"
             style={{
-              background: 'linear-gradient(180deg, #FBF6EC 0%, #F2EADB 100%)',
+              background: 'linear-gradient(180deg, #F4F2EE 0%, #EAE8E4 100%)',
               boxShadow:
-                '0 12px 24px -8px rgba(120,90,50,0.35), 0 0 0 1px rgba(120,90,50,0.1), inset 0 1px 0 rgba(255,255,255,0.9)',
+                '0 12px 32px -8px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.9)',
             }}
           >
-            <div className="text-xs text-stone-700">确认清空所有文件？</div>
+            <div className="text-xs" style={{ color: '#1C1A18' }}>
+              确认清空所有文件？
+            </div>
             <div className="mt-2.5 flex justify-end gap-3">
               <button
                 onClick={() => setOpen(false)}
-                className="text-xs text-stone-500 hover:text-stone-700"
+                className="text-xs"
+                style={{ color: '#8A8680' }}
               >
                 取消
               </button>
@@ -627,7 +655,7 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
                   setOpen(false)
                 }}
                 className="text-xs font-semibold"
-                style={{ color: '#A53D2A' }}
+                style={{ color: '#B83020' }}
               >
                 清空
               </button>
@@ -864,9 +892,10 @@ function App() {
   const currentTitle = currentlyDecrypting?.result?.meta?.musicName ?? ''
 
   const secondaryBtnStyle = {
-    background: 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+    color: '#1C1A18',
+    background: 'linear-gradient(180deg, #F4F2EE 0%, #EAE8E4 100%)',
     boxShadow:
-      'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(120,90,50,0.15), 0 1px 2px rgba(120,90,50,0.15)',
+      'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.1)',
   }
 
   return (
@@ -874,7 +903,7 @@ function App() {
       className="min-h-screen w-full"
       style={{
         background:
-          'radial-gradient(ellipse 120% 80% at 50% 0%, #FBF4E4 0%, #F4EAD5 60%, #ECDFC4 100%)',
+          'radial-gradient(ellipse 140% 100% at 50% -10%, #F0EEE9 0%, #ECEAE6 40%, #E4E2DC 100%)',
         backgroundAttachment: 'fixed',
       }}
     >
@@ -883,57 +912,66 @@ function App() {
         className="fixed inset-0 pointer-events-none opacity-[0.35]"
         aria-hidden
         style={{
-          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.35 0 0 0 0 0.20 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")`,
+          backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.30 0 0 0 0 0.28 0 0 0 0 0.26 0 0 0 0.035 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")`,
         }}
       />
 
-      <div className="relative max-w-5xl mx-auto px-5 sm:px-8 pt-7 pb-16">
-        {/* Header */}
-        <header className="flex items-start justify-between mb-8 sm:mb-12 gap-4">
-          <div className="flex items-center gap-3">
-            {/* mini vinyl logo */}
-            <div className="relative w-10 h-10 shrink-0">
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: 'radial-gradient(circle at 35% 30%, #2a2a2a, #0a0a0a 80%)',
-                  boxShadow:
-                    'inset 0 -1px 2px rgba(0,0,0,0.5), 0 2px 4px rgba(120,90,50,0.2)',
-                }}
-              />
-              <div
-                className="absolute rounded-full"
-                style={{
-                  inset: '28%',
-                  background: 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14)',
-                }}
-              />
-              <div
-                className="absolute rounded-full"
-                style={{ inset: '44%', background: '#0a0a0a' }}
-              />
-            </div>
-            <div className="min-w-0">
-              <div
-                className="text-[18px] font-semibold text-stone-800 tracking-tight leading-tight"
-                style={{ fontFamily: "'Noto Serif SC', serif" }}
-              >
-                拾音
+      {/* Header: 全宽深色横幅 */}
+      <div className="relative w-full" style={{ background: '#1C1A18' }}>
+        <div className="max-w-5xl mx-auto px-5 sm:px-8">
+          <header className="flex items-center justify-between gap-4 py-3.5">
+            <div className="flex items-center gap-3">
+              {/* mini vinyl logo */}
+              <div className="relative w-10 h-10 shrink-0">
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background: 'radial-gradient(circle at 35% 30%, #2a2a2a, #0a0a0a 80%)',
+                    boxShadow:
+                      'inset 0 -1px 2px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.15)',
+                  }}
+                />
+                <div
+                  className="absolute rounded-full"
+                  style={{
+                    inset: '28%',
+                    background: 'radial-gradient(circle at 35% 30%, #E8431A, #A82C08)',
+                  }}
+                />
+                <div
+                  className="absolute rounded-full"
+                  style={{ inset: '44%', background: '#1C1A18' }}
+                />
               </div>
-              <div className="text-[12px] text-stone-600 leading-snug">
-                打破音频格式壁垒 ·{' '}
-                <span className="text-stone-500">永无广告 · 永久免费</span>
+              <div className="min-w-0">
+                <div
+                  className="text-[18px] font-semibold tracking-tight leading-tight"
+                  style={{ fontFamily: "'Noto Serif SC', serif", color: '#F4F2EE' }}
+                >
+                  拾音
+                </div>
+                <div className="text-[12px] leading-snug" style={{ color: '#8A8680' }}>
+                  打破音频格式壁垒 ·{' '}
+                  <span style={{ color: 'rgba(138,134,128,0.85)' }}>
+                    永无广告 · 永久免费
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <div
-            className="text-[11px] text-stone-500 shrink-0 mt-1"
-            style={{ fontFamily: "'JetBrains Mono', monospace" }}
-          >
-            v0.1.1
-          </div>
-        </header>
+            <div
+              className="text-[11px] shrink-0"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                color: '#6A6460',
+              }}
+            >
+              v0.1.1
+            </div>
+          </header>
+        </div>
+      </div>
 
+      <div className="relative max-w-5xl mx-auto px-5 sm:px-8 pt-8 pb-16">
         {/* Hero: vinyl left, drop zone right */}
         <section className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 items-stretch mb-8 sm:mb-12">
           <div className="flex justify-center md:justify-start items-center">
@@ -973,18 +1011,23 @@ function App() {
               />
             </div>
             <div
-              className="flex items-center justify-between gap-3 flex-wrap text-[11px] text-stone-500"
-              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              className="flex items-center justify-between gap-3 flex-wrap text-[11px]"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                color: '#6A6058',
+              }}
             >
               <span>
                 目前支持 网易云 .ncm / 酷狗 .kgm / .vpr
-                <span className="mx-1.5 text-stone-300">·</span>
-                <span className="text-stone-400">QQ 音乐 / 酷我 即将到来</span>
+                <span className="mx-1.5" style={{ color: 'rgba(28,26,24,0.2)' }}>
+                  ·
+                </span>
+                <span style={{ color: '#A0988E' }}>QQ 音乐 / 酷我 即将到来</span>
               </span>
               {currentlyDecrypting && (
-                <span className="text-stone-600">
+                <span style={{ color: '#6A6058' }}>
                   正在转换 ·{' '}
-                  <span className="text-stone-800">{currentTitle}</span>
+                  <span style={{ color: '#1C1A18' }}>{currentTitle}</span>
                 </span>
               )}
             </div>
@@ -996,10 +1039,10 @@ function App() {
           <div
             className="mb-4 rounded-2xl px-4 py-2.5 text-[12px]"
             style={{
-              background: 'linear-gradient(180deg, #FBF1DC 0%, #F5E5BE 100%)',
+              background: 'linear-gradient(180deg, #FBF0D8 0%, #F4E4B8 100%)',
               color: '#7B5A14',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.7), inset 0 0 0 1px rgba(180,130,40,0.15)',
+                'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(180,130,40,0.2)',
             }}
           >
             ⚠ {warning}
@@ -1009,25 +1052,33 @@ function App() {
         {/* Batch list */}
         {files.length > 0 && (
           <section
-            className="rounded-3xl p-4 sm:p-5"
+            className="rounded-2xl p-4 sm:p-5"
             style={{
               background:
-                'linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(248,238,218,0.5) 100%)',
+                'linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(0,0,0,0.02) 100%)',
               boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(120,90,50,0.08), 0 1px 2px rgba(120,90,50,0.06)',
+                'inset 0 1px 0 rgba(255,255,255,0.8), 0 0 0 1px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.05)',
             }}
           >
             {/* list header */}
             <div className="flex items-center justify-between mb-3 px-1 gap-2 flex-wrap">
               <div className="flex items-baseline gap-2.5 flex-wrap">
-                <h2 className="text-sm font-semibold text-stone-800">转换队列</h2>
+                <h2
+                  className="text-sm font-medium"
+                  style={{ color: '#1C1A18' }}
+                >
+                  转换队列
+                </h2>
                 <span
-                  className="text-[11px] text-stone-500"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  className="text-[11px]"
+                  style={{
+                    fontFamily: "'JetBrains Mono', monospace",
+                    color: '#8A8680',
+                  }}
                 >
                   {total} 个文件 · 已完成 {doneCount}
                   {failedCount > 0 && (
-                    <span style={{ color: '#A53D2A' }}> · {failedCount} 失败</span>
+                    <span style={{ color: '#B83020' }}> · {failedCount} 失败</span>
                   )}
                 </span>
               </div>
@@ -1037,7 +1088,7 @@ function App() {
                     <button
                       onClick={downloadAllSeparate}
                       disabled={isZipping}
-                      className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
                       style={secondaryBtnStyle}
                     >
                       下载全部
@@ -1045,7 +1096,7 @@ function App() {
                     <button
                       onClick={downloadAllAsZip}
                       disabled={isZipping}
-                      className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+                      className="px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
                       style={secondaryBtnStyle}
                     >
                       {isZipping
@@ -1062,8 +1113,8 @@ function App() {
             <div
               className="mx-1 mb-3 h-1.5 rounded-full overflow-hidden"
               style={{
-                background: 'rgba(120,90,50,0.12)',
-                boxShadow: 'inset 0 1px 1px rgba(120,90,50,0.15)',
+                background: 'rgba(0,0,0,0.08)',
+                boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.1)',
               }}
             >
               <div
@@ -1072,8 +1123,8 @@ function App() {
                   width: `${overallProgress * 100}%`,
                   background:
                     allDone && failedCount === 0
-                      ? 'linear-gradient(180deg, #5DAA70 0%, #3A6B4A 100%)'
-                      : 'linear-gradient(180deg, #E89455 0%, #C8662C 100%)',
+                      ? 'linear-gradient(180deg, #3A9B5C 0%, #236B3A 100%)'
+                      : 'linear-gradient(180deg, #F05A2A 0%, #C4310E 100%)',
                   boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)',
                 }}
               />
@@ -1094,7 +1145,10 @@ function App() {
           </section>
         )}
 
-        <footer className="mt-12 sm:mt-16 text-center text-[11px] text-stone-500">
+        <footer
+          className="mt-12 sm:mt-16 text-center text-[11px]"
+          style={{ color: '#A0988E' }}
+        >
           仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
         </footer>
       </div>
@@ -1102,10 +1156,10 @@ function App() {
       {/* Toast */}
       {toast && (
         <div
-          className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 py-2 rounded-full text-sm"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 py-2 rounded-lg text-sm"
           style={{
-            background: '#1a1a1a',
-            color: '#F4EAD5',
+            background: '#1C1A18',
+            color: '#F4F2EE',
             boxShadow:
               '0 8px 24px -4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
           }}
