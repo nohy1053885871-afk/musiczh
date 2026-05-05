@@ -21,6 +21,12 @@
 
 import aesjs from 'aes-js'
 import { ID3Writer } from 'browser-id3-writer'
+import {
+  DecryptError,
+  type AudioMeta,
+  type DecryptResult,
+  type ProgressCallback,
+} from './types'
 
 // 两个固定的 AES 密钥（来自网易云客户端，业内公开）
 const CORE_KEY = new Uint8Array([
@@ -32,48 +38,8 @@ const META_KEY = new Uint8Array([
   0x5c, 0x5d, 0x26, 0x30, 0x55, 0x3c, 0x27, 0x28,
 ])
 
-// 错误码：与 UI 友好提示一一对应
-export type NcmErrorCode =
-  | 'INVALID_HEADER' // 不是 NCM 文件
-  | 'FILE_TOO_SMALL' // 文件太小
-  | 'DECRYPT_FAILED' // 解密过程异常
-  | 'UNKNOWN' // 兜底
-
-export class NcmError extends Error {
-  code: NcmErrorCode
-  cause?: unknown
-  constructor(code: NcmErrorCode, message: string, cause?: unknown) {
-    super(message)
-    this.name = 'NcmError'
-    this.code = code
-    this.cause = cause
-  }
-}
-
-// 元数据 JSON 的常见字段
-export interface NcmMeta {
-  musicName?: string
-  artist?: [string, number][]
-  album?: string
-  format?: string
-  duration?: number
-  bitrate?: number
-  albumPic?: string
-}
-
-export interface DecryptResult {
-  audio: Blob
-  format: 'mp3' | 'flac'
-  meta: NcmMeta
-  cover: Blob | null
-  suggestedName: string
-}
-
-// 进度回调，传入 0 ~ 1 的进度值
-export type ProgressCallback = (progress: number) => void
-
 /**
- * 主入口。失败时抛出 NcmError。
+ * 主入口。失败时抛出 DecryptError。
  * @param file 浏览器 File 对象
  * @param onProgress 进度回调（可选）
  */
@@ -83,7 +49,7 @@ export async function decryptNcm(
 ): Promise<DecryptResult> {
   // ========== 0. 基础校验 ==========
   if (file.size < 1024) {
-    throw new NcmError(
+    throw new DecryptError(
       'FILE_TOO_SMALL',
       '文件太小，可能未下载完整或已损坏',
     )
@@ -93,7 +59,7 @@ export async function decryptNcm(
   try {
     buffer = await file.arrayBuffer()
   } catch (e) {
-    throw new NcmError('UNKNOWN', '读取文件失败', e)
+    throw new DecryptError('UNKNOWN', '读取文件失败', e)
   }
   const view = new DataView(buffer)
   let offset = 0
@@ -101,7 +67,7 @@ export async function decryptNcm(
   // ========== 1. 魔数校验 ==========
   const magic = bytesToString(new Uint8Array(buffer, 0, 8))
   if (magic !== 'CTENFDAM') {
-    throw new NcmError('INVALID_HEADER', '这不像是 NCM 文件')
+    throw new DecryptError('INVALID_HEADER', '这不像是 NCM 文件')
   }
   offset = 10
   onProgress?.(0.05)
@@ -117,7 +83,7 @@ export async function decryptNcm(
     const keyDecrypted = aesEcbDecrypt(keyEncrypted, CORE_KEY)
     rc4Key = keyDecrypted.slice(17)
   } catch (e) {
-    throw new NcmError(
+    throw new DecryptError(
       'DECRYPT_FAILED',
       '解密失败，文件可能已损坏或加密方式不同',
       e,
@@ -128,7 +94,7 @@ export async function decryptNcm(
   // ========== 3. 解出元数据 ==========
   const metaLen = view.getUint32(offset, true)
   offset += 4
-  let meta: NcmMeta = {}
+  let meta: AudioMeta = { source: 'ncm' }
   if (metaLen > 0) {
     const metaEncrypted = new Uint8Array(buffer.slice(offset, offset + metaLen))
     offset += metaLen
@@ -139,10 +105,10 @@ export async function decryptNcm(
       const metaJson = aesEcbDecrypt(b64Decoded, META_KEY)
       const jsonStr = new TextDecoder().decode(metaJson)
       const colonIdx = jsonStr.indexOf(':')
-      meta = JSON.parse(jsonStr.slice(colonIdx + 1))
+      meta = { source: 'ncm', ...JSON.parse(jsonStr.slice(colonIdx + 1)) }
     } catch {
       // 元数据失败不影响主流程，吞掉
-      meta = {}
+      meta = { source: 'ncm' }
     }
   }
   onProgress?.(0.15)
@@ -167,7 +133,7 @@ export async function decryptNcm(
   try {
     keyBox = buildKeyBox(rc4Key)
   } catch (e) {
-    throw new NcmError('DECRYPT_FAILED', '生成解密密钥失败', e)
+    throw new DecryptError('DECRYPT_FAILED', '生成解密密钥失败', e)
   }
 
   // 切块大小：256KB。每块结束后让出主线程并汇报进度。

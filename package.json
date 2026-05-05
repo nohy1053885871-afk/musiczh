@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@tailwindcss/vite": "^4.2.4",
     "aes-js": "^3.1.2",
     "browser-id3-writer": "^6.3.1",

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import JSZip from 'jszip'
 import {
-  decryptNcm,
-  NcmError,
+  decryptAudioFile,
+  DecryptError,
+  SUPPORTED_EXT_REGEX,
   type DecryptResult,
-  type NcmErrorCode,
-} from './lib/ncm'
+  type DecryptErrorCode,
+} from './lib/decrypt'
+import { transcodeToMp3 } from './lib/transcode'
 
 const MAX_FILES = 50
 const MAX_FILE_SIZE = 100 * 1024 * 1024
 
-type FileStatus = 'pending' | 'decrypting' | 'done' | 'failed'
+type FileStatus = 'pending' | 'decrypting' | 'done' | 'failed' | 'transcoding'
 
 type TrackedFile = {
   id: string
@@ -19,7 +21,7 @@ type TrackedFile = {
   progress: number
   result?: DecryptResult
   coverUrl?: string
-  errorCode?: NcmErrorCode
+  errorCode?: DecryptErrorCode
   errorMessage?: string
 }
 
@@ -240,7 +242,7 @@ function DropZone({
       <input
         type="file"
         multiple
-        accept=".ncm"
+        accept=".ncm,.kgm,.vpr"
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) onFiles(e.target.files)
@@ -278,7 +280,7 @@ function DropZone({
           <div className="text-lg sm:text-xl font-semibold text-stone-800 mb-0.5">
             {isDragging
               ? '松手即可开始转换'
-              : '把 .ncm 文件拖到这里或点击上传，转为 MP3'}
+              : '把音频文件拖到这里或点击上传，转为 MP3'}
           </div>
           <div
             className="text-[12px] text-stone-500"
@@ -299,19 +301,23 @@ function FileRow({
   onRetry,
   onRemove,
   onNotify,
+  onTranscode,
 }: {
   file: TrackedFile
   onRetry: (id: string) => void
   onRemove: (id: string) => void
   onNotify: (msg: string) => void
+  onTranscode: (id: string) => void
 }) {
   const meta = file.result?.meta
-  const title = meta?.musicName || file.file.name.replace(/\.ncm$/i, '')
+  const title = meta?.musicName || file.file.name.replace(SUPPORTED_EXT_REGEX, '')
   const artist = meta?.artist?.map((a) => a[0]).join(', ')
   const isFailed = file.status === 'failed'
   const isDecrypting = file.status === 'decrypting'
+  const isTranscoding = file.status === 'transcoding'
   const isDone = file.status === 'done'
   const format = file.result?.format
+  const canTranscode = isDone && format && format !== 'mp3'
   const [justDownloaded, setJustDownloaded] = useState(false)
 
   useEffect(() => {
@@ -333,7 +339,7 @@ function FileRow({
           'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(120,90,50,0.06), 0 1px 2px rgba(120,90,50,0.08)',
       }}
     >
-      {/* cover or mini disc */}
+      {/* cover / placeholder / mini disc */}
       <div className="relative shrink-0">
         {isDone && file.coverUrl ? (
           <img
@@ -345,9 +351,34 @@ function FileRow({
                 'inset 0 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.15)',
             }}
           />
+        ) : isDone ? (
+          // 完成态但没拿到封面（如 KGM/VPR）：用音符占位，外形和封面一致
+          <div
+            className="w-12 h-12 rounded-lg flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(180deg, #F4E4C8 0%, #E0CCA4 100%)',
+              boxShadow:
+                'inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 1px rgba(120,90,50,0.18), 0 1px 2px rgba(120,90,50,0.15)',
+            }}
+            aria-hidden
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="w-6 h-6"
+              fill="none"
+              stroke="#7B3A14"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 17V5l12-2v12" />
+              <circle cx="6" cy="17" r="3" />
+              <circle cx="18" cy="15" r="3" />
+            </svg>
+          </div>
         ) : (
           <div
-            className={`w-12 h-12 rounded-full relative ${isDecrypting ? 'vinyl-spin-fast' : ''}`}
+            className={`w-12 h-12 rounded-full relative ${isDecrypting || isTranscoding ? 'vinyl-spin-fast' : ''}`}
             style={{
               background: 'radial-gradient(circle at 35% 30%, #2a2a2a, #0a0a0a 80%)',
               boxShadow:
@@ -360,9 +391,7 @@ function FileRow({
                 inset: '28%',
                 background: isFailed
                   ? 'radial-gradient(circle at 35% 30%, #B85A4A, #6B2A22)'
-                  : isDone
-                    ? 'radial-gradient(circle at 35% 30%, #4D8B5C, #2A5238)'
-                    : 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14)',
+                  : 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14)',
               }}
             />
             <div
@@ -390,7 +419,7 @@ function FileRow({
             </span>
           )}
         </div>
-        {isDecrypting ? (
+        {isDecrypting || isTranscoding ? (
           <div className="mt-1.5 flex items-center gap-2">
             <div
               className="flex-1 h-1.5 rounded-full overflow-hidden"
@@ -409,9 +438,10 @@ function FileRow({
               />
             </div>
             <span
-              className="text-[11px] text-stone-500 shrink-0 w-10 text-right"
+              className="text-[11px] text-stone-500 shrink-0 w-14 text-right"
               style={{ fontFamily: "'JetBrains Mono', monospace" }}
             >
+              {isTranscoding && '转码 '}
               {Math.round(file.progress * 100)}%
             </span>
           </div>
@@ -442,6 +472,23 @@ function FileRow({
 
       {/* actions */}
       <div className="shrink-0 flex items-center gap-1.5">
+        {canTranscode && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onTranscode(file.id)
+            }}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium text-stone-700 transition-all hover:-translate-y-0.5 active:translate-y-0"
+            style={{
+              background: 'linear-gradient(180deg, #FBF6EC 0%, #E8DCC0 100%)',
+              boxShadow:
+                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(120,90,50,0.15), 0 1px 2px rgba(120,90,50,0.15)',
+            }}
+            title={`将当前 ${format} 强制转码为 MP3（有损）`}
+          >
+            转 MP3
+          </button>
+        )}
         {isDone && file.result && (
           <button
             onClick={(e) => {
@@ -623,7 +670,7 @@ function App() {
         if (!next) break
         updateFile(next.id, { status: 'decrypting', progress: 0 })
         try {
-          const result = await decryptNcm(next.file, (p) => {
+          const result = await decryptAudioFile(next.file, (p) => {
             updateFile(next.id, { progress: p })
           })
           const coverUrl = result.cover
@@ -631,9 +678,9 @@ function App() {
             : result.meta.albumPic || undefined
           updateFile(next.id, { status: 'done', result, coverUrl, progress: 1 })
         } catch (err) {
-          let code: NcmErrorCode = 'UNKNOWN'
+          let code: DecryptErrorCode = 'UNKNOWN'
           let message = '未知错误'
-          if (err instanceof NcmError) {
+          if (err instanceof DecryptError) {
             code = err.code
             message = err.message
           } else if (err instanceof Error) {
@@ -651,9 +698,9 @@ function App() {
     (incoming: FileList | File[]) => {
       const reasons: string[] = []
       let candidates = Array.from(incoming)
-      const wrongExt = candidates.filter((f) => !/\.ncm$/i.test(f.name))
-      if (wrongExt.length) reasons.push(`${wrongExt.length} 个非 .ncm 文件`)
-      candidates = candidates.filter((f) => /\.ncm$/i.test(f.name))
+      const wrongExt = candidates.filter((f) => !SUPPORTED_EXT_REGEX.test(f.name))
+      if (wrongExt.length) reasons.push(`${wrongExt.length} 个文件格式不支持`)
+      candidates = candidates.filter((f) => SUPPORTED_EXT_REGEX.test(f.name))
       const oversize = candidates.filter((f) => f.size > MAX_FILE_SIZE)
       if (oversize.length) reasons.push(`${oversize.length} 个文件超过 100MB`)
       candidates = candidates.filter((f) => f.size <= MAX_FILE_SIZE)
@@ -705,6 +752,45 @@ function App() {
       setTimeout(() => processQueue(), 0)
     },
     [updateFile, processQueue],
+  )
+
+  const transcodeFile = useCallback(
+    async (id: string) => {
+      const target = filesRef.current.find((f) => f.id === id)
+      if (!target?.result || target.status !== 'done') return
+      if (target.result.format === 'mp3') return
+      updateFile(id, { status: 'transcoding', progress: 0 })
+      try {
+        const mp3Blob = await transcodeToMp3(target.result.audio, (p) => {
+          updateFile(id, { progress: p })
+        })
+        const newName = target.result.suggestedName.replace(
+          /\.(flac|ogg)$/i,
+          '.mp3',
+        )
+        updateFile(id, {
+          status: 'done',
+          progress: 1,
+          result: {
+            ...target.result,
+            audio: mp3Blob,
+            format: 'mp3',
+            suggestedName: newName,
+          },
+        })
+        notify('已转为 MP3')
+      } catch (err) {
+        let message = '转码失败'
+        if (err instanceof DecryptError) message = err.message
+        else if (err instanceof Error) message = `转码失败：${err.message}`
+        updateFile(id, {
+          status: 'done',
+          progress: 1,
+        })
+        setWarning(message)
+      }
+    },
+    [updateFile, notify],
   )
 
   const removeFile = useCallback((id: string) => {
@@ -844,7 +930,7 @@ function App() {
             className="text-[11px] text-stone-500 shrink-0 mt-1"
             style={{ fontFamily: "'JetBrains Mono', monospace" }}
           >
-            v0.1
+            v0.1.1
           </div>
         </header>
 
@@ -891,7 +977,7 @@ function App() {
               style={{ fontFamily: "'JetBrains Mono', monospace" }}
             >
               <span>
-                目前支持 网易云 .ncm
+                目前支持 网易云 .ncm / 酷狗 .kgm / .vpr
                 <span className="mx-1.5 text-stone-300">·</span>
                 <span className="text-stone-400">QQ 音乐 / 酷我 即将到来</span>
               </span>
@@ -1001,6 +1087,7 @@ function App() {
                   onRetry={retryFile}
                   onRemove={removeFile}
                   onNotify={notify}
+                  onTranscode={transcodeFile}
                 />
               ))}
             </div>
