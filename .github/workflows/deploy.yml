@@ -98,6 +98,7 @@ jobs:
       - name: rsync 同步到服务器
         run: |
           rsync -az --delete --delay-updates \
+            --exclude='.user.ini' \
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh/
 
@@ -146,6 +147,7 @@ jobs:
       - name: rsync 同步到服务器
         run: |
           rsync -az --delete --delay-updates \
+            --exclude='.user.ini' \
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             admin/dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh-admin/
 
