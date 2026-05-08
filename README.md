@@ -1,73 +1,54 @@
-# React + TypeScript + Vite
+# 拾音 · 加密音乐文件转 MP3
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个纯前端的加密音乐解密工具——把 **网易云 `.ncm`**、**酷狗 `.kgm` / `.vpr`** 解密还原为 MP3 / FLAC / OGG。
+所有文件都在浏览器本地处理，不上传任何服务器。**永久免费，永无广告**。
 
-Currently, two official plugins are available:
+🎵 在线试用：[https://sleepno.cn](https://sleepno.cn)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 主要特性
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **纯前端，零上传** — AES + RC4 解密、FLAC/OGG 转码全部在浏览器内完成。
+- **批量处理** — 单次最多 50 个文件，单文件 100MB 上限，支持 ZIP 打包下载。
+- **保留元数据** — 自动写入 ID3 标签与专辑封面。
+- **强制转 MP3** — FLAC / OGG 可一键转码（基于浏览器原生 AudioContext + lamejs）。
+- **暗色拟物 UI** — 黑胶唱片旋转动画 + 中性灰拾物风格。
 
-## Expanding the ESLint configuration
+## 支持的格式
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+| 格式 | 来源 | 还原后 |
+|---|---|---|
+| `.ncm` | 网易云音乐客户端 | MP3 / FLAC |
+| `.kgm` | 酷狗音乐客户端 | MP3 / FLAC |
+| `.vpr` | 酷狗音乐 v2 | MP3 / FLAC |
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 本地开发
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # 生产构建到 dist/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 技术栈
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+React 19 · TypeScript · Tailwind CSS 4 · Vite 8 · JSZip · aes-js · browser-id3-writer · @breezystack/lamejs
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## 路线图
+
+- [x] 网易云 `.ncm`
+- [x] 酷狗 `.kgm` / `.vpr` v2
+- [x] FLAC / OGG 强制转 MP3
+- [ ] QQ 音乐 `.qmc` / `.mflac`
+- [ ] 酷我 `.kwm`
+- [ ] 酷狗 KGM v4
+- [ ] FLAC 文件 Vorbis Comments + PICTURE block 标签写入
+
+## 使用须知
+
+请仅用于处理你**合法持有**的音乐文件。本网站不对用户上传内容承担法律责任。
+
+## License
+
+MIT

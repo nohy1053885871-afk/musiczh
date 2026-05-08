@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="80%">
+      <stop offset="0%" stop-color="#2A2725"/>
+      <stop offset="100%" stop-color="#0F0E0D"/>
+    </radialGradient>
+    <radialGradient id="discGrad" cx="35%" cy="30%">
+      <stop offset="0%" stop-color="#2a2a2a"/>
+      <stop offset="80%" stop-color="#0a0a0a"/>
+    </radialGradient>
+    <radialGradient id="labelGrad" cx="35%" cy="30%">
+      <stop offset="0%" stop-color="#E8431A"/>
+      <stop offset="100%" stop-color="#A82C08"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F05A2A"/>
+      <stop offset="100%" stop-color="#C4310E"/>
+    </linearGradient>
+    <filter id="noise">
+      <feTurbulence baseFrequency="0.9" numOctaves="2" seed="3"/>
+      <feColorMatrix values="0 0 0 0 0.30  0 0 0 0 0.28  0 0 0 0 0.26  0 0 0 0.04 0"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+  <rect width="1200" height="630" filter="url(#noise)" opacity="0.6"/>
+
+  <!-- vinyl record -->
+  <g transform="translate(280, 315)">
+    <!-- shadow -->
+    <ellipse cx="8" cy="200" rx="220" ry="22" fill="#000" opacity="0.45" filter="url(#noise)"/>
+    <!-- disc -->
+    <circle r="220" fill="url(#discGrad)"/>
+    <!-- groove rings -->
+    <g stroke="rgba(255,255,255,0.045)" stroke-width="0.6" fill="none">
+      <circle r="80"/>
+      <circle r="95"/>
+      <circle r="110"/>
+      <circle r="125"/>
+      <circle r="140"/>
+      <circle r="155"/>
+      <circle r="170"/>
+      <circle r="185"/>
+      <circle r="200"/>
+    </g>
+    <!-- groove sheen -->
+    <circle r="200" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="1.2"/>
+    <!-- center label -->
+    <circle r="78" fill="url(#labelGrad)"/>
+    <text y="-6" text-anchor="middle"
+          font-family="'Noto Serif SC', 'PingFang SC', serif"
+          font-weight="700" font-size="44" fill="#F4E0D8">拾音</text>
+    <text y="22" text-anchor="middle"
+          font-family="'JetBrains Mono', monospace"
+          font-size="11" fill="#F4E0D8" opacity="0.7"
+          letter-spacing="3">SHIYIN</text>
+    <!-- spindle -->
+    <circle r="9" fill="#0a0a0a"/>
+    <circle r="3" fill="#F4E0D8" opacity="0.4"/>
+  </g>
+
+  <!-- right text -->
+  <g transform="translate(580, 0)">
+    <!-- brand name -->
+    <text x="0" y="200"
+          font-family="'Noto Serif SC', 'PingFang SC', serif"
+          font-weight="700" font-size="120" fill="#F4F2EE"
+          letter-spacing="4">拾音</text>
+
+    <!-- divider -->
+    <rect x="2" y="225" width="60" height="4" fill="url(#accent)" rx="2"/>
+
+    <!-- main slogan -->
+    <text x="0" y="290"
+          font-family="'PingFang SC', 'Noto Serif SC', serif"
+          font-weight="600" font-size="36" fill="#F4F2EE">
+      一键解密 · 转 MP3
+    </text>
+
+    <!-- sub line -->
+    <text x="0" y="340"
+          font-family="'PingFang SC', sans-serif"
+          font-weight="400" font-size="22" fill="#A8A29C">
+      网易云 NCM · 酷狗 KGM / VPR
+    </text>
+
+    <!-- features pills -->
+    <g transform="translate(0, 400)">
+      <g>
+        <rect x="0" y="0" width="170" height="44" rx="22"
+              fill="rgba(240,90,42,0.12)" stroke="rgba(240,90,42,0.4)" stroke-width="1"/>
+        <text x="85" y="29" text-anchor="middle"
+              font-family="'PingFang SC', sans-serif"
+              font-size="16" font-weight="500" fill="#F05A2A">✓ 文件不上传</text>
+      </g>
+      <g transform="translate(186, 0)">
+        <rect x="0" y="0" width="150" height="44" rx="22"
+              fill="rgba(240,90,42,0.12)" stroke="rgba(240,90,42,0.4)" stroke-width="1"/>
+        <text x="75" y="29" text-anchor="middle"
+              font-family="'PingFang SC', sans-serif"
+              font-size="16" font-weight="500" fill="#F05A2A">✓ 永久免费</text>
+      </g>
+      <g transform="translate(352, 0)">
+        <rect x="0" y="0" width="130" height="44" rx="22"
+              fill="rgba(240,90,42,0.12)" stroke="rgba(240,90,42,0.4)" stroke-width="1"/>
+        <text x="65" y="29" text-anchor="middle"
+              font-family="'PingFang SC', sans-serif"
+              font-size="16" font-weight="500" fill="#F05A2A">✓ 无广告</text>
+      </g>
+    </g>
+
+    <!-- domain -->
+    <text x="0" y="540"
+          font-family="'JetBrains Mono', monospace"
+          font-size="20" fill="#6A6460" letter-spacing="2">sleepno.cn</text>
+  </g>
+</svg>
