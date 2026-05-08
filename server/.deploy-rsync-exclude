@@ -1,0 +1,13 @@
+.env
+.env.*
+analytics.db
+analytics.db-journal
+analytics.db-wal
+analytics.db-shm
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+node_modules/
+logs/
+.deploy-rsync-exclude

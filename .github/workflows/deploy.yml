@@ -1,0 +1,230 @@
+name: Deploy
+
+# 触发规则：
+#   - push 到 main：detect-changes 决定哪个子项目要发；后端故意不在 push 触发
+#   - push v* tag：三个子项目全发（用于大版本同步发布）
+#   - workflow_dispatch：手动选 target=user|admin|server|all
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '部署哪个子项目'
+        type: choice
+        required: true
+        default: user
+        options:
+          - user
+          - admin
+          - server
+          - all
+
+# 同分支并发部署排队，避免新旧两次 push 抢 rsync
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  detect-changes:
+    name: 检测改动范围
+    runs-on: ubuntu-latest
+    outputs:
+      user: ${{ steps.run.outputs.user }}
+      admin: ${{ steps.run.outputs.admin }}
+      server: ${{ steps.run.outputs.server }}
+      server_lock: ${{ steps.run.outputs.server_lock }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: run
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            user:
+              - 'src/**'
+              - 'public/**'
+              - 'index.html'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'vite.config.ts'
+              - 'tsconfig.app.json'
+              - 'tsconfig.json'
+              - 'tsconfig.node.json'
+            admin:
+              - 'admin/**'
+            server:
+              - 'server/**'
+            server_lock:
+              - 'server/package-lock.json'
+
+  deploy-user:
+    name: 部署用户端
+    needs: detect-changes
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.user == 'true') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.target == 'user' || inputs.target == 'all')) ||
+      startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建用户端
+        run: npm run build
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 写入 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: rsync 同步到服务器
+        run: |
+          rsync -az --delete --delay-updates \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh/
+
+      - name: 验证站点可达
+        run: |
+          sleep 2
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://sleepno.cn/
+
+  deploy-admin:
+    name: 部署运营后台前端
+    needs: detect-changes
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.admin == 'true') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.target == 'admin' || inputs.target == 'all')) ||
+      startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            admin/package-lock.json
+
+      - name: 安装依赖
+        run: |
+          npm ci
+          npm --prefix admin ci
+
+      - name: 构建运营后台
+        run: npm run build:admin
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 写入 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: rsync 同步到服务器
+        run: |
+          rsync -az --delete --delay-updates \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            admin/dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh-admin/
+
+      - name: 验证后台可达
+        run: |
+          sleep 2
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://sleepno.cn/admin/
+
+  deploy-server:
+    name: 部署后端 API
+    needs: detect-changes
+    # 故意不让 push 自动触发后端：后端有状态（pm2+SQLite+.env），需 workflow_dispatch 或 v* tag
+    if: |
+      (github.event_name == 'workflow_dispatch' && (inputs.target == 'server' || inputs.target == 'all')) ||
+      startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 写入 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: 部署前备份服务器代码（保留最近 3 份）
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            TS=$(date +%Y%m%d-%H%M%S)
+            mkdir -p /www/backup/musiczh/api-rollback/$TS
+            rsync -a --delete \
+              --exclude=node_modules --exclude="*.db*" --exclude=logs \
+              /www/wwwroot/musiczh-api/ /www/backup/musiczh/api-rollback/$TS/
+            ls -1dt /www/backup/musiczh/api-rollback/*/ | tail -n +4 | xargs -r rm -rf
+            echo "[backup] saved at $TS"
+          '
+
+      - name: rsync 同步源码（排除 .env 和 DB）
+        run: |
+          rsync -az --delete --delay-updates \
+            --exclude-from=server/.deploy-rsync-exclude \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            server/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh-api/
+
+      - name: 远程 npm ci（仅 lock 变化或手动/tag 触发时）
+        if: |
+          needs.detect-changes.outputs.server_lock == 'true' ||
+          (github.event_name == 'workflow_dispatch' && (inputs.target == 'server' || inputs.target == 'all')) ||
+          startsWith(github.ref, 'refs/tags/v')
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd /www/wwwroot/musiczh-api
+            npm ci --no-audit --no-fund
+            echo "[install] done"
+          '
+
+      - name: pm2 restart + 健康检查
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd /www/wwwroot/musiczh-api
+            pm2 restart musiczh-api --update-env
+            for i in $(seq 1 30); do
+              if curl -fsS --max-time 2 http://127.0.0.1:8787/api/health | grep -q "\"ok\":true"; then
+                echo "[health] OK at attempt $i"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "[health] FAILED — dumping pm2 logs"
+            pm2 logs musiczh-api --nostream --lines 50
+            exit 1
+          '
+
+      - name: 验证公网入口
+        run: curl -fsS https://sleepno.cn/api/health
