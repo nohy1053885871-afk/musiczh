@@ -8,6 +8,24 @@ import {
   type DecryptErrorCode,
 } from './lib/decrypt'
 import { transcodeToMp3 } from './lib/transcode'
+import { analytics } from './lib/analytics'
+
+function fileExtOf(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''
+}
+
+// 给元素绑定曝光埋点：元素挂载且进入视口 >=50%、停留 >=300ms 时触发一次 *_view
+function useImpression<T extends HTMLElement>(event: string, props?: Record<string, unknown>) {
+  const ref = useRef<T | null>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    const dispose = analytics.observeImpression(ref.current, event, props)
+    return dispose
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event])
+  return ref
+}
 
 const MAX_FILES = 50
 const MAX_FILE_SIZE = 100 * 1024 * 1024
@@ -214,8 +232,14 @@ function DropZone({
   const dragShadow =
     'inset 0 2px 8px rgba(232,67,26,0.15), inset 0 0 0 2px rgba(232,67,26,0.4), 0 0 0 6px rgba(232,67,26,0.1)'
 
+  const labelRef = useImpression<HTMLLabelElement>('upload_zone_view')
+
   return (
     <label
+      ref={labelRef}
+      onClick={() => {
+        analytics.track('upload_zone_click')
+      }}
       onDragOver={(e) => {
         e.preventDefault()
         setIsDragging(true)
@@ -227,7 +251,14 @@ function DropZone({
       onDrop={(e) => {
         e.preventDefault()
         setIsDragging(false)
-        if (e.dataTransfer.files?.length) onFiles(e.dataTransfer.files)
+        if (e.dataTransfer.files?.length) {
+          const arr = Array.from(e.dataTransfer.files)
+          analytics.track('upload_drop', {
+            count: arr.length,
+            total_size: arr.reduce((s, f) => s + f.size, 0),
+          })
+          onFiles(e.dataTransfer.files)
+        }
       }}
       className="relative rounded-2xl cursor-pointer transition-all duration-300 select-none group flex flex-col items-center justify-center w-full"
       style={{
@@ -245,7 +276,10 @@ function DropZone({
         accept=".ncm,.kgm,.vpr"
         className="hidden"
         onChange={(e) => {
-          if (e.target.files?.length) onFiles(e.target.files)
+          if (e.target.files?.length) {
+            analytics.track('upload_pick', { count: e.target.files.length })
+            onFiles(e.target.files)
+          }
           e.target.value = ''
         }}
       />
@@ -331,6 +365,11 @@ function FileRow({
     const t = setTimeout(() => setJustDownloaded(false), 1500)
     return () => clearTimeout(t)
   }, [justDownloaded])
+
+  const transcodeBtnRef = useImpression<HTMLButtonElement>('btn_transcode_view')
+  const downloadBtnRef = useImpression<HTMLButtonElement>('row_download_view')
+  const retryBtnRef = useImpression<HTMLButtonElement>('row_retry_view')
+  const removeBtnRef = useImpression<HTMLButtonElement>('row_remove_view')
 
   return (
     <div
@@ -495,8 +534,15 @@ function FileRow({
       <div className="shrink-0 flex items-center gap-1.5">
         {canTranscode && (
           <button
+            ref={transcodeBtnRef}
             onClick={(e) => {
               e.stopPropagation()
+              analytics.track('btn_transcode_click', {
+                file_name: file.file.name,
+                file_ext: fileExtOf(file.file.name),
+                file_size: file.file.size,
+                format,
+              })
               onTranscode(file.id)
             }}
             className="px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-0.5 active:translate-y-0"
@@ -513,8 +559,14 @@ function FileRow({
         )}
         {isDone && file.result && (
           <button
+            ref={downloadBtnRef}
             onClick={(e) => {
               e.stopPropagation()
+              analytics.track('row_download_click', {
+                file_name: file.result!.suggestedName,
+                format: file.result!.format,
+                file_size: file.result!.audio.size,
+              })
               triggerDownload(file.result!.audio, file.result!.suggestedName)
               onNotify('已开始下载')
               setJustDownloaded(true)
@@ -568,8 +620,13 @@ function FileRow({
         )}
         {isFailed && (
           <button
+            ref={retryBtnRef}
             onClick={(e) => {
               e.stopPropagation()
+              analytics.track('row_retry_click', {
+                file_name: file.file.name,
+                error_code: file.errorCode,
+              })
               onRetry(file.id)
             }}
             className="px-3 py-1.5 rounded-md text-xs font-medium"
@@ -584,8 +641,13 @@ function FileRow({
           </button>
         )}
         <button
+          ref={removeBtnRef}
           onClick={(e) => {
             e.stopPropagation()
+            analytics.track('row_remove_click', {
+              file_name: file.file.name,
+              status: file.status,
+            })
             onRemove(file.id)
           }}
           className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 transition-colors"
@@ -618,10 +680,16 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
     return () => clearTimeout(t)
   }, [open])
 
+  const clearAllRef = useImpression<HTMLButtonElement>('btn_clear_all_view')
+
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(true)}
+        ref={clearAllRef}
+        onClick={() => {
+          analytics.track('btn_clear_all_click')
+          setOpen(true)
+        }}
         className="px-3 py-1.5 rounded-md text-xs font-medium transition"
         style={{ color: '#8A8680' }}
       >
@@ -643,7 +711,10 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
             </div>
             <div className="mt-2.5 flex justify-end gap-3">
               <button
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  analytics.track('dialog_clear_confirm', { action: 'cancel' })
+                  setOpen(false)
+                }}
                 className="text-xs"
                 style={{ color: '#8A8680' }}
               >
@@ -651,6 +722,7 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
               </button>
               <button
                 onClick={() => {
+                  analytics.track('dialog_clear_confirm', { action: 'confirm' })
                   onConfirm()
                   setOpen(false)
                 }}
@@ -697,6 +769,12 @@ function App() {
         const next = filesRef.current.find((f) => f.status === 'pending')
         if (!next) break
         updateFile(next.id, { status: 'decrypting', progress: 0 })
+        const fileExt = fileExtOf(next.file.name)
+        analytics.track('decrypt_start', {
+          file_name: next.file.name,
+          file_ext: fileExt,
+          file_size: next.file.size,
+        })
         try {
           const result = await decryptAudioFile(next.file, (p) => {
             updateFile(next.id, { progress: p })
@@ -705,6 +783,12 @@ function App() {
             ? URL.createObjectURL(result.cover)
             : result.meta.albumPic || undefined
           updateFile(next.id, { status: 'done', result, coverUrl, progress: 1 })
+          analytics.track('decrypt_done', {
+            file_name: next.file.name,
+            file_ext: fileExt,
+            source: result.meta?.source,
+            format: result.format,
+          })
         } catch (err) {
           let code: DecryptErrorCode = 'UNKNOWN'
           let message = '未知错误'
@@ -715,6 +799,15 @@ function App() {
             message = `出错了：${err.message}`
           }
           updateFile(next.id, { status: 'failed', errorCode: code, errorMessage: message })
+          analytics.trackFailure('decrypt', {
+            error_code: code,
+            error_msg: message,
+            error_stack: err instanceof Error ? err.stack : undefined,
+            file_name: next.file.name,
+            file_ext: fileExt,
+            file_size: next.file.size,
+            source: fileExt === 'kgm' || fileExt === 'vpr' ? fileExt : fileExt === 'ncm' ? 'ncm' : undefined,
+          })
         }
       }
     } finally {
@@ -788,6 +881,12 @@ function App() {
       if (!target?.result || target.status !== 'done') return
       if (target.result.format === 'mp3') return
       updateFile(id, { status: 'transcoding', progress: 0 })
+      const fromFormat = target.result.format
+      analytics.track('transcode_start', {
+        file_name: target.result.suggestedName,
+        from_format: fromFormat,
+        file_size: target.result.audio.size,
+      })
       try {
         const mp3Blob = await transcodeToMp3(target.result.audio, (p) => {
           updateFile(id, { progress: p })
@@ -806,6 +905,10 @@ function App() {
             suggestedName: newName,
           },
         })
+        analytics.track('transcode_done', {
+          file_name: newName,
+          from_format: fromFormat,
+        })
         notify('已转为 MP3')
       } catch (err) {
         let message = '转码失败'
@@ -814,6 +917,15 @@ function App() {
         updateFile(id, {
           status: 'done',
           progress: 1,
+        })
+        analytics.trackFailure('transcode', {
+          error_code: err instanceof DecryptError ? err.code : undefined,
+          error_msg: message,
+          error_stack: err instanceof Error ? err.stack : undefined,
+          file_name: target.result.suggestedName,
+          file_ext: fromFormat,
+          file_size: target.result.audio.size,
+          source: target.result.meta?.source,
         })
         setWarning(message)
       }
@@ -842,6 +954,9 @@ function App() {
   const total = files.length
   const overallProgress = total === 0 ? 0 : (doneCount + failedCount) / total
   const allDone = total > 0 && doneCount + failedCount === total
+
+  const downloadAllRef = useImpression<HTMLButtonElement>('btn_download_all_view')
+  const downloadZipRef = useImpression<HTMLButtonElement>('btn_download_zip_view')
 
   const downloadAllSeparate = async () => {
     const doneFiles = files.filter((f) => f.status === 'done' && f.result)
@@ -1086,7 +1201,11 @@ function App() {
                 {doneCount >= 2 && (
                   <>
                     <button
-                      onClick={downloadAllSeparate}
+                      ref={downloadAllRef}
+                      onClick={() => {
+                        analytics.track('btn_download_all_click', { count: doneCount })
+                        downloadAllSeparate()
+                      }}
                       disabled={isZipping}
                       className="px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
                       style={secondaryBtnStyle}
@@ -1094,7 +1213,11 @@ function App() {
                       下载全部
                     </button>
                     <button
-                      onClick={downloadAllAsZip}
+                      ref={downloadZipRef}
+                      onClick={() => {
+                        analytics.track('btn_download_zip_click', { count: doneCount })
+                        downloadAllAsZip()
+                      }}
                       disabled={isZipping}
                       className="px-3 py-1.5 rounded-md text-xs font-medium transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
                       style={secondaryBtnStyle}
