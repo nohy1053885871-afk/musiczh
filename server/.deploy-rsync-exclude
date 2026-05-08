@@ -11,3 +11,4 @@ analytics.db-shm
 node_modules/
 logs/
 .deploy-rsync-exclude
+.user.ini
