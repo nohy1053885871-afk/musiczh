@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Card, Input, Space, Typography, Button } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import type { ColumnsType } from 'antd/es/table'
 import { api, type ButtonsResp } from '../lib/api'
-import { PanelCard } from '../components/Card'
-import { RangePicker, type Range, rangeQueryString } from '../components/RangePicker'
-import { RefreshButton } from '../components/RefreshButton'
+import { AppRangePicker, DEFAULT_RANGE, type Range, rangeQueryString } from '../components/biz/AppRangePicker'
+import { DataTableCard } from '../components/biz/DataTableCard'
+import { DownloadCSVButton } from '../components/biz/DownloadCSVButton'
 import { eventLabel, formatPct } from '../lib/format'
 
+const { Title, Text } = Typography
+
+type ButtonRow = ButtonsResp['buttons'][number]
+type RawRow = ButtonsResp['raw'][number]
+
 export function ButtonsPage() {
-  const [range, setRange] = useState<Range>({ kind: 'preset', preset: '30d' })
+  const [range, setRange] = useState<Range>(DEFAULT_RANGE)
   const [data, setData] = useState<ButtonsResp | null>(null)
   const [loading, setLoading] = useState(false)
   const [keyword, setKeyword] = useState('')
@@ -26,113 +34,102 @@ export function ButtonsPage() {
     const label = eventLabel(event).toLowerCase()
     return event.toLowerCase().includes(lowered) || label.includes(lowered)
   }
-  const filteredButtons = (data?.buttons ?? []).filter((b) => matches(b.base) || matches(`${b.base}_click`) || matches(`${b.base}_view`))
+  const filteredButtons = (data?.buttons ?? []).filter(
+    (b) => matches(b.base) || matches(`${b.base}_click`) || matches(`${b.base}_view`),
+  )
   const filteredRaw = (data?.raw ?? []).filter((r) => matches(r.event))
 
+  const buttonsColumns: ColumnsType<ButtonRow> = [
+    { title: '事件名', dataIndex: 'base', key: 'base',
+      render: (v) => <code style={{ fontSize: 12 }}>{v}</code> },
+    { title: '中文描述', key: 'label',
+      render: (_, r) => eventLabel(`${r.base}_click`) },
+    { title: '曝光 PV', dataIndex: 'view_pv', key: 'view_pv', align: 'right', width: 90 },
+    { title: '曝光 UV', dataIndex: 'view_uv', key: 'view_uv', align: 'right', width: 90 },
+    { title: '点击 PV', dataIndex: 'click_pv', key: 'click_pv', align: 'right', width: 90,
+      render: (v) => <strong>{v}</strong> },
+    { title: '点击 UV', dataIndex: 'click_uv', key: 'click_uv', align: 'right', width: 90 },
+    { title: 'CTR (PV)', dataIndex: 'ctr', key: 'ctr', align: 'right', width: 90,
+      render: (v) => formatPct(v) },
+    { title: 'CTR (UV)', dataIndex: 'ctr_uv', key: 'ctr_uv', align: 'right', width: 90,
+      render: (v) => formatPct(v) },
+  ]
+
+  const rawColumns: ColumnsType<RawRow> = [
+    { title: '事件名', dataIndex: 'event', key: 'event',
+      render: (v) => <code style={{ fontSize: 12 }}>{v}</code> },
+    { title: '中文描述', key: 'label', render: (_, r) => eventLabel(r.event) },
+    { title: 'PV', dataIndex: 'pv', key: 'pv', align: 'right', width: 90 },
+    { title: 'UV', dataIndex: 'uv', key: 'uv', align: 'right', width: 90 },
+  ]
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
         <div>
-          <div className="text-xl font-semibold">按钮埋点</div>
-          <div className="text-xs mt-1" style={{ color: '#8A8680' }}>
-            各按钮的曝光与点击 PV / UV，以及对应 CTR {loading && '· 加载中…'}
-          </div>
+          <Title level={4} style={{ margin: 0 }}>按钮埋点</Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            各按钮的曝光与点击 PV / UV，以及对应 CTR
+          </Text>
         </div>
-        <div className="flex items-center gap-2">
-          <RangePicker value={range} onChange={setRange} />
-          <RefreshButton onClick={reload} loading={loading} />
-        </div>
+        <Space>
+          <AppRangePicker value={range} onChange={setRange} />
+          <Button icon={<ReloadOutlined />} onClick={reload} loading={loading}>刷新</Button>
+        </Space>
       </div>
 
-      <PanelCard
-        title="搜索"
-        extra={
-          keyword && (
-            <button
-              onClick={() => setKeyword('')}
-              className="text-xs"
-              style={{ color: '#8A8680' }}
-            >清除</button>
-          )
-        }
-      >
-        <input
-          type="text"
+      <Card>
+        <Input.Search
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="按事件名（如 btn_transcode）或中文描述（如 转 MP3）搜索"
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          allowClear
         />
-        {keyword && (
-          <div className="text-xs mt-2" style={{ color: '#8A8680' }}>
-            过滤后：聚合行 {filteredButtons.length} / {data?.buttons.length ?? 0}，原始行 {filteredRaw.length} / {data?.raw.length ?? 0}
-          </div>
-        )}
-      </PanelCard>
+      </Card>
 
-      <PanelCard title="按钮聚合（曝光 vs 点击）">
-        <div className="overflow-auto">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>事件名</th>
-                <th>中文描述</th>
-                <th className="text-right">曝光 PV</th>
-                <th className="text-right">曝光 UV</th>
-                <th className="text-right">点击 PV</th>
-                <th className="text-right">点击 UV</th>
-                <th className="text-right">CTR (PV)</th>
-                <th className="text-right">CTR (UV)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredButtons.length === 0 && (
-                <tr><td colSpan={8} className="text-center" style={{ color: '#A0988E' }}>{keyword ? '没有匹配的按钮' : '暂无数据'}</td></tr>
-              )}
-              {filteredButtons.map((b) => (
-                <tr key={b.base}>
-                  <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>{b.base}</td>
-                  <td>{eventLabel(`${b.base}_click`)}</td>
-                  <td className="text-right">{b.view_pv}</td>
-                  <td className="text-right">{b.view_uv}</td>
-                  <td className="text-right" style={{ fontWeight: 600 }}>{b.click_pv}</td>
-                  <td className="text-right">{b.click_uv}</td>
-                  <td className="text-right">{formatPct(b.ctr)}</td>
-                  <td className="text-right">{formatPct(b.ctr_uv)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </PanelCard>
+      <DataTableCard<ButtonRow>
+        title="按钮聚合（曝光 vs 点击）"
+        toolbar={
+          <DownloadCSVButton<ButtonRow>
+            filename={`buttons-aggregated-${Date.now()}.csv`}
+            columns={[
+              { key: 'base', title: '事件名' },
+              { key: 'label', title: '中文描述', format: (r) => eventLabel(`${r.base}_click`) },
+              { key: 'view_pv', title: '曝光 PV' },
+              { key: 'view_uv', title: '曝光 UV' },
+              { key: 'click_pv', title: '点击 PV' },
+              { key: 'click_uv', title: '点击 UV' },
+              { key: 'ctr', title: 'CTR (PV)', format: (r) => formatPct(r.ctr) },
+              { key: 'ctr_uv', title: 'CTR (UV)', format: (r) => formatPct(r.ctr_uv) },
+            ]}
+            dataSource={filteredButtons}
+          />
+        }
+        columns={buttonsColumns}
+        dataSource={filteredButtons}
+        rowKey="base"
+        loading={loading}
+      />
 
-      <PanelCard title="原始事件计数（含所有 *_click / *_view）">
-        <div className="overflow-auto">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>事件名</th>
-                <th>中文描述</th>
-                <th className="text-right">PV</th>
-                <th className="text-right">UV</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRaw.length === 0 && (
-                <tr><td colSpan={4} className="text-center" style={{ color: '#A0988E' }}>{keyword ? '没有匹配的事件' : '暂无数据'}</td></tr>
-              )}
-              {filteredRaw.map((r) => (
-                <tr key={r.event}>
-                  <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>{r.event}</td>
-                  <td>{eventLabel(r.event)}</td>
-                  <td className="text-right">{r.pv}</td>
-                  <td className="text-right">{r.uv}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </PanelCard>
+      <DataTableCard<RawRow>
+        title="原始事件计数（含所有 *_click / *_view）"
+        toolbar={
+          <DownloadCSVButton<RawRow>
+            filename={`buttons-raw-${Date.now()}.csv`}
+            columns={[
+              { key: 'event', title: '事件名' },
+              { key: 'label', title: '中文描述', format: (r) => eventLabel(r.event) },
+              { key: 'pv', title: 'PV' },
+              { key: 'uv', title: 'UV' },
+            ]}
+            dataSource={filteredRaw}
+          />
+        }
+        columns={rawColumns}
+        dataSource={filteredRaw}
+        rowKey="event"
+        loading={loading}
+      />
     </div>
   )
 }

@@ -9,6 +9,7 @@ const ALLOWED_PROPS = new Set([
   'error_code', 'error_msg', 'error_stack',
   'count', 'total_size', 'format', 'source',
   'from_format', 'queue_size', 'action', 'status',
+  'referrer',
 ])
 
 const FailureSchema = z.object({

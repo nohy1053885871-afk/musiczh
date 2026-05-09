@@ -786,6 +786,7 @@ function App() {
           analytics.track('decrypt_done', {
             file_name: next.file.name,
             file_ext: fileExt,
+            file_size: next.file.size,
             source: result.meta?.source,
             format: result.format,
           })
@@ -907,6 +908,9 @@ function App() {
         })
         analytics.track('transcode_done', {
           file_name: newName,
+          file_ext: fromFormat,
+          file_size: target.result.audio.size,
+          source: target.result.meta?.source,
           from_format: fromFormat,
         })
         notify('已转为 MP3')

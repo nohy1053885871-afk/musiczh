@@ -41,6 +41,27 @@ export function eventLabel(name: string): string {
   return EVENT_LABELS[name] ?? name
 }
 
+export const STAGE_LABEL: Record<string, string> = {
+  decrypt: '解密',
+  transcode: '转码',
+}
+
+export const EXT_LABELS: Record<string, string> = {
+  ncm: 'NCM 网易云',
+  kgm: 'KGM 酷狗',
+  vpr: 'VPR 酷狗',
+  mp3: 'MP3',
+  flac: 'FLAC',
+  ogg: 'OGG',
+  wav: 'WAV',
+  m4a: 'M4A',
+}
+
+export function extLabel(ext: string | null | undefined): string {
+  if (!ext) return '-'
+  return EXT_LABELS[ext] ?? ext.toUpperCase()
+}
+
 export function formatBytes(n?: number | null): string {
   if (n == null) return '-'
   if (n < 1024) return `${n} B`
@@ -63,4 +84,28 @@ export function formatDay(ts: number): string {
 export function formatPct(v: number | null | undefined): string {
   if (v == null) return '-'
   return `${(v * 100).toFixed(1)}%`
+}
+
+export function formatPercent(part: number, total: number): string {
+  if (!total) return '-'
+  return `${((part / total) * 100).toFixed(1)}%`
+}
+
+const CHANNEL_COLOR: Record<string, string> = {
+  '直接访问': 'default',
+  '站内': 'blue',
+  '搜索引擎': 'green',
+  '社交': 'purple',
+  '外部网站': 'orange',
+  '其他': 'default',
+}
+
+export function channelColor(channel: string): string {
+  return CHANNEL_COLOR[channel] ?? 'default'
+}
+
+export function shortUA(ua: string | null | undefined): string {
+  if (!ua) return '-'
+  if (ua.length <= 80) return ua
+  return ua.slice(0, 78) + '…'
 }

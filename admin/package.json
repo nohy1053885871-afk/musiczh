@@ -9,7 +9,10 @@
     "preview": "vite preview --port 5174"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.6.1",
     "@tailwindcss/vite": "^4.2.4",
+    "antd": "^5.29.3",
+    "dayjs": "^1.11.20",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.15.0",
