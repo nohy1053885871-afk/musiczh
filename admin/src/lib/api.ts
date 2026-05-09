@@ -33,6 +33,14 @@ async function request<T = unknown>(path: string, init?: RequestInit): Promise<T
   return res.json() as Promise<T>
 }
 
+function buildQuery(params: Record<string, unknown>): string {
+  const q = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+  })
+  return q.toString()
+}
+
 export const api = {
   me: () => request<{ uid: number; username: string }>('/admin/me'),
   login: (username: string, password: string) =>
@@ -47,15 +55,29 @@ export const api = {
   buttons: (rangeQuery: string) => request<ButtonsResp>(`/admin/stats/buttons?${rangeQuery}`),
   timeseries: (rangeQuery: string, metric: string) =>
     request<TimeseriesResp>(`/admin/stats/timeseries?${rangeQuery}&metric=${metric}`),
+  formatDistribution: (rangeQuery: string) =>
+    request<FormatDistributionResp>(`/admin/stats/format-distribution?${rangeQuery}`),
+  devices: (rangeQuery: string) =>
+    request<DevicesResp>(`/admin/stats/devices?${rangeQuery}`),
 
   failures: (params: {
-    page?: number; size?: number; stage?: string; code?: string; from?: number; to?: number
-  }) => {
-    const q = new URLSearchParams()
-    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== '') q.set(k, String(v)) })
-    return request<FailuresResp>(`/admin/failures?${q.toString()}`)
-  },
+    page?: number; size?: number; stage?: string; code?: string;
+    q?: string; ext?: string; from?: number; to?: number; range?: string
+  }) => request<FailuresResp>(`/admin/failures?${buildQuery(params)}`),
   failureDetail: (id: number) => request<FailureDetail>(`/admin/failures/${id}`),
+
+  successes: (params: {
+    page?: number; size?: number; stage?: string;
+    q?: string; ext?: string; from?: number; to?: number; range?: string
+  }) => request<SuccessesResp>(`/admin/successes?${buildQuery(params)}`),
+  successDetail: (id: number) => request<SuccessDetail>(`/admin/successes/${id}`),
+
+  visitors: (params: {
+    page?: number; size?: number; q?: string;
+    browser?: string; os?: string; device_type?: string; channel?: string;
+    from?: number; to?: number; range?: string
+  }) => request<VisitorsResp>(`/admin/visitors?${buildQuery(params)}`),
+  visitorDetail: (id: string) => request<VisitorDetail>(`/admin/visitors/${encodeURIComponent(id)}`),
 }
 
 export type OverviewResp = {
@@ -98,6 +120,19 @@ export type TimeseriesResp = {
   points: { day: number; v: number }[]
 }
 
+export type FormatDistributionResp = {
+  range: string
+  rows: { ext: string | null; total: number; success: number; fail: number }[]
+}
+
+export type DevicesResp = {
+  range: string
+  browsers: { name: string; n: number }[]
+  os: { name: string; n: number }[]
+  device_types: { name: string; n: number }[]
+  visitors: { browser: string; os: string; device_type: string }[]
+}
+
 export type FailureRow = {
   id: number
   ts: number
@@ -124,4 +159,75 @@ export type FailureDetail = FailureRow & {
   error_stack: string | null
   ua: string | null
   ip: string | null
+}
+
+export type SuccessRow = {
+  id: number
+  ts: number
+  visitor_id: string
+  stage: 'decrypt' | 'transcode'
+  file_name: string | null
+  file_ext: string | null
+  file_size: number | null
+  source: string | null
+  app_ver: string | null
+}
+
+export type SuccessesResp = {
+  total: number
+  page: number
+  size: number
+  rows: SuccessRow[]
+}
+
+export type SuccessDetail = SuccessRow & {
+  ua: string | null
+  ip: string | null
+  event: string
+}
+
+export type VisitorRow = {
+  visitor_id: string
+  first_ts: number
+  last_ts: number
+  sessions: number
+  events: number
+  ua: string | null
+  ip: string | null
+  first_page: string | null
+  referrer: string | null
+  browser: string
+  os: string
+  device_type: string
+  channel: string
+}
+
+export type VisitorsResp = {
+  range: string
+  from: number
+  to: number
+  total: number
+  page: number
+  size: number
+  rows: VisitorRow[]
+  options: {
+    browsers: string[]
+    os: string[]
+    device_types: string[]
+    channels: string[]
+  }
+}
+
+export type VisitorTimelineEvent = {
+  id: number
+  ts: number
+  event: string
+  page: string | null
+  session_id: string
+  app_ver: string | null
+  props: Record<string, unknown> | null
+}
+
+export type VisitorDetail = VisitorRow & {
+  timeline: VisitorTimelineEvent[]
 }

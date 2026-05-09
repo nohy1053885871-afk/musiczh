@@ -8,6 +8,8 @@ import trackRouter from './routes/track.js'
 import adminAuth from './routes/adminAuth.js'
 import adminStats from './routes/adminStats.js'
 import adminFailures from './routes/adminFailures.js'
+import adminSuccesses from './routes/adminSuccesses.js'
+import adminVisitors from './routes/adminVisitors.js'
 import { rateLimit } from './middleware/ratelimit.js'
 import { seedAdmin } from './seed/admin.js'
 import { startRetentionCron, runRetention } from './lib/retention.js'
@@ -46,6 +48,8 @@ app.route('/api/track', trackRouter)
 app.route('/api/admin', adminAuth)
 app.route('/api/admin/stats', adminStats)
 app.route('/api/admin/failures', adminFailures)
+app.route('/api/admin/successes', adminSuccesses)
+app.route('/api/admin/visitors', adminVisitors)
 
 // 启动时执行一次保留策略 + 安排每日 cron
 runRetention()

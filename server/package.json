@@ -18,12 +18,14 @@
     "hono": "^4.6.10",
     "jose": "^5.9.6",
     "tsx": "^4.19.2",
+    "ua-parser-js": "^2.0.9",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.9.0",
+    "@types/ua-parser-js": "^0.7.39",
     "typescript": "^5.9.0"
   }
 }

@@ -3,38 +3,47 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, Cell,
 } from 'recharts'
-import { api, type OverviewResp, type FunnelResp, type TimeseriesResp } from '../lib/api'
-import { StatCard, PanelCard } from '../components/Card'
-import { RangePicker, type Range, rangeQueryString } from '../components/RangePicker'
-import { RefreshButton } from '../components/RefreshButton'
-import { formatDay, formatPct } from '../lib/format'
+import { Card, Row, Col, Statistic, Button, Space, Typography, Tag, Empty } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
+import type { ColumnsType } from 'antd/es/table'
+import {
+  api,
+  type OverviewResp, type FunnelResp, type TimeseriesResp, type DevicesResp,
+} from '../lib/api'
+import { AppRangePicker, DEFAULT_RANGE, type Range, rangeQueryString } from '../components/biz/AppRangePicker'
+import { DataTableCard } from '../components/biz/DataTableCard'
+import { DownloadCSVButton } from '../components/biz/DownloadCSVButton'
+import { StatPie } from '../components/biz/StatPie'
+import { formatDay, formatPct, formatPercent } from '../lib/format'
+
+const { Title, Text } = Typography
 
 type MetricKey =
   | 'pv' | 'uv' | 'upload_uv' | 'download_uv'
   | 'upload_files' | 'decrypt_done' | 'decrypt_fail' | 'transcode_fail'
 
 const METRIC_OPTIONS: { v: MetricKey; label: string; color: string }[] = [
-  { v: 'pv',             label: 'PV',         color: '#F05A2A' },
-  { v: 'uv',             label: 'UV',         color: '#3A9B5C' },
-  { v: 'upload_uv',      label: '上传 UV',    color: '#7B5BD6' },
-  { v: 'download_uv',    label: '下载 UV',    color: '#2A8DC9' },
-  { v: 'upload_files',   label: '上传文件总数', color: '#D6A437' },
-  { v: 'decrypt_done',   label: '解密成功',    color: '#236B3A' },
-  { v: 'decrypt_fail',   label: '解密失败',    color: '#B83020' },
-  { v: 'transcode_fail', label: '转码失败',    color: '#8B3A1A' },
+  { v: 'pv',             label: 'PV',         color: '#1677FF' },
+  { v: 'uv',             label: 'UV',         color: '#52C41A' },
+  { v: 'upload_uv',      label: '上传 UV',    color: '#722ED1' },
+  { v: 'download_uv',    label: '下载 UV',    color: '#13C2C2' },
+  { v: 'upload_files',   label: '上传文件总数', color: '#FAAD14' },
+  { v: 'decrypt_done',   label: '解密成功',    color: '#389E0D' },
+  { v: 'decrypt_fail',   label: '解密失败',    color: '#F5222D' },
+  { v: 'transcode_fail', label: '转码失败',    color: '#FA541C' },
 ]
 
 const DEFAULT_METRICS: MetricKey[] = ['pv', 'uv']
 
 export function OverviewPage() {
-  const [range, setRange] = useState<Range>({ kind: 'preset', preset: '30d' })
+  const [range, setRange] = useState<Range>(DEFAULT_RANGE)
   const [overview, setOverview] = useState<OverviewResp | null>(null)
   const [funnel, setFunnel] = useState<FunnelResp | null>(null)
   const [pvSeries, setPvSeries] = useState<TimeseriesResp | null>(null)
   const [uvSeries, setUvSeries] = useState<TimeseriesResp | null>(null)
+  const [devices, setDevices] = useState<DevicesResp | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // 多选趋势图
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(DEFAULT_METRICS)
   const [seriesByMetric, setSeriesByMetric] = useState<Partial<Record<MetricKey, TimeseriesResp>>>({})
   const [seriesLoading, setSeriesLoading] = useState(false)
@@ -44,13 +53,14 @@ export function OverviewPage() {
   const reloadOverview = useCallback(async () => {
     setLoading(true)
     try {
-      const [o, f, pv, uv] = await Promise.all([
+      const [o, f, pv, uv, dev] = await Promise.all([
         api.overview(rq),
         api.funnel(rq),
         api.timeseries(rq, 'pv'),
         api.timeseries(rq, 'uv'),
+        api.devices(rq),
       ])
-      setOverview(o); setFunnel(f); setPvSeries(pv); setUvSeries(uv)
+      setOverview(o); setFunnel(f); setPvSeries(pv); setUvSeries(uv); setDevices(dev)
     } finally {
       setLoading(false)
     }
@@ -79,169 +89,287 @@ export function OverviewPage() {
     reloadCustomChart()
   }, [reloadOverview, reloadCustomChart])
 
-  const customSeries = useMemo(() => mergeMultiSeries(selectedMetrics, seriesByMetric, METRIC_OPTIONS),
-    [selectedMetrics, seriesByMetric])
+  const customSeries = useMemo(
+    () => mergeMultiSeries(selectedMetrics, seriesByMetric, METRIC_OPTIONS),
+    [selectedMetrics, seriesByMetric],
+  )
 
   const toggleMetric = (m: MetricKey) => {
-    setSelectedMetrics((cur) =>
-      cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m],
-    )
+    setSelectedMetrics((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]))
   }
 
+  const toggleFilter = (dim: 'browser' | 'os' | 'device_type', value: string) => {
+    setDeviceFilter((cur) => (cur && cur.dim === dim && cur.value === value ? null : { dim, value }))
+  }
+
+  const [deviceFilter, setDeviceFilter] = useState<{ dim: 'browser' | 'os' | 'device_type'; value: string } | null>(null)
+
+  const filteredDevices = useMemo(() => filterDevices(devices, deviceFilter), [devices, deviceFilter])
+  const deviceTableData = useMemo(() => buildDeviceRows(filteredDevices), [filteredDevices])
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
         <div>
-          <div className="text-xl font-semibold">数据概览</div>
-          <div className="text-xs mt-1" style={{ color: '#8A8680' }}>
-            站点 PV / UV、人维度、件维度核心 8 指标 {loading && '· 加载中…'}
-          </div>
+          <Title level={4} style={{ margin: 0 }}>数据概览</Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            站点 PV / UV、人维度、件维度核心 8 指标
+          </Text>
         </div>
-        <div className="flex items-center gap-2">
-          <RangePicker value={range} onChange={setRange} />
-          <RefreshButton onClick={refreshAll} loading={loading || seriesLoading} />
-        </div>
+        <Space>
+          <AppRangePicker value={range} onChange={setRange} />
+          <Button icon={<ReloadOutlined />} onClick={refreshAll} loading={loading || seriesLoading}>刷新</Button>
+        </Space>
       </div>
 
       {/* 第一组：流量 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="PV（页面访问）" value={overview?.pv ?? '-'} sub="所有 pageview 事件" />
-        <StatCard label="UV（独立访客）" value={overview?.uv ?? '-'} sub="按 visitor_id 去重" />
-        <StatCard label="上传过的人 UV" value={overview?.upload_uv ?? '-'} sub="拖拽 / 点选过文件的人数" />
-        <StatCard label="下载过的人 UV" value={overview?.download_uv ?? '-'} sub="单文件 + 散下载 + ZIP 下载" />
-      </div>
+      <Row gutter={[16, 16]}>
+        <Col xs={12} md={6}><Card><Statistic title="PV（页面访问）" value={overview?.pv ?? 0} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="UV（独立访客）" value={overview?.uv ?? 0} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="上传过的人 UV" value={overview?.upload_uv ?? 0} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="下载过的人 UV" value={overview?.download_uv ?? 0} /></Card></Col>
+      </Row>
 
       {/* 第二组：件维度 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="上传文件总数" value={overview?.upload_files ?? '-'} sub="进入解密队列的文件数" />
-        <StatCard
-          label="解密成功"
-          value={overview?.decrypt_done ?? '-'}
-          sub={`成功率 ${formatPct(overview?.decrypt_success_rate)}`}
-          tone="good"
-        />
-        <StatCard
-          label="解密失败"
-          value={overview?.decrypt_fail ?? '-'}
-          sub="点「失败日志」看详情"
-          tone={overview && overview.decrypt_fail > 0 ? 'warn' : 'default'}
-        />
-        <StatCard
-          label="转码失败"
-          value={overview?.transcode_fail ?? '-'}
-          sub={`成功率 ${formatPct(overview?.transcode_success_rate)}`}
-          tone={overview && overview.transcode_fail > 0 ? 'warn' : 'default'}
-        />
-      </div>
+      <Row gutter={[16, 16]}>
+        <Col xs={12} md={6}><Card><Statistic title="上传文件总数" value={overview?.upload_files ?? 0} /></Card></Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title="解密成功"
+              value={overview?.decrypt_done ?? 0}
+              valueStyle={{ color: '#389E0D' }}
+              suffix={<Text type="secondary" style={{ fontSize: 12 }}>{`成功率 ${formatPct(overview?.decrypt_success_rate)}`}</Text>}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title="解密失败"
+              value={overview?.decrypt_fail ?? 0}
+              valueStyle={overview && overview.decrypt_fail > 0 ? { color: '#F5222D' } : undefined}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title="转码失败"
+              value={overview?.transcode_fail ?? 0}
+              valueStyle={overview && overview.transcode_fail > 0 ? { color: '#F5222D' } : undefined}
+              suffix={<Text type="secondary" style={{ fontSize: 12 }}>{`成功率 ${formatPct(overview?.transcode_success_rate)}`}</Text>}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       {/* PV/UV 趋势 */}
-      <PanelCard title="PV / UV 趋势">
+      <Card title="PV / UV 趋势">
         <div style={{ width: '100%', height: 240 }}>
           <ResponsiveContainer>
             <LineChart data={mergeSeries(pvSeries, uvSeries, ['PV', 'UV'])}>
-              <CartesianGrid stroke="rgba(0,0,0,0.05)" />
-              <XAxis dataKey="day" tickFormatter={formatDay} stroke="#8A8680" fontSize={11} />
-              <YAxis stroke="#8A8680" fontSize={11} allowDecimals={false} />
+              <CartesianGrid stroke="rgba(0,0,0,0.06)" />
+              <XAxis dataKey="day" tickFormatter={formatDay} fontSize={11} />
+              <YAxis fontSize={11} allowDecimals={false} />
               <Tooltip labelFormatter={(v) => formatDay(v as number)} />
-              <Line type="monotone" dataKey="PV" stroke="#F05A2A" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="UV" stroke="#3A9B5C" strokeWidth={2} dot={false} />
+              <Legend />
+              <Line type="monotone" dataKey="PV" stroke="#1677FF" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="UV" stroke="#52C41A" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </PanelCard>
+      </Card>
 
       {/* 漏斗 */}
-      <PanelCard title="转化漏斗（按人/UV）" extra={<span className="text-xs" style={{ color: '#8A8680' }}>上传 → 解密成功 → 下载</span>}>
+      <Card title="转化漏斗（按人 / UV）" extra={<Text type="secondary" style={{ fontSize: 12 }}>上传 → 解密成功 → 下载</Text>}>
         <div style={{ width: '100%', height: 220 }}>
           <ResponsiveContainer>
             <BarChart data={funnel?.steps ?? []}>
-              <CartesianGrid stroke="rgba(0,0,0,0.05)" />
-              <XAxis dataKey="name" stroke="#8A8680" fontSize={11} />
-              <YAxis stroke="#8A8680" fontSize={11} allowDecimals={false} />
+              <CartesianGrid stroke="rgba(0,0,0,0.06)" />
+              <XAxis dataKey="name" fontSize={11} />
+              <YAxis fontSize={11} allowDecimals={false} />
               <Tooltip />
               <Bar dataKey="uv" radius={[6, 6, 0, 0]}>
                 {(funnel?.steps ?? []).map((_s, i) => (
-                  <Cell key={i} fill={['#F05A2A', '#E8431A', '#C4310E'][i]} />
+                  <Cell key={i} fill={['#1677FF', '#13C2C2', '#52C41A'][i]} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </PanelCard>
+      </Card>
 
       {/* 自定义多指标趋势 */}
-      <PanelCard
+      <Card
         title="自定义指标趋势（多选）"
-        extra={<span className="text-xs" style={{ color: '#8A8680' }}>{seriesLoading ? '加载中…' : `已选 ${selectedMetrics.length} 个`}</span>}
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>{seriesLoading ? '加载中…' : `已选 ${selectedMetrics.length} 个`}</Text>}
       >
-        <div className="flex flex-wrap gap-2 mb-4">
+        <Space wrap style={{ marginBottom: 16 }}>
           {METRIC_OPTIONS.map((m) => {
             const active = selectedMetrics.includes(m.v)
             return (
-              <button
+              <Tag.CheckableTag
                 key={m.v}
-                onClick={() => toggleMetric(m.v)}
-                className="px-2.5 py-1 rounded-md text-xs flex items-center gap-1.5"
-                style={active
-                  ? {
-                      background: '#1C1A18',
-                      color: '#fff',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                    }
-                  : { background: '#ECEAE6', color: '#1C1A18' }}
+                checked={active}
+                onChange={() => toggleMetric(m.v)}
+                style={active ? { background: m.color, color: '#fff' } : undefined}
               >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: m.color }}
-                />
                 {m.label}
-              </button>
+              </Tag.CheckableTag>
             )
           })}
           {selectedMetrics.length > 0 && (
-            <button
-              onClick={() => setSelectedMetrics([])}
-              className="px-2.5 py-1 rounded-md text-xs"
-              style={{ color: '#8A8680' }}
-            >
-              清空
-            </button>
+            <Button type="link" size="small" onClick={() => setSelectedMetrics([])}>清空</Button>
           )}
-        </div>
+        </Space>
 
         <div style={{ width: '100%', height: 280 }}>
           {selectedMetrics.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-sm" style={{ color: '#A0988E' }}>
-              请选择至少一个指标
-            </div>
+            <Empty description="请选择至少一个指标" />
           ) : (
             <ResponsiveContainer>
               <LineChart data={customSeries}>
-                <CartesianGrid stroke="rgba(0,0,0,0.05)" />
-                <XAxis dataKey="day" tickFormatter={formatDay} stroke="#8A8680" fontSize={11} />
-                <YAxis stroke="#8A8680" fontSize={11} allowDecimals={false} />
+                <CartesianGrid stroke="rgba(0,0,0,0.06)" />
+                <XAxis dataKey="day" tickFormatter={formatDay} fontSize={11} />
+                <YAxis fontSize={11} allowDecimals={false} />
                 <Tooltip labelFormatter={(v) => formatDay(v as number)} />
                 <Legend />
                 {selectedMetrics.map((m) => {
                   const opt = METRIC_OPTIONS.find((o) => o.v === m)!
                   return (
-                    <Line
-                      key={m}
-                      type="monotone"
-                      dataKey={opt.label}
-                      stroke={opt.color}
-                      strokeWidth={2}
-                      dot={false}
-                    />
+                    <Line key={m} type="monotone" dataKey={opt.label} stroke={opt.color} strokeWidth={2} dot={false} />
                   )
                 })}
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
-      </PanelCard>
+      </Card>
+
+      {/* 访问设备环境 */}
+      <Card
+        title="访问设备环境"
+        extra={
+          <Space>
+            {deviceFilter && (
+              <Tag closable color="blue" onClose={() => setDeviceFilter(null)}>
+                {DIM_LABEL[deviceFilter.dim]}：{deviceFilter.value}
+              </Tag>
+            )}
+            <Text type="secondary" style={{ fontSize: 12 }}>按 visitor_id 去重 · 点击扇区交叉筛选</Text>
+          </Space>
+        }
+      >
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={8}>
+            <div style={{ textAlign: 'center', marginBottom: 8, fontWeight: 500 }}>浏览器</div>
+            <StatPie
+              data={filteredDevices.browsers.map((b) => ({ name: b.name, value: b.n }))}
+              activeName={deviceFilter?.dim === 'browser' ? deviceFilter.value : undefined}
+              onSliceClick={(name) => toggleFilter('browser', name)}
+            />
+          </Col>
+          <Col xs={24} md={8}>
+            <div style={{ textAlign: 'center', marginBottom: 8, fontWeight: 500 }}>操作系统</div>
+            <StatPie
+              data={filteredDevices.os.map((b) => ({ name: b.name, value: b.n }))}
+              activeName={deviceFilter?.dim === 'os' ? deviceFilter.value : undefined}
+              onSliceClick={(name) => toggleFilter('os', name)}
+            />
+          </Col>
+          <Col xs={24} md={8}>
+            <div style={{ textAlign: 'center', marginBottom: 8, fontWeight: 500 }}>设备类型</div>
+            <StatPie
+              data={filteredDevices.device_types.map((b) => ({ name: b.name, value: b.n }))}
+              activeName={deviceFilter?.dim === 'device_type' ? deviceFilter.value : undefined}
+              onSliceClick={(name) => toggleFilter('device_type', name)}
+            />
+          </Col>
+        </Row>
+      </Card>
+
+      <DataTableCard<DeviceRow>
+        title="设备分布明细"
+        toolbar={
+          <DownloadCSVButton<DeviceRow>
+            filename={`devices-${Date.now()}.csv`}
+            columns={[
+              { key: 'dimension', title: '维度' },
+              { key: 'name', title: '名称' },
+              { key: 'n', title: '访客数' },
+              { key: 'pct', title: '占比' },
+            ]}
+            dataSource={deviceTableData}
+          />
+        }
+        columns={DEVICE_COLUMNS}
+        dataSource={deviceTableData}
+        rowKey={(r) => `${r.dimension}-${r.name}`}
+        loading={loading}
+        size="small"
+      />
     </div>
   )
+}
+
+type DeviceRow = { dimension: string; name: string; n: number; pct: string }
+
+const DIM_LABEL: Record<'browser' | 'os' | 'device_type', string> = {
+  browser: '浏览器',
+  os: '操作系统',
+  device_type: '设备类型',
+}
+
+const DEVICE_COLUMNS: ColumnsType<DeviceRow> = [
+  { title: '维度', dataIndex: 'dimension', key: 'dimension', width: 120,
+    render: (v) => <Tag color="blue">{v}</Tag> },
+  { title: '名称', dataIndex: 'name', key: 'name' },
+  { title: '访客数', dataIndex: 'n', key: 'n', align: 'right', width: 120 },
+  { title: '占比', dataIndex: 'pct', key: 'pct', align: 'right', width: 100 },
+]
+
+type FilteredDevices = {
+  browsers: { name: string; n: number }[]
+  os: { name: string; n: number }[]
+  device_types: { name: string; n: number }[]
+}
+
+function filterDevices(
+  devices: DevicesResp | null,
+  filter: { dim: 'browser' | 'os' | 'device_type'; value: string } | null,
+): FilteredDevices {
+  if (!devices) return { browsers: [], os: [], device_types: [] }
+  if (!filter) {
+    return {
+      browsers: devices.browsers,
+      os: devices.os,
+      device_types: devices.device_types,
+    }
+  }
+  const visitors = devices.visitors.filter((v) => v[filter.dim] === filter.value)
+  const tally = (key: 'browser' | 'os' | 'device_type') => {
+    const m = new Map<string, number>()
+    for (const v of visitors) m.set(v[key], (m.get(v[key]) ?? 0) + 1)
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n }))
+  }
+  return {
+    browsers: tally('browser'),
+    os: tally('os'),
+    device_types: tally('device_type'),
+  }
+}
+
+function buildDeviceRows(devices: FilteredDevices): DeviceRow[] {
+  const sumOf = (arr: { n: number }[]) => arr.reduce((s, x) => s + x.n, 0)
+  const browserTotal = sumOf(devices.browsers)
+  const osTotal = sumOf(devices.os)
+  const dtTotal = sumOf(devices.device_types)
+  return [
+    ...devices.browsers.map((b) => ({ dimension: '浏览器', name: b.name, n: b.n, pct: formatPercent(b.n, browserTotal) })),
+    ...devices.os.map((b) => ({ dimension: '操作系统', name: b.name, n: b.n, pct: formatPercent(b.n, osTotal) })),
+    ...devices.device_types.map((b) => ({ dimension: '设备类型', name: b.name, n: b.n, pct: formatPercent(b.n, dtTotal) })),
+  ]
 }
 
 function mergeSeries(
@@ -277,7 +405,6 @@ function mergeMultiSeries(
       map.set(p.day, cur)
     }
   }
-  // 把缺失的点补 0
   const out = [...map.values()].sort((x, y) => x.day - y.day)
   for (const row of out) {
     for (const m of metrics) {

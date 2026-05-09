@@ -225,7 +225,10 @@ export const analytics = {
   },
 
   pageview(props?: Props) {
-    enqueue(envelope('pageview', props))
+    const ref = typeof document !== 'undefined' ? document.referrer : ''
+    const merged: Props = { ...(props ?? {}) }
+    if (ref) merged.referrer = ref
+    enqueue(envelope('pageview', merged))
   },
 
   track(event: string, props?: Props) {

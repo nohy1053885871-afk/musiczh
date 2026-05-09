@@ -72,6 +72,7 @@
 | `queue_size` | number | 当前队列长度 |
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
 | `status` | string | 文件当时状态 |
+| `referrer` | string | 来源 URL（仅 `pageview` 自动从 `document.referrer` 采集，用于访客日志渠道分析）|
 
 **绝对禁止**：上报文件二进制内容、文件内容哈希（指纹）、用户输入的密码 / 账号、网银卡号等隐私信息。
 

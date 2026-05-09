@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { UAParser } from 'ua-parser-js'
 import db from '../db.js'
 import { requireAdmin } from '../middleware/auth.js'
 
@@ -216,5 +217,83 @@ adminStats.get('/timeseries', (c) => {
   const rows = db.prepare(sql!).all(from, to) as { day: number; v: number }[]
   return c.json({ range, from, to, metric: metric.data, points: rows })
 })
+
+// 文件格式分布：按 file_ext 聚合解密总数 / 成功 / 失败
+adminStats.get('/format-distribution', (c) => {
+  const { from, to, range } = parseTimeRange(c)
+
+  const rows = db
+    .prepare(
+      `SELECT json_extract(props,'$.file_ext') AS ext,
+              SUM(CASE WHEN event = 'decrypt_done' THEN 1 ELSE 0 END) AS success,
+              SUM(CASE WHEN event = 'decrypt_fail' THEN 1 ELSE 0 END) AS fail
+         FROM events
+        WHERE ts >= ? AND ts <= ?
+          AND event IN ('decrypt_done','decrypt_fail')
+          AND json_extract(props,'$.file_ext') IS NOT NULL
+        GROUP BY ext
+        ORDER BY (success + fail) DESC`,
+    )
+    .all(from, to) as Array<{ ext: string | null; success: number; fail: number }>
+
+  const result = rows.map((r) => ({
+    ext: r.ext,
+    success: r.success ?? 0,
+    fail: r.fail ?? 0,
+    total: (r.success ?? 0) + (r.fail ?? 0),
+  }))
+
+  return c.json({ range, from, to, rows: result })
+})
+
+// 访问设备环境：按 visitor_id 去重后再分桶
+adminStats.get('/devices', (c) => {
+  const { from, to, range } = parseTimeRange(c)
+
+  const rows = db
+    .prepare(
+      `SELECT visitor_id, ua FROM events
+        WHERE ts >= ? AND ts <= ?
+          AND ua IS NOT NULL
+        GROUP BY visitor_id`,
+    )
+    .all(from, to) as Array<{ visitor_id: string; ua: string }>
+
+  const visitors = rows.map((r) => parseDevice(r.ua))
+
+  const browserMap = new Map<string, number>()
+  const osMap = new Map<string, number>()
+  const deviceMap = new Map<string, number>()
+  const inc = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
+  for (const v of visitors) {
+    inc(browserMap, v.browser)
+    inc(osMap, v.os)
+    inc(deviceMap, v.device_type)
+  }
+  const sortDesc = (m: Map<string, number>) =>
+    [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => ({ name, n }))
+
+  return c.json({
+    range,
+    from,
+    to,
+    browsers: sortDesc(browserMap),
+    os: sortDesc(osMap),
+    device_types: sortDesc(deviceMap),
+    visitors,
+  })
+})
+
+function parseDevice(ua: string | null): { browser: string; os: string; device_type: string } {
+  if (!ua) return { browser: '其他', os: '其他', device_type: '其他' }
+  const res = new UAParser(ua).getResult()
+  let browser = res.browser.name ?? '其他'
+  if (/MicroMessenger/i.test(ua)) browser = '微信内置'
+  if (browser === 'Mobile Safari') browser = 'Safari'
+  const os = res.os.name ?? '其他'
+  const t = res.device.type
+  const device_type = t === 'mobile' ? '手机' : t === 'tablet' ? '平板' : '桌面'
+  return { browser, os, device_type }
+}
 
 export default adminStats

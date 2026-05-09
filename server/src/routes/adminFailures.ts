@@ -9,21 +9,25 @@ adminFailures.use('*', requireAdmin)
 const ListQuery = z.object({
   stage: z.enum(['decrypt', 'transcode']).optional(),
   code: z.string().max(64).optional(),
+  q: z.string().max(200).optional(),
+  ext: z.string().max(32).optional(),
   from: z.coerce.number().int().nonnegative().optional(),
   to: z.coerce.number().int().nonnegative().optional(),
   page: z.coerce.number().int().min(1).default(1),
-  size: z.coerce.number().int().min(1).max(200).default(50),
+  size: z.coerce.number().int().min(1).max(200).default(10),
 })
 
 adminFailures.get('/', (c) => {
   const parsed = ListQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams))
   if (!parsed.success) return c.json({ error: 'invalid_query', detail: parsed.error.issues }, 400)
-  const { stage, code, from, to, page, size } = parsed.data
+  const { stage, code, q, ext, from, to, page, size } = parsed.data
 
   const where: string[] = []
   const params: any[] = []
   if (stage) { where.push('stage = ?'); params.push(stage) }
   if (code)  { where.push('error_code = ?'); params.push(code) }
+  if (ext)   { where.push('file_ext = ?'); params.push(ext) }
+  if (q)     { where.push('file_name LIKE ?'); params.push(`%${q}%`) }
   if (from)  { where.push('ts >= ?'); params.push(from) }
   if (to)    { where.push('ts <= ?'); params.push(to) }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
