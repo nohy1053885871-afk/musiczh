@@ -5,6 +5,17 @@ import { requireAdmin } from '../middleware/auth.js'
 import { parseUA } from '../lib/ua.js'
 import { parseTimeRange } from '../lib/timeRange.js'
 
+// 启动时算一次本地时区相对 UTC 的偏移（ms）。
+// SQLite 没有时区函数，纯 ts/86400000 切桶按 UTC 0 点切，
+// 但 parseTimeRange.startOfTodayMs() 用的是本地时区今日 0 点 → 与 overview 卡片口径错位
+// （北京 UTC+8 时，今日的前 8 小时数据被错切到「UTC 昨日」桶，图表与卡片对不上）。
+// 在 ts 上 +TZ_OFFSET_MS 再 /86400000 整除，最后再 -TZ_OFFSET_MS 还原回真实 ts，
+// 即可让 GROUP BY 桶按「本地时区当日 0 点」对齐。中国不切 DST，启动时算一次足矣。
+const TZ_OFFSET_MS = -new Date().getTimezoneOffset() * 60_000
+
+// SQL 片段：把 ts（UTC ms）切到本地时区当日 0 点的 ts
+const DAY_BUCKET_SQL = `((ts + ${TZ_OFFSET_MS}) / 86400000) * 86400000 - ${TZ_OFFSET_MS}`
+
 const adminStats = new Hono()
 
 adminStats.use('*', requireAdmin)
@@ -29,10 +40,29 @@ adminStats.get('/overview', (c) => {
     `SELECT COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)), 0) AS n
        FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
   )
+  // 上传校验拒（格式 / 大小 / 队列上限），每个被拒文件一条
+  const uploadReject = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'")
   const decryptDone = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'")
   const decryptFail = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_fail'")
   const transcodeDone = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'transcode_done'")
   const transcodeFail = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'transcode_fail'")
+  // 「转换成功」= 解密成功（件） + 原始 .flac 直接转码成功（件）
+  // 原始 flac 上传时 transcode_done 不带 source；解密产物再转码会带 source=ncm/kgm/vpr
+  // 这样同一个文件「先解密再转码」只算一次，避免双计数
+  const rawFlacTranscodeDone = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND event = 'transcode_done'
+         AND json_extract(props,'$.source') IS NULL`,
+  )
+  // 原 flac 上传转码失败件数（用于「上传文件总数」卡的拆分小字 + tooltip）
+  const rawFlacTranscodeFail = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND event = 'transcode_fail'
+         AND json_extract(props,'$.source') IS NULL`,
+  )
+  const convertDone = decryptDone + rawFlacTranscodeDone
 
   return c.json({
     range,
@@ -51,11 +81,16 @@ adminStats.get('/overview', (c) => {
     transcode_fail: transcodeFail,
     transcode_success_rate:
       transcodeDone + transcodeFail > 0 ? transcodeDone / (transcodeDone + transcodeFail) : null,
+    convert_done: convertDone,
+    raw_flac_transcode_done: rawFlacTranscodeDone,
+    raw_flac_transcode_fail: rawFlacTranscodeFail,
+    upload_reject: uploadReject,
   })
 })
 
-// 漏斗：人维度 4 层（访问→上传→解密→下载） / 件维度 3 层（上传→解密→下载）
+// 漏斗：人维度 4 层（访问→上传→转换→下载） / 件维度 3 层（上传→转换→下载）
 // 「上传」层含被拒文件（漏斗的诊断价值就在于看每个环节流失多少）
+// 「转换成功」= decrypt_done + 原始 flac 上传 transcode_done（source 为空），避免双计数
 // 兼容历史数据：旧事件 upload_drop/upload_pick + *_download_click 也计入对应层
 adminStats.get('/funnel', (c) => {
   const { from, to, range } = parseTimeRange(c)
@@ -68,8 +103,13 @@ adminStats.get('/funnel', (c) => {
   const userUpload = cnt(
     "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_attempt','upload_reject','upload_drop','upload_pick')",
   )
+  // 「转换成功」层口径 = decrypt_done + 原始 flac 上传转码成功（transcode_done 且 source 为空）
+  // 同一个文件先解密再转码不会被双计数：解密产物的 transcode_done 带 source=ncm/kgm/vpr，会被排除
   const userDecrypt = cnt(
-    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'",
+    `SELECT COUNT(DISTINCT visitor_id) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND ( event = 'decrypt_done'
+            OR (event = 'transcode_done' AND json_extract(props,'$.source') IS NULL) )`,
   )
   const userDownload = cnt(
     "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('download_done','download_fail','row_download_click','btn_download_all_click','btn_download_zip_click')",
@@ -85,7 +125,10 @@ adminStats.get('/funnel', (c) => {
        FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
   )
   const fileDecrypt = cnt(
-    "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'",
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND ( event = 'decrypt_done'
+            OR (event = 'transcode_done' AND json_extract(props,'$.source') IS NULL) )`,
   )
   const fileDownload = cnt(
     "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'download_done'",
@@ -114,14 +157,14 @@ adminStats.get('/funnel', (c) => {
       steps: buildSteps([
         { name: '访问', n: userVisit },
         { name: '上传', n: userUpload },
-        { name: '解密成功', n: userDecrypt },
+        { name: '转换成功', n: userDecrypt },
         { name: '下载', n: userDownload },
       ]),
     },
     file: {
       steps: buildSteps([
         { name: '上传', n: fileUpload },
-        { name: '解密成功', n: fileDecrypt },
+        { name: '转换成功', n: fileDecrypt },
         { name: '下载', n: fileDownload },
       ]),
     },
@@ -185,48 +228,48 @@ adminStats.get('/timeseries', (c) => {
   let sql: string
   switch (metric.data) {
     case 'pv':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(*) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(*) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event = 'pageview'
              GROUP BY day ORDER BY day`
       break
     case 'uv':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(DISTINCT visitor_id) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(DISTINCT visitor_id) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event = 'pageview'
              GROUP BY day ORDER BY day`
       break
     case 'upload_uv':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(DISTINCT visitor_id) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(DISTINCT visitor_id) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')
              GROUP BY day ORDER BY day`
       break
     case 'download_uv':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(DISTINCT visitor_id) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(DISTINCT visitor_id) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click')
              GROUP BY day ORDER BY day`
       break
     case 'upload_files':
-      sql = `SELECT (ts/86400000)*86400000 AS day,
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day,
                     COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)),0) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')
              GROUP BY day ORDER BY day`
       break
     case 'decrypt_done':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(*) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(*) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'
              GROUP BY day ORDER BY day`
       break
     case 'decrypt_fail':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(*) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(*) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_fail'
              GROUP BY day ORDER BY day`
       break
     case 'transcode_done':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(*) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(*) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event = 'transcode_done'
              GROUP BY day ORDER BY day`
       break
     case 'transcode_fail':
-      sql = `SELECT (ts/86400000)*86400000 AS day, COUNT(*) AS v
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(*) AS v
              FROM events WHERE ts >= ? AND ts <= ? AND event = 'transcode_fail'
              GROUP BY day ORDER BY day`
       break

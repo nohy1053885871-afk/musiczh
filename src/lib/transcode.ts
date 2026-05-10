@@ -21,10 +21,27 @@ export async function transcodeToMp3(
   source: Blob,
   onProgress?: ProgressCallback,
 ): Promise<Blob> {
+  const arrayBuffer = await source.arrayBuffer()
+
+  // ========== 0. 文件头嗅探：把「假 FLAC」与「真 FLAC 但浏览器解不了」分开报错 ==========
+  // FLAC: 66 4c 61 43 ("fLaC")  /  Ogg: 4f 67 67 53 ("OggS"，可能是 Ogg-Vorbis 或 Ogg-FLAC)
+  const head = new Uint8Array(arrayBuffer, 0, Math.min(4, arrayBuffer.byteLength))
+  const isFlac =
+    head.length >= 4 &&
+    head[0] === 0x66 && head[1] === 0x4c && head[2] === 0x61 && head[3] === 0x43
+  const isOgg =
+    head.length >= 4 &&
+    head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53
+  if (!isFlac && !isOgg) {
+    throw new DecryptError(
+      'INVALID_HEADER',
+      '这个文件可能不是有效的 FLAC（看起来像加密文件或命名错误），请确认源文件是否真的已解密',
+    )
+  }
+
   // ========== 1. 解码到 PCM ==========
   let audioBuffer: AudioBuffer
   try {
-    const arrayBuffer = await source.arrayBuffer()
     const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     try {
       audioBuffer = await ctx.decodeAudioData(arrayBuffer)
@@ -35,6 +52,14 @@ export async function transcodeToMp3(
       }
     }
   } catch (e) {
+    // 真 FLAC 头但 decodeAudioData 失败，大概率是 Hi-Res 编码（24-bit / ≥96kHz）当前浏览器解不了
+    if (isFlac) {
+      throw new DecryptError(
+        'HIRES_NOT_SUPPORTED',
+        '这个 FLAC 可能是 Hi-Res（24-bit 或 ≥96kHz），当前浏览器内置解码器不支持。建议在桌面版 Chrome / Edge 重试',
+        e,
+      )
+    }
     throw new DecryptError(
       'DECRYPT_FAILED',
       '当前浏览器无法解码这个音频，请尝试用 Chrome / Edge 打开',

@@ -27,6 +27,7 @@ import {
   type DecryptResult,
   type ProgressCallback,
 } from './types'
+import { stripFileExtensions } from './filename'
 
 // 两个固定的 AES 密钥（来自网易云客户端，业内公开）
 const CORE_KEY = new Uint8Array([
@@ -198,7 +199,7 @@ export async function decryptNcm(
   onProgress?.(1)
 
   // ========== 9. 推荐文件名 ==========
-  const title = meta.musicName || file.name.replace(/\.ncm$/i, '')
+  const title = meta.musicName || stripFileExtensions(file.name)
   const artists = meta.artist?.map((a) => a[0]).join(', ') || ''
   const suggestedName = artists
     ? sanitizeFilename(`${artists} - ${title}.${format}`)

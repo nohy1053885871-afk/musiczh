@@ -2,13 +2,13 @@
 
 加密音乐文件 → MP3/FLAC/OGG 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
 
-支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥）。
-解密后可一键二次转码为 MP3（基于浏览器原生 AudioContext + lamejs，有损）。
+支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥）；以及原始 .flac（自动转 MP3）。
+解密后可一键二次转码为 MP3（基于浏览器原生 AudioContext + lamejs，有损）；原始 .flac 上传走同一管线，无需点击按钮。
 
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.3.0（运营后台 v0.3）
+- 当前版本：v0.4.0（运营后台 v0.4）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -54,7 +54,7 @@ docs/
 public/
   favicon.svg            # 黑胶唱片 SVG 图标
   icons.svg
-  kgm-v2-mask.bin     # KGM 解密用查表（gzip 流，但不加 .gz 后缀避免 server/浏览器自动解压），1.1MB；首次 KGM 解密时拉取，浏览器缓存
+  kgm-v2-mask.bin     # KGM 解密用查表（gzip 流，但不加 .gz 后缀避免 server/浏览器自动解压），当前 1.1MB（覆盖 ≤100MB KGM）；扩 mask 到 2.2MB 后可覆盖 ≤200MB（脚本见 scripts/build-kgm-mask.ts）
 ```
 
 ## 需求归属速查（关键词 → 改哪个子项目）
@@ -93,7 +93,7 @@ type TrackedFile = {
 
 ## 限制规则
 
-- 单文件最大 100MB（NCM、KGM、VPR 一致）
+- 单文件最大 200MB（NCM / 原始 FLAC 全量支持；KGM / VPR 当前 mask 仅覆盖 ≤100MB，100-200MB 会在解密阶段抛 FILE_TOO_LARGE，等 mask 资产扩容后才能完整支持 200MB）
 - 列表累计最多 50 个
 - 超限时 warning 横幅 5 秒自动消失
 
@@ -148,10 +148,18 @@ npm run dev:server   # http://localhost:8787（tsx watch，热重载）
 - [ ] CI/CD：GitHub Actions 自动构建 + rsync 部署到服务器
 - [ ] FLAC 文件 Vorbis Comments + PICTURE block 标签写入
 - [ ] 移动端适配优化
+- [ ] 移动端 .flac >100MB 上传时给软提示（避免 transcodeToMp3 一次性 PCM 解码导致 Safari OOM 闪退）
+- [ ] FLAC 流式转码改造（用 WASM FLAC decoder 取代 AudioContext.decodeAudioData，把内存峰值从 ~1GB 降到 ~50MB）
 - [ ] QQ 音乐 / 酷我音乐 / 酷狗 v4 格式支持
 - [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
+
+## 已完成（v0.4.0 / 运营后台 v0.4 · 20260510 上线）
+
+- **单文件上限 100MB → 200MB**：NCM / 原始 FLAC 全量支持；KGM/VPR 因 mask 资产暂未扩容，仍 ≤100MB 才能解（100-200MB 会抛 FILE_TOO_LARGE）。扩容脚本见 `scripts/build-kgm-mask.ts`
+- **原始 .flac 上传自动转 MP3**：跳过解密，进队列后立即走 transcode 路径；`transcode_done` 不带 `source` 用于运营后台口径区分
+- **运营后台「转换成功」**：Overview 顶部新增「转换成功数（件）」卡片（口径 = 解密成功 + 原始 flac 转码成功，悬停 InfoIcon 看说明）；漏斗第二层从「解密成功」改为「转换成功」，相同口径，**人维度 / 件维度同步**；同一文件先解密再转码不会被双计数
 
 ## 已完成（运营后台 v0.3 · 20260510 上线）
 

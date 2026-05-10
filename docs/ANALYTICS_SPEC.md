@@ -95,7 +95,7 @@
 | `upload_zone_view` | 主站 - 上传区 - 曝光 | [src/App.tsx](../src/App.tsx) `DropZone` ref | — | session 内只触发一次 |
 | `upload_drop` | 主站 - 上传区 - 拖拽文件松手 | [src/App.tsx](../src/App.tsx) `DropZone.onDrop` | `count, total_size` | 批量动作事件，文件级请看 `upload_attempt` |
 | `upload_pick` | 主站 - 上传区 - 点击选择文件后确认 | [src/App.tsx](../src/App.tsx) `input.onChange` | `count` | 批量动作事件 |
-| `upload_attempt` | 主站 - 业务 - 上传成功（进入队列） | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size` | **每个通过限制规则的文件一条**；漏斗件维度的「上传」层 |
+| `upload_attempt` | 主站 - 业务 - 上传成功（进入队列） | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size` | **每个通过限制规则的文件一条**；漏斗件维度的「上传」层；原始 .flac 上传也走此事件 |
 | `upload_reject` | 主站 - 业务 - 上传被拒 | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size, reject_reason` | **每个被拒文件一条**；用于诊断"哪些格式 / 多大 / 多少超限" |
 | `btn_transcode_click` / `btn_transcode_view` | 主站 - 列表行 - 转 MP3 按钮 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, file_ext, file_size, format` | 仅 flac/ogg 才显示 |
 | `row_download_click` / `row_download_view` | 主站 - 列表行 - 单文件下载 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, format, file_size` | 仅 done 状态显示 |
@@ -108,8 +108,8 @@
 | `decrypt_start` | 主站 - 业务 - 解密任务开始 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size` | |
 | `decrypt_done` | 主站 - 业务 - 解密成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, source, format` | |
 | `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, ...` | 同步触发 `trackFailure` |
-| `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size` | |
-| `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format` | |
+| `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size` | `source` 为空 = 原始 .flac 上传；带值（ncm/kgm/vpr）= 解密产物再转码。运营后台「转换成功」漏斗 / 卡片靠此区分以避双计数 |
+| `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, source` | 同上；`source IS NULL` 是原始 flac 上传转码 |
 | `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_msg, error_stack, ...` | 同步触发 `trackFailure` |
 | `download_done` | 主站 - 业务 - 下载完成 | [src/App.tsx](../src/App.tsx) `FileRow` 单文件 / `downloadAllSeparate` / `downloadAllAsZip` | `file_name, file_ext, file_size, download_kind` | ZIP 整批成功后按文件数批量发；漏斗件维度的「下载」层 |
 | `download_fail` | 主站 - 业务 - 下载失败 | 三处下载入口的 try/catch 兜底 | `download_kind, error_code, error_msg, file_name?` | 同步触发 `trackFailure('download',...)`；ZIP 整批失败时 `file_name` 留空 |
