@@ -3,8 +3,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, Cell, LabelList,
 } from 'recharts'
-import { Card, Row, Col, Statistic, Button, Space, Typography, Tag, Empty, Segmented } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Statistic, Button, Space, Typography, Tag, Empty, Segmented, Tooltip as AntTooltip } from 'antd'
+import { ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import {
   api,
@@ -14,7 +14,7 @@ import { AppRangePicker, DEFAULT_RANGE, type Range, rangeQueryString } from '../
 import { DataTableCard } from '../components/biz/DataTableCard'
 import { DownloadCSVButton } from '../components/biz/DownloadCSVButton'
 import { StatPie } from '../components/biz/StatPie'
-import { formatDay, formatPct, formatPercent } from '../lib/format'
+import { formatDay, formatPct, formatPercent, ratioLabel } from '../lib/format'
 
 type FunnelDim = 'user' | 'file'
 const FUNNEL_COLORS = ['#1677FF', '#722ED1', '#13C2C2', '#52C41A']
@@ -134,16 +134,86 @@ export function OverviewPage() {
         <Col xs={12} md={6}><Card><Statistic title="下载过的人 UV" value={overview?.download_uv ?? 0} /></Card></Col>
       </Row>
 
-      {/* 第二组：件维度 */}
+      {/* 第二组：件维度 - 成功口径（上传 → 转换 → 解密 → 转码） */}
       <Row gutter={[16, 16]}>
-        <Col xs={12} md={6}><Card><Statistic title="上传文件总数（件）" value={overview?.upload_files ?? 0} /></Card></Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title={
+                <Space size={6}>
+                  <span>上传文件总数（件）</span>
+                  <AntTooltip title="所有进入上传校验的文件件数（含被拒）。拆分小字按出口分类：走过解密路径（NCM/KGM/VPR）的件数 + 走过原 flac 转码路径的件数；差额是被上传校验拒的（见「上传失败」卡）。">
+                    <InfoCircleOutlined style={{ color: '#999' }} />
+                  </AntTooltip>
+                </Space>
+              }
+              value={overview?.upload_files ?? 0}
+              suffix={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {`= 解密 ${(overview?.decrypt_done ?? 0) + (overview?.decrypt_fail ?? 0)} + 原 flac 转 ${(overview?.raw_flac_transcode_done ?? 0) + (overview?.raw_flac_transcode_fail ?? 0)}`}
+                </Text>
+              }
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title={
+                <Space size={6}>
+                  <span>转换成功数（件）</span>
+                  <AntTooltip title="解密成功（件） + 原始 .flac 直接转码成功（件）。同一个文件先解密再转码不会被双计数。">
+                    <InfoCircleOutlined style={{ color: '#999' }} />
+                  </AntTooltip>
+                </Space>
+              }
+              value={overview?.convert_done ?? 0}
+              valueStyle={{ color: '#1677FF' }}
+              suffix={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {`= 解密 ${overview?.decrypt_done ?? 0} + 原 flac 转 ${overview?.raw_flac_transcode_done ?? 0}`}
+                </Text>
+              }
+            />
+          </Card>
+        </Col>
         <Col xs={12} md={6}>
           <Card>
             <Statistic
               title="解密成功（件）"
               value={overview?.decrypt_done ?? 0}
               valueStyle={{ color: '#389E0D' }}
-              suffix={<Text type="secondary" style={{ fontSize: 12 }}>{`成功率 ${formatPct(overview?.decrypt_success_rate)}`}</Text>}
+              suffix={<Text type="secondary" style={{ fontSize: 12 }}>{ratioLabel('成功率', overview?.decrypt_done, overview?.decrypt_fail, overview?.decrypt_success_rate)}</Text>}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title="转码成功（件）"
+              value={overview?.transcode_done ?? 0}
+              valueStyle={{ color: '#389E0D' }}
+              suffix={<Text type="secondary" style={{ fontSize: 12 }}>{ratioLabel('成功率', overview?.transcode_done, overview?.transcode_fail, overview?.transcode_success_rate)}</Text>}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 第三组：件维度 - 失败口径（上传 / 解密 / 转码） */}
+      <Row gutter={[16, 16]}>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title={
+                <Space size={6}>
+                  <span>上传失败（件）</span>
+                  <AntTooltip title="上传校验阶段被拒的文件件数：格式不支持 / 超出 200MB / 超过 50 个队列上限。明细见「解密分析 → 上传日志」按 reject_reason 筛选。">
+                    <InfoCircleOutlined style={{ color: '#999' }} />
+                  </AntTooltip>
+                </Space>
+              }
+              value={overview?.upload_reject ?? 0}
+              valueStyle={overview && overview.upload_reject > 0 ? { color: '#F5222D' } : undefined}
             />
           </Card>
         </Col>
@@ -162,7 +232,6 @@ export function OverviewPage() {
               title="转码失败（件）"
               value={overview?.transcode_fail ?? 0}
               valueStyle={overview && overview.transcode_fail > 0 ? { color: '#F5222D' } : undefined}
-              suffix={<Text type="secondary" style={{ fontSize: 12 }}>{`成功率 ${formatPct(overview?.transcode_success_rate)}`}</Text>}
             />
           </Card>
         </Col>
@@ -199,7 +268,7 @@ export function OverviewPage() {
               ]}
             />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {funnelDim === 'user' ? '访问 → 上传 → 解密 → 下载' : '上传 → 解密 → 下载'}
+              {funnelDim === 'user' ? '访问 → 上传 → 转换 → 下载' : '上传 → 转换 → 下载'}
             </Text>
           </Space>
         }

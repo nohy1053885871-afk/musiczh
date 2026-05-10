@@ -13,8 +13,13 @@
  *   if VPR: plain[i] ^= MASK_DIFF_VPR[i % 17]
  *
  * MASK_LARGE 是一张 73MB 的查表，但它高度可压缩（公开常数）。
- * 我们打包了前 6.5MB（gzip 压缩到 ~1.1MB，存放于 public/kgm-v2-mask.bin.gz），
- * 这覆盖了「加密音频长度 ≤ 100MB」的文件——和项目整体的单文件上限一致。
+ * 我们打包了前 6.5MB（gzip 压缩到 ~1.1MB，存放于 public/kgm-v2-mask.bin），
+ * 这覆盖了「加密音频长度 ≤ 100MB」的文件。
+ * 注意：项目整体单文件上限已升至 200MB，但 KGM/VPR 因 mask 限制仍只能解 ≤100MB；
+ *      100-200MB 的 KGM/VPR 会在解密阶段抛 FILE_TOO_LARGE。
+ *      要扩到 200MB 需提供完整 73MB MASK_LARGE 源（公开常量，但本仓不便落盘），
+ *      跑 scripts/build-kgm-mask.ts 切前 13MB → gzip 替换 public/kgm-v2-mask.bin，
+ *      并把下方 MASK_LARGE_RAW_BYTES 改成 13 * 1024 * 1024。
  * 解密资源仅在首次解密 KGM/VPR 时一次性拉取，之后浏览器缓存。
  *
  * 全部解密在浏览器内完成，文件不会上传到任何服务器。
@@ -27,6 +32,7 @@ import {
   type DecryptResult,
   type ProgressCallback,
 } from './types'
+import { stripFileExtensions } from './filename'
 
 // ============== Magic ==============
 
@@ -73,7 +79,7 @@ const MASK_DIFF_VPR = new Uint8Array([
 // 我们打包的 mask 资产覆盖的最大「加密音频字节数」上限
 // = mask 字节数 × 16
 const MASK_LARGE_RAW_BYTES = 6 * 1024 * 1024 + 512 * 1024 // 6.5 MB
-const MAX_KGM_AUDIO_BYTES = MASK_LARGE_RAW_BYTES * 16 // ~104 MB（覆盖项目整体 100MB 单文件上限）
+const MAX_KGM_AUDIO_BYTES = MASK_LARGE_RAW_BYTES * 16 // ~104 MB（KGM/VPR 单格式上限；项目整体 200MB，扩 mask 后此处也跟着改）
 
 // 文件内容是 gzip 流，但故意不用 .gz 结尾——避免 dev server / 浏览器在 HTTP 层
 // 自作主张地按 Content-Encoding: gzip 自动解压一次，导致我们 DecompressionStream
@@ -205,7 +211,7 @@ export async function decryptKgm(
     // 99% 是 v4（密钥需要联网获取），剩下是文件损坏
     throw new DecryptError(
       'KGM_V4_UNSUPPORTED',
-      '这可能是酷狗新版加密格式（v4），本工具暂不支持。请尝试用酷狗客户端导出 MP3。',
+      '这可能是酷狗新版加密格式（v4），本工具暂不支持',
     )
   }
 
@@ -214,7 +220,9 @@ export async function decryptKgm(
     format === 'mp3' ? 'audio/mpeg' : format === 'flac' ? 'audio/flac' : 'audio/ogg'
   const audioBlob = new Blob([audio], { type: mimeType })
 
-  const baseName = file.name.replace(/\.(kgm|vpr)$/i, '')
+  // 用户可能上传 xxx.kgm.flac / xxx.kgm (1).flac 这种多重伪后缀文件名，
+  // stripFileExtensions 会把所有连续扩展名 + macOS 副本编号都剥掉，得到干净 base
+  const baseName = stripFileExtensions(file.name)
   // 酷狗下载的文件名一般是「歌手 - 歌名.kgm」，按首个 ' - ' 拆
   const sepIdx = baseName.indexOf(' - ')
   const meta: AudioMeta =

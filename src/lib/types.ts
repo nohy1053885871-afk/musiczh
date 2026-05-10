@@ -11,6 +11,8 @@ export type DecryptErrorCode =
   | 'DECRYPT_FAILED'
   | 'KGM_V4_UNSUPPORTED'
   | 'UNSUPPORTED_FORMAT'
+  // 真 FLAC 头但浏览器内置 codec 解不了（高概率是 24-bit / 96kHz+ Hi-Res FLAC）
+  | 'HIRES_NOT_SUPPORTED'
   | 'UNKNOWN'
 
 export class DecryptError extends Error {

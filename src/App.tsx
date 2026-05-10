@@ -8,6 +8,8 @@ import {
   type DecryptErrorCode,
 } from './lib/decrypt'
 import { transcodeToMp3 } from './lib/transcode'
+import { sniffRealFormat } from './lib/sniff'
+import { stripFileExtensions } from './lib/filename'
 import { analytics } from './lib/analytics'
 
 function fileExtOf(name: string): string {
@@ -28,7 +30,7 @@ function useImpression<T extends HTMLElement>(event: string, props?: Record<stri
 }
 
 const MAX_FILES = 50
-const MAX_FILE_SIZE = 100 * 1024 * 1024
+const MAX_FILE_SIZE = 200 * 1024 * 1024
 
 type FileStatus = 'pending' | 'decrypting' | 'done' | 'failed' | 'transcoding'
 
@@ -273,7 +275,7 @@ function DropZone({
       <input
         type="file"
         multiple
-        accept=".ncm,.kgm,.vpr"
+        accept=".ncm,.kgm,.vpr,.flac"
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) {
@@ -326,7 +328,7 @@ function DropZone({
               color: '#8A8680',
             }}
           >
-            支持多文件 · 单个最大 100MB ·{' '}
+            支持多文件 · 单个最大 200MB ·{' '}
             {queueLeft === MAX_FILES ? '每次最多 50 个' : `还可上传 ${queueLeft} 个`}
           </div>
         </div>
@@ -781,6 +783,75 @@ function App() {
     [],
   )
 
+  // override 参数：调用方直接传入待转码的 result，避免依赖 filesRef.current（React state 未 commit 时是 stale 的）
+  // 原始 flac 上传走 override 路径——processQueue 同步调用，filesRef 还是 pending 状态读不到 result
+  const transcodeFile = useCallback(
+    async (id: string, override?: DecryptResult) => {
+      const target = filesRef.current.find((f) => f.id === id)
+      if (!target) return
+      const result = override ?? target.result
+      if (!result) return
+      if (result.format === 'mp3') return
+      // 仅手动按钮路径（无 override）需要 status === 'done' 校验；override 路径由 caller 保证状态
+      if (!override && target.status !== 'done') return
+      updateFile(id, { status: 'transcoding', progress: 0 })
+      const fromFormat = result.format
+      analytics.track('transcode_start', {
+        file_name: result.suggestedName,
+        from_format: fromFormat,
+        file_size: result.audio.size,
+      })
+      try {
+        const mp3Blob = await transcodeToMp3(result.audio, (p) => {
+          updateFile(id, { progress: p })
+        })
+        const newName = result.suggestedName.replace(
+          /\.(flac|ogg)$/i,
+          '.mp3',
+        )
+        updateFile(id, {
+          status: 'done',
+          progress: 1,
+          result: {
+            ...result,
+            audio: mp3Blob,
+            format: 'mp3',
+            suggestedName: newName,
+          },
+        })
+        analytics.track('transcode_done', {
+          file_name: newName,
+          file_ext: fromFormat,
+          file_size: result.audio.size,
+          source: result.meta?.source,
+          from_format: fromFormat,
+        })
+        notify('已转为 MP3')
+      } catch (err) {
+        let message = '转码失败'
+        if (err instanceof DecryptError) message = err.message
+        else if (err instanceof Error) message = `转码失败：${err.message}`
+        // 失败时保留 source result（原始 flac 上传失败时让用户至少能下载原 .flac 兜底）
+        updateFile(id, {
+          status: 'done',
+          progress: 1,
+          result,
+        })
+        analytics.trackFailure('transcode', {
+          error_code: err instanceof DecryptError ? err.code : undefined,
+          error_msg: message,
+          error_stack: err instanceof Error ? err.stack : undefined,
+          file_name: result.suggestedName,
+          file_ext: fromFormat,
+          file_size: result.audio.size,
+          source: result.meta?.source,
+        })
+        setWarning(message)
+      }
+    },
+    [updateFile, notify],
+  )
+
   const processQueue = useCallback(async () => {
     if (isProcessingRef.current) return
     isProcessingRef.current = true
@@ -788,17 +859,100 @@ function App() {
       while (true) {
         const next = filesRef.current.find((f) => f.status === 'pending')
         if (!next) break
-        updateFile(next.id, { status: 'decrypting', progress: 0 })
         const fileExt = fileExtOf(next.file.name)
+
+        // 嗅探真实格式：以文件头 magic 为权威，覆盖用户瞎改的扩展名
+        // 例：「xxx.kgm.flac」内容是真 KGM v2 → realFormat='kgm' → 自动走解密路径
+        const realFormat = await sniffRealFormat(next.file)
+
+        // 文件名里若带 xxx.kgm.flac / xxx (1).flac 之类的脏后缀链，剥成纯 base 再拼真实格式
+        const cleanBase = stripFileExtensions(next.file.name)
+
+        // 1) 原始 FLAC / OGG → 自动转码到 MP3
+        if (realFormat === 'flac' || realFormat === 'ogg') {
+          await transcodeFile(next.id, {
+            audio: next.file,
+            format: realFormat,
+            meta: {},
+            cover: null,
+            suggestedName: `${cleanBase}.${realFormat}`,
+          })
+          continue
+        }
+
+        // 2) 已经是 MP3 → 直接 done（用户可能误传，给个友好兜底）
+        if (realFormat === 'mp3') {
+          updateFile(next.id, {
+            status: 'done',
+            progress: 1,
+            result: {
+              audio: next.file,
+              format: 'mp3',
+              meta: {},
+              cover: null,
+              suggestedName: `${cleanBase}.mp3`,
+            },
+          })
+          continue
+        }
+
+        // 3) KGG / KGM v4：本工具不支持（联网密钥协议），给精准错误
+        if (realFormat === 'kgg_or_kgmv4') {
+          const code: DecryptErrorCode = 'KGM_V4_UNSUPPORTED'
+          const message = '这可能是酷狗新版加密格式（v4），本工具暂不支持'
+          updateFile(next.id, {
+            status: 'failed',
+            errorCode: code,
+            errorMessage: message,
+          })
+          analytics.trackFailure('decrypt', {
+            error_code: code,
+            error_msg: message,
+            file_name: next.file.name,
+            file_ext: fileExt,
+            file_size: next.file.size,
+          })
+          continue
+        }
+
+        // 4) 完全不识别 → 上传准入已经放行（因为后缀是 .flac/.ncm/.kgm 等），
+        // 但内容头不匹配，给精准错误
+        if (
+          realFormat !== 'ncm' &&
+          realFormat !== 'kgm' &&
+          realFormat !== 'vpr'
+        ) {
+          const code: DecryptErrorCode = 'INVALID_HEADER'
+          const message =
+            '无法识别这个文件，请确认是网易云 .ncm / 酷狗 .kgm / .vpr 或原始 .flac / .ogg / .mp3'
+          updateFile(next.id, {
+            status: 'failed',
+            errorCode: code,
+            errorMessage: message,
+          })
+          analytics.trackFailure('decrypt', {
+            error_code: code,
+            error_msg: message,
+            file_name: next.file.name,
+            file_ext: fileExt,
+            file_size: next.file.size,
+          })
+          continue
+        }
+
+        // 5) NCM / KGM / VPR：正常解密路径（按 sniff 真实格式分发，绕过扩展名）
+        updateFile(next.id, { status: 'decrypting', progress: 0 })
         analytics.track('decrypt_start', {
           file_name: next.file.name,
           file_ext: fileExt,
           file_size: next.file.size,
         })
         try {
-          const result = await decryptAudioFile(next.file, (p) => {
-            updateFile(next.id, { progress: p })
-          })
+          const result = await decryptAudioFile(
+            next.file,
+            (p) => updateFile(next.id, { progress: p }),
+            realFormat,
+          )
           const coverUrl = result.cover
             ? URL.createObjectURL(result.cover)
             : result.meta.albumPic || undefined
@@ -827,14 +981,14 @@ function App() {
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
-            source: fileExt === 'kgm' || fileExt === 'vpr' ? fileExt : fileExt === 'ncm' ? 'ncm' : undefined,
+            source: realFormat,
           })
         }
       }
     } finally {
       isProcessingRef.current = false
     }
-  }, [updateFile])
+  }, [updateFile, transcodeFile])
 
   const addFiles = useCallback(
     (incoming: FileList | File[]) => {
@@ -856,7 +1010,7 @@ function App() {
       candidates = candidates.filter((f) => SUPPORTED_EXT_REGEX.test(f.name))
 
       const oversize = candidates.filter((f) => f.size > MAX_FILE_SIZE)
-      if (oversize.length) reasons.push(`${oversize.length} 个文件超过 100MB`)
+      if (oversize.length) reasons.push(`${oversize.length} 个文件超过 200MB`)
       oversize.forEach((f) => trackReject(f, 'SIZE_EXCEEDED'))
       candidates = candidates.filter((f) => f.size <= MAX_FILE_SIZE)
 
@@ -896,12 +1050,7 @@ function App() {
     [processQueue],
   )
 
-  useEffect(() => {
-    if (!warning) return
-    const t = setTimeout(() => setWarning(null), 5000)
-    return () => clearTimeout(t)
-  }, [warning])
-
+  // warning 不自动消失，由用户点关闭按钮（×）手动关；toast 仍 2s 自动消失
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(null), 2000)
@@ -919,67 +1068,6 @@ function App() {
       setTimeout(() => processQueue(), 0)
     },
     [updateFile, processQueue],
-  )
-
-  const transcodeFile = useCallback(
-    async (id: string) => {
-      const target = filesRef.current.find((f) => f.id === id)
-      if (!target?.result || target.status !== 'done') return
-      if (target.result.format === 'mp3') return
-      updateFile(id, { status: 'transcoding', progress: 0 })
-      const fromFormat = target.result.format
-      analytics.track('transcode_start', {
-        file_name: target.result.suggestedName,
-        from_format: fromFormat,
-        file_size: target.result.audio.size,
-      })
-      try {
-        const mp3Blob = await transcodeToMp3(target.result.audio, (p) => {
-          updateFile(id, { progress: p })
-        })
-        const newName = target.result.suggestedName.replace(
-          /\.(flac|ogg)$/i,
-          '.mp3',
-        )
-        updateFile(id, {
-          status: 'done',
-          progress: 1,
-          result: {
-            ...target.result,
-            audio: mp3Blob,
-            format: 'mp3',
-            suggestedName: newName,
-          },
-        })
-        analytics.track('transcode_done', {
-          file_name: newName,
-          file_ext: fromFormat,
-          file_size: target.result.audio.size,
-          source: target.result.meta?.source,
-          from_format: fromFormat,
-        })
-        notify('已转为 MP3')
-      } catch (err) {
-        let message = '转码失败'
-        if (err instanceof DecryptError) message = err.message
-        else if (err instanceof Error) message = `转码失败：${err.message}`
-        updateFile(id, {
-          status: 'done',
-          progress: 1,
-        })
-        analytics.trackFailure('transcode', {
-          error_code: err instanceof DecryptError ? err.code : undefined,
-          error_msg: message,
-          error_stack: err instanceof Error ? err.stack : undefined,
-          file_name: target.result.suggestedName,
-          file_ext: fromFormat,
-          file_size: target.result.audio.size,
-          source: target.result.meta?.source,
-        })
-        setWarning(message)
-      }
-    },
-    [updateFile, notify],
   )
 
   const removeFile = useCallback((id: string) => {
@@ -1167,7 +1255,7 @@ function App() {
                 color: '#6A6460',
               }}
             >
-              v0.1.1
+              v{import.meta.env.VITE_APP_VERSION ?? 'dev'}
             </div>
           </header>
         </div>
@@ -1220,7 +1308,7 @@ function App() {
               }}
             >
               <span>
-                目前支持 网易云 .ncm / 酷狗 .kgm / .vpr
+                目前支持 网易云（.ncm）/ 酷狗（.kgm / .vpr）/ 原 .flac
                 <span className="mx-1.5" style={{ color: 'rgba(28,26,24,0.2)' }}>
                   ·
                 </span>
@@ -1236,10 +1324,10 @@ function App() {
           </div>
         </section>
 
-        {/* Warning banner */}
+        {/* Warning banner — 手动关闭，不自动消失 */}
         {warning && (
           <div
-            className="mb-4 rounded-2xl px-4 py-2.5 text-[12px]"
+            className="mb-4 rounded-2xl pl-4 pr-2 py-2.5 text-[12px] flex items-start gap-3"
             style={{
               background: 'linear-gradient(180deg, #FBF0D8 0%, #F4E4B8 100%)',
               color: '#7B5A14',
@@ -1247,7 +1335,28 @@ function App() {
                 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(180,130,40,0.2)',
             }}
           >
-            ⚠ {warning}
+            <span className="flex-1 leading-snug pt-0.5">⚠ {warning}</span>
+            <button
+              type="button"
+              onClick={() => setWarning(null)}
+              aria-label="关闭"
+              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center transition-colors hover:bg-[rgba(123,90,20,0.12)]"
+              style={{ color: '#7B5A14' }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" />
+              </svg>
+            </button>
           </div>
         )}
 

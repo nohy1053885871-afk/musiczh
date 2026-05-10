@@ -54,7 +54,7 @@ export const STAGE_LABEL: Record<string, string> = {
 
 export const REJECT_REASON_LABEL: Record<string, string> = {
   FORMAT_UNSUPPORTED: '格式不支持',
-  SIZE_EXCEEDED: '超出 100MB',
+  SIZE_EXCEEDED: '超出 200MB',
   QUEUE_FULL: '超出 50 个上限',
 }
 
@@ -107,6 +107,14 @@ export function formatPct(v: number | null | undefined): string {
 export function formatPercent(part: number, total: number): string {
   if (!total) return '-'
   return `${((part / total) * 100).toFixed(1)}%`
+}
+
+// 用于卡片小字：「成功率 9/10 = 90%」；分母 0 时显示「成功率 -」
+export function ratioLabel(prefix: string, part?: number | null, complement?: number | null, rate?: number | null): string {
+  const p = part ?? 0
+  const denom = p + (complement ?? 0)
+  if (denom === 0) return `${prefix} -`
+  return `${prefix} ${p}/${denom} = ${formatPct(rate)}`
 }
 
 const CHANNEL_COLOR: Record<string, string> = {
