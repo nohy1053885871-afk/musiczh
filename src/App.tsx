@@ -1044,7 +1044,8 @@ function App() {
         status: 'pending' as FileStatus,
         progress: 0,
       }))
-      setFiles((prev) => [...prev, ...list])
+      // 新批次插到列表最前，processQueue 会先处理最新意图，符合用户认知
+      setFiles((prev) => [...list, ...prev])
       setTimeout(() => processQueue(), 0)
     },
     [processQueue],
