@@ -438,7 +438,7 @@ function FileRow({
                 inset: '28%',
                 background: isFailed
                   ? 'radial-gradient(circle at 35% 30%, #B85A4A, #6B2A22)'
-                  : 'radial-gradient(circle at 35% 30%, #C8662C, #7B3A14)',
+                  : 'radial-gradient(circle at 35% 30%, #D42B10, #8A1A08)',
               }}
             />
             <div
@@ -748,7 +748,7 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
                   onConfirm()
                   setOpen(false)
                 }}
-                className="text-xs font-semibold"
+                className="text-xs font-medium"
                 style={{ color: '#B83020' }}
               >
                 清空
@@ -1226,7 +1226,7 @@ function App() {
                   className="absolute rounded-full"
                   style={{
                     inset: '28%',
-                    background: 'radial-gradient(circle at 35% 30%, #E8431A, #A82C08)',
+                    background: 'radial-gradient(circle at 35% 30%, #D42B10, #8A1A08)',
                   }}
                 />
                 <div
@@ -1330,13 +1330,31 @@ function App() {
           <div
             className="mb-4 rounded-2xl pl-4 pr-2 py-2.5 text-[12px] flex items-start gap-3"
             style={{
-              background: 'linear-gradient(180deg, #FBF0D8 0%, #F4E4B8 100%)',
+              background: '#FBF0D8',
               color: '#7B5A14',
               boxShadow:
                 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(180,130,40,0.2)',
             }}
           >
-            <span className="flex-1 leading-snug pt-0.5">⚠ {warning}</span>
+            <span className="flex-1 leading-snug pt-0.5 flex items-start gap-2">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="shrink-0 mt-[2px]"
+                aria-hidden
+              >
+                <path d="M12 3l10 18H2L12 3z" />
+                <path d="M12 10v5" />
+                <circle cx="12" cy="18" r="0.6" fill="currentColor" />
+              </svg>
+              <span>{warning}</span>
+            </span>
             <button
               type="button"
               onClick={() => setWarning(null)}

@@ -5,8 +5,8 @@
       <stop offset="100%" stop-color="#0a0a0a"/>
     </radialGradient>
     <radialGradient id="lbl" cx="35%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#E89455"/>
-      <stop offset="100%" stop-color="#7B3A14"/>
+      <stop offset="0%" stop-color="#D42B10"/>
+      <stop offset="100%" stop-color="#8A1A08"/>
     </radialGradient>
   </defs>
   <circle cx="32" cy="34" r="27" fill="rgba(0,0,0,0.18)"/>
