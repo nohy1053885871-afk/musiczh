@@ -1309,7 +1309,7 @@ function App() {
               }}
             >
               <span>
-                目前支持 网易云（.ncm）/ 酷狗（.kgm / .vpr）/ 原 .flac
+                目前支持 网易云（.ncm）/ 酷狗（.kgm / .vpr）/ .flac
                 <span className="mx-1.5" style={{ color: 'rgba(28,26,24,0.2)' }}>
                   ·
                 </span>
