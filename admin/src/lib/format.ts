@@ -35,6 +35,11 @@ export const EVENT_LABELS: Record<string, string> = {
   transcode_start: '主站 - 业务 - 转码开始',
   transcode_done:  '主站 - 业务 - 转码成功',
   transcode_fail:  '主站 - 业务 - 转码失败',
+
+  upload_attempt: '主站 - 业务 - 上传成功（进入队列）',
+  upload_reject:  '主站 - 业务 - 上传被拒（格式/大小/数量）',
+  download_done:  '主站 - 业务 - 下载完成',
+  download_fail:  '主站 - 业务 - 下载失败',
 }
 
 export function eventLabel(name: string): string {
@@ -44,6 +49,19 @@ export function eventLabel(name: string): string {
 export const STAGE_LABEL: Record<string, string> = {
   decrypt: '解密',
   transcode: '转码',
+  download: '下载',
+}
+
+export const REJECT_REASON_LABEL: Record<string, string> = {
+  FORMAT_UNSUPPORTED: '格式不支持',
+  SIZE_EXCEEDED: '超出 100MB',
+  QUEUE_FULL: '超出 50 个上限',
+}
+
+export const DOWNLOAD_KIND_LABEL: Record<string, string> = {
+  single: '单文件下载',
+  all_separate: '下载全部（散）',
+  zip: 'ZIP 打包',
 }
 
 export const EXT_LABELS: Record<string, string> = {

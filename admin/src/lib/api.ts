@@ -78,6 +78,21 @@ export const api = {
     from?: number; to?: number; range?: string
   }) => request<VisitorsResp>(`/admin/visitors?${buildQuery(params)}`),
   visitorDetail: (id: string) => request<VisitorDetail>(`/admin/visitors/${encodeURIComponent(id)}`),
+
+  uploads: (params: {
+    page?: number; size?: number; type?: 'attempt' | 'reject';
+    reason?: string; ext?: string; q?: string;
+    from?: number; to?: number; range?: string
+  }) => request<UploadsResp>(`/admin/uploads?${buildQuery(params)}`),
+  uploadDetail: (id: number) => request<UploadDetail>(`/admin/uploads/${id}`),
+
+  downloads: (params: {
+    page?: number; size?: number; type?: 'done' | 'fail';
+    kind?: 'single' | 'all_separate' | 'zip';
+    ext?: string; q?: string;
+    from?: number; to?: number; range?: string
+  }) => request<DownloadsResp>(`/admin/downloads?${buildQuery(params)}`),
+  downloadDetail: (id: number) => request<DownloadDetail>(`/admin/downloads/${id}`),
 }
 
 export type OverviewResp = {
@@ -97,9 +112,18 @@ export type OverviewResp = {
   transcode_success_rate: number | null
 }
 
+export type FunnelStep = {
+  name: string
+  n: number
+  uv: number  // 兼容老前端：dim=user 时是 UV，dim=file 时是文件数
+  pct_of_prev: number | null
+  pct_of_first: number | null
+}
+
 export type FunnelResp = {
   range: string
-  steps: { name: string; uv: number }[]
+  user: { steps: FunnelStep[] }
+  file: { steps: FunnelStep[] }
 }
 
 export type ButtonsResp = {
@@ -137,7 +161,7 @@ export type FailureRow = {
   id: number
   ts: number
   visitor_id: string
-  stage: 'decrypt' | 'transcode'
+  stage: 'decrypt' | 'transcode' | 'download'
   error_code: string | null
   error_msg: string | null
   file_name: string | null
@@ -230,4 +254,73 @@ export type VisitorTimelineEvent = {
 
 export type VisitorDetail = VisitorRow & {
   timeline: VisitorTimelineEvent[]
+}
+
+export type UploadType = 'attempt' | 'reject'
+export type UploadRejectReason = 'FORMAT_UNSUPPORTED' | 'SIZE_EXCEEDED' | 'QUEUE_FULL'
+
+export type UploadRow = {
+  id: number
+  ts: number
+  visitor_id: string
+  event: string
+  type: UploadType
+  file_name: string | null
+  file_ext: string | null
+  file_size: number | null
+  reject_reason: UploadRejectReason | null
+  app_ver: string | null
+  browser: string
+  os: string
+  device_type: string
+}
+
+export type UploadsResp = {
+  total: number
+  page: number
+  size: number
+  rows: UploadRow[]
+  reason_agg: { reason: string | null; n: number }[]
+}
+
+export type UploadDetail = UploadRow & {
+  ua: string | null
+  ip: string | null
+  page: string | null
+}
+
+export type DownloadType = 'done' | 'fail'
+export type DownloadKind = 'single' | 'all_separate' | 'zip'
+
+export type DownloadRow = {
+  id: number
+  ts: number
+  visitor_id: string
+  event: string
+  type: DownloadType
+  download_kind: DownloadKind | null
+  file_name: string | null
+  file_ext: string | null
+  file_size: number | null
+  error_code: string | null
+  error_msg: string | null
+  app_ver: string | null
+  browser: string
+  os: string
+  device_type: string
+}
+
+export type DownloadsResp = {
+  total: number
+  page: number
+  size: number
+  rows: DownloadRow[]
+  kind_agg: { kind: string | null; n: number }[]
+}
+
+export type DownloadDetail = DownloadRow & {
+  ua: string | null
+  ip: string | null
+  page: string | null
+  error_stack: string | null
 }
