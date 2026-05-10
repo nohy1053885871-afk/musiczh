@@ -1,42 +1,12 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { UAParser } from 'ua-parser-js'
 import db from '../db.js'
 import { requireAdmin } from '../middleware/auth.js'
+import { parseUA } from '../lib/ua.js'
+import { parseTimeRange } from '../lib/timeRange.js'
 
 const adminVisitors = new Hono()
 adminVisitors.use('*', requireAdmin)
-
-const RangePresetSchema = z.enum(['today', '7d', '30d', '90d', '365d'])
-
-function startOfTodayMs(): number {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d.getTime()
-}
-
-function parseTimeRange(c: any): { from: number; to: number; range: string } {
-  const fromQ = c.req.query('from')
-  const toQ = c.req.query('to')
-  if (fromQ || toQ) {
-    const from = Number(fromQ ?? 0)
-    const to = Number(toQ ?? Date.now())
-    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
-      return { from, to, range: 'custom' }
-    }
-  }
-  const raw = c.req.query('range') ?? '30d'
-  const r = RangePresetSchema.safeParse(raw)
-  const preset = r.success ? r.data : '30d'
-  const now = Date.now()
-  let from = now
-  if (preset === 'today') from = startOfTodayMs()
-  else {
-    const days = preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365
-    from = now - days * 86_400_000
-  }
-  return { from, to: now, range: preset }
-}
 
 const ListQuery = z.object({
   q: z.string().max(64).optional(),
@@ -58,18 +28,6 @@ type RawRow = {
   ip: string | null
   first_page: string | null
   referrer: string | null
-}
-
-function parseUA(ua: string | null): { browser: string; os: string; device_type: string } {
-  if (!ua) return { browser: '其他', os: '其他', device_type: '其他' }
-  const res = new UAParser(ua).getResult()
-  let browser = res.browser.name ?? '其他'
-  if (/MicroMessenger/i.test(ua)) browser = '微信内置'
-  if (browser === 'Mobile Safari') browser = 'Safari'
-  const os = res.os.name ?? '其他'
-  const t = res.device.type
-  const device_type = t === 'mobile' ? '手机' : t === 'tablet' ? '平板' : '桌面'
-  return { browser, os, device_type }
 }
 
 function classifyChannel(referrer: string | null): string {

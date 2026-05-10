@@ -567,9 +567,29 @@ function FileRow({
                 format: file.result!.format,
                 file_size: file.result!.audio.size,
               })
-              triggerDownload(file.result!.audio, file.result!.suggestedName)
-              onNotify('已开始下载')
-              setJustDownloaded(true)
+              try {
+                triggerDownload(file.result!.audio, file.result!.suggestedName)
+                analytics.track('download_done', {
+                  file_name: file.result!.suggestedName,
+                  file_ext: file.result!.format,
+                  file_size: file.result!.audio.size,
+                  download_kind: 'single',
+                })
+                onNotify('已开始下载')
+                setJustDownloaded(true)
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : '下载失败'
+                analytics.trackFailure('download', {
+                  error_code: 'DOWNLOAD_FAILED',
+                  error_msg: msg,
+                  error_stack: err instanceof Error ? err.stack : undefined,
+                  file_name: file.result!.suggestedName,
+                  file_ext: file.result!.format,
+                  file_size: file.result!.audio.size,
+                  download_kind: 'single',
+                })
+                onNotify('下载失败')
+              }
             }}
             className="px-3 py-1.5 rounded-md text-xs font-medium text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-95"
             style={{
@@ -820,18 +840,34 @@ function App() {
     (incoming: FileList | File[]) => {
       const reasons: string[] = []
       let candidates = Array.from(incoming)
+
+      const trackReject = (f: File, reject_reason: 'FORMAT_UNSUPPORTED' | 'SIZE_EXCEEDED' | 'QUEUE_FULL') => {
+        analytics.track('upload_reject', {
+          file_name: f.name,
+          file_ext: fileExtOf(f.name),
+          file_size: f.size,
+          reject_reason,
+        })
+      }
+
       const wrongExt = candidates.filter((f) => !SUPPORTED_EXT_REGEX.test(f.name))
       if (wrongExt.length) reasons.push(`${wrongExt.length} 个文件格式不支持`)
+      wrongExt.forEach((f) => trackReject(f, 'FORMAT_UNSUPPORTED'))
       candidates = candidates.filter((f) => SUPPORTED_EXT_REGEX.test(f.name))
+
       const oversize = candidates.filter((f) => f.size > MAX_FILE_SIZE)
       if (oversize.length) reasons.push(`${oversize.length} 个文件超过 100MB`)
+      oversize.forEach((f) => trackReject(f, 'SIZE_EXCEEDED'))
       candidates = candidates.filter((f) => f.size <= MAX_FILE_SIZE)
+
       const currentCount = filesRef.current.length
       const remaining = MAX_FILES - currentCount
       let hitLimit = false
       if (candidates.length > remaining) {
         hitLimit = true
         reasons.push(`${candidates.length - remaining} 个文件超过 50 个上限`)
+        const dropped = candidates.slice(Math.max(0, remaining))
+        dropped.forEach((f) => trackReject(f, 'QUEUE_FULL'))
         candidates = candidates.slice(0, Math.max(0, remaining))
       }
       if (reasons.length) {
@@ -839,6 +875,15 @@ function App() {
         setWarning(`已跳过：${reasons.join('；')}${suffix}`)
       } else setWarning(null)
       if (candidates.length === 0) return
+
+      candidates.forEach((f) => {
+        analytics.track('upload_attempt', {
+          file_name: f.name,
+          file_ext: fileExtOf(f.name),
+          file_size: f.size,
+        })
+      })
+
       const list: TrackedFile[] = candidates.map((f) => ({
         id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
         file: f,
@@ -967,7 +1012,26 @@ function App() {
     if (doneFiles.length === 0) return
     notify(`已开始下载 ${doneFiles.length} 首`)
     for (const f of doneFiles) {
-      triggerDownload(f.result!.audio, f.result!.suggestedName)
+      try {
+        triggerDownload(f.result!.audio, f.result!.suggestedName)
+        analytics.track('download_done', {
+          file_name: f.result!.suggestedName,
+          file_ext: f.result!.format,
+          file_size: f.result!.audio.size,
+          download_kind: 'all_separate',
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : '下载失败'
+        analytics.trackFailure('download', {
+          error_code: 'DOWNLOAD_FAILED',
+          error_msg: msg,
+          error_stack: err instanceof Error ? err.stack : undefined,
+          file_name: f.result!.suggestedName,
+          file_ext: f.result!.format,
+          file_size: f.result!.audio.size,
+          download_kind: 'all_separate',
+        })
+      }
       await new Promise((r) => setTimeout(r, 150))
     }
   }
@@ -989,7 +1053,26 @@ function App() {
         (m) => setZipProgress(m.percent / 100),
       )
       triggerDownload(blob, `音乐转换_${doneFiles.length}首_${todayStamp()}.zip`)
+      // ZIP 整批成功：按文件数批量发 download_done
+      for (const f of doneFiles) {
+        analytics.track('download_done', {
+          file_name: f.result!.suggestedName,
+          file_ext: f.result!.format,
+          file_size: f.result!.audio.size,
+          download_kind: 'zip',
+        })
+      }
       notify('ZIP 已开始下载')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'ZIP 打包失败'
+      analytics.trackFailure('download', {
+        error_code: 'ZIP_FAILED',
+        error_msg: msg,
+        error_stack: err instanceof Error ? err.stack : undefined,
+        file_size: doneFiles.reduce((sum, f) => sum + f.result!.audio.size, 0),
+        download_kind: 'zip',
+      })
+      setWarning(msg)
     } finally {
       setIsZipping(false)
       setZipProgress(0)

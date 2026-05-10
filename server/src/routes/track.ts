@@ -10,10 +10,11 @@ const ALLOWED_PROPS = new Set([
   'count', 'total_size', 'format', 'source',
   'from_format', 'queue_size', 'action', 'status',
   'referrer',
+  'reject_reason', 'download_kind',
 ])
 
 const FailureSchema = z.object({
-  stage: z.enum(['decrypt', 'transcode']),
+  stage: z.enum(['decrypt', 'transcode', 'download']),
   error_code: z.string().max(64).optional(),
   error_msg: z.string().max(2000).optional(),
   error_stack: z.string().max(8000).optional(),

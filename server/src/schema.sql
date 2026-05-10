@@ -18,12 +18,12 @@ CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_event_ts ON events(event, ts);
 CREATE INDEX IF NOT EXISTS idx_events_visitor_ts ON events(visitor_id, ts);
 
--- 失败详情表：解密 / 转码失败专用，便于"复制 JSON"排查
+-- 失败详情表：解密 / 转码 / 下载失败专用，便于"复制 JSON"排查
 CREATE TABLE IF NOT EXISTS failures (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   ts          INTEGER NOT NULL,
   visitor_id  TEXT    NOT NULL,
-  stage       TEXT    NOT NULL,                  -- 'decrypt' | 'transcode'
+  stage       TEXT    NOT NULL,                  -- 'decrypt' | 'transcode' | 'download'
   error_code  TEXT,                              -- 如 INVALID_HEADER / DECRYPT_FAILED
   error_msg   TEXT,
   error_stack TEXT,

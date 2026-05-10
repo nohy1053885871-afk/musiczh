@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, Cell,
+  BarChart, Bar, Cell, LabelList,
 } from 'recharts'
-import { Card, Row, Col, Statistic, Button, Space, Typography, Tag, Empty } from 'antd'
+import { Card, Row, Col, Statistic, Button, Space, Typography, Tag, Empty, Segmented } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import {
   api,
-  type OverviewResp, type FunnelResp, type TimeseriesResp, type DevicesResp,
+  type OverviewResp, type FunnelResp, type FunnelStep, type TimeseriesResp, type DevicesResp,
 } from '../lib/api'
 import { AppRangePicker, DEFAULT_RANGE, type Range, rangeQueryString } from '../components/biz/AppRangePicker'
 import { DataTableCard } from '../components/biz/DataTableCard'
 import { DownloadCSVButton } from '../components/biz/DownloadCSVButton'
 import { StatPie } from '../components/biz/StatPie'
 import { formatDay, formatPct, formatPercent } from '../lib/format'
+
+type FunnelDim = 'user' | 'file'
+const FUNNEL_COLORS = ['#1677FF', '#722ED1', '#13C2C2', '#52C41A']
 
 const { Title, Text } = Typography
 
@@ -47,6 +50,7 @@ export function OverviewPage() {
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(DEFAULT_METRICS)
   const [seriesByMetric, setSeriesByMetric] = useState<Partial<Record<MetricKey, TimeseriesResp>>>({})
   const [seriesLoading, setSeriesLoading] = useState(false)
+  const [funnelDim, setFunnelDim] = useState<FunnelDim>('user')
 
   const rq = useMemo(() => rangeQueryString(range), [range])
 
@@ -132,11 +136,11 @@ export function OverviewPage() {
 
       {/* 第二组：件维度 */}
       <Row gutter={[16, 16]}>
-        <Col xs={12} md={6}><Card><Statistic title="上传文件总数" value={overview?.upload_files ?? 0} /></Card></Col>
+        <Col xs={12} md={6}><Card><Statistic title="上传文件总数（件）" value={overview?.upload_files ?? 0} /></Card></Col>
         <Col xs={12} md={6}>
           <Card>
             <Statistic
-              title="解密成功"
+              title="解密成功（件）"
               value={overview?.decrypt_done ?? 0}
               valueStyle={{ color: '#389E0D' }}
               suffix={<Text type="secondary" style={{ fontSize: 12 }}>{`成功率 ${formatPct(overview?.decrypt_success_rate)}`}</Text>}
@@ -146,7 +150,7 @@ export function OverviewPage() {
         <Col xs={12} md={6}>
           <Card>
             <Statistic
-              title="解密失败"
+              title="解密失败（件）"
               value={overview?.decrypt_fail ?? 0}
               valueStyle={overview && overview.decrypt_fail > 0 ? { color: '#F5222D' } : undefined}
             />
@@ -155,7 +159,7 @@ export function OverviewPage() {
         <Col xs={12} md={6}>
           <Card>
             <Statistic
-              title="转码失败"
+              title="转码失败（件）"
               value={overview?.transcode_fail ?? 0}
               valueStyle={overview && overview.transcode_fail > 0 ? { color: '#F5222D' } : undefined}
               suffix={<Text type="secondary" style={{ fontSize: 12 }}>{`成功率 ${formatPct(overview?.transcode_success_rate)}`}</Text>}
@@ -182,18 +186,45 @@ export function OverviewPage() {
       </Card>
 
       {/* 漏斗 */}
-      <Card title="转化漏斗（按人 / UV）" extra={<Text type="secondary" style={{ fontSize: 12 }}>上传 → 解密成功 → 下载</Text>}>
-        <div style={{ width: '100%', height: 220 }}>
+      <Card
+        title="转化漏斗"
+        extra={
+          <Space>
+            <Segmented
+              value={funnelDim}
+              onChange={(v) => setFunnelDim(v as FunnelDim)}
+              options={[
+                { value: 'user', label: '按人 (UV)' },
+                { value: 'file', label: '按文件数' },
+              ]}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {funnelDim === 'user' ? '访问 → 上传 → 解密 → 下载' : '上传 → 解密 → 下载'}
+            </Text>
+          </Space>
+        }
+      >
+        <div style={{ width: '100%', height: 280 }}>
           <ResponsiveContainer>
-            <BarChart data={funnel?.steps ?? []}>
+            <BarChart data={funnelStepsOf(funnel, funnelDim)} margin={{ top: 28, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="rgba(0,0,0,0.06)" />
               <XAxis dataKey="name" fontSize={11} />
               <YAxis fontSize={11} allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="uv" radius={[6, 6, 0, 0]}>
-                {(funnel?.steps ?? []).map((_s, i) => (
-                  <Cell key={i} fill={['#1677FF', '#13C2C2', '#52C41A'][i]} />
+              <Tooltip
+                formatter={(v) => [v as number, funnelDim === 'user' ? 'UV' : '文件数']}
+                labelFormatter={(label, payload) => {
+                  const step = payload?.[0]?.payload as FunnelStep | undefined
+                  if (!step) return String(label ?? '')
+                  const prev = step.pct_of_prev != null ? `较上层 ${formatPct(step.pct_of_prev)}` : ''
+                  const first = step.pct_of_first != null ? `总转化 ${formatPct(step.pct_of_first)}` : ''
+                  return [String(label ?? ''), prev, first].filter(Boolean).join(' · ')
+                }}
+              />
+              <Bar dataKey="n" radius={[6, 6, 0, 0]}>
+                {funnelStepsOf(funnel, funnelDim).map((_s, i) => (
+                  <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
                 ))}
+                <LabelList dataKey="label_text" position="top" fontSize={11} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -370,6 +401,20 @@ function buildDeviceRows(devices: FilteredDevices): DeviceRow[] {
     ...devices.os.map((b) => ({ dimension: '操作系统', name: b.name, n: b.n, pct: formatPercent(b.n, osTotal) })),
     ...devices.device_types.map((b) => ({ dimension: '设备类型', name: b.name, n: b.n, pct: formatPercent(b.n, dtTotal) })),
   ]
+}
+
+type FunnelStepWithLabel = FunnelStep & { label_text: string }
+
+function funnelStepsOf(funnel: FunnelResp | null, dim: FunnelDim): FunnelStepWithLabel[] {
+  if (!funnel) return []
+  const steps = dim === 'user' ? (funnel.user?.steps ?? []) : (funnel.file?.steps ?? [])
+  return steps.map((s, i) => ({
+    ...s,
+    label_text:
+      i === 0 || s.pct_of_prev == null
+        ? String(s.n)
+        : `${s.n} · ↘${formatPct(s.pct_of_prev)}`,
+  }))
 }
 
 function mergeSeries(

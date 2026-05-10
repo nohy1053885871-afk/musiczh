@@ -1,40 +1,9 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { UAParser } from 'ua-parser-js'
 import db from '../db.js'
 import { requireAdmin } from '../middleware/auth.js'
-
-const RangePresetSchema = z.enum(['today', '7d', '30d', '90d', '365d'])
-
-function startOfTodayMs(): number {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d.getTime()
-}
-
-// 解析 range：优先 from/to（自定义）；其次 range 预设；默认 30d
-function parseTimeRange(c: any): { from: number; to: number; range: string } {
-  const fromQ = c.req.query('from')
-  const toQ = c.req.query('to')
-  if (fromQ || toQ) {
-    const from = Number(fromQ ?? 0)
-    const to = Number(toQ ?? Date.now())
-    if (Number.isFinite(from) && Number.isFinite(to) && from <= to) {
-      return { from, to, range: 'custom' }
-    }
-  }
-  const raw = c.req.query('range') ?? '30d'
-  const r = RangePresetSchema.safeParse(raw)
-  const preset = r.success ? r.data : '30d'
-  const now = Date.now()
-  let from = now
-  if (preset === 'today') from = startOfTodayMs()
-  else {
-    const days = preset === '7d' ? 7 : preset === '30d' ? 30 : preset === '90d' ? 90 : 365
-    from = now - days * 86_400_000
-  }
-  return { from, to: now, range: preset }
-}
+import { parseUA } from '../lib/ua.js'
+import { parseTimeRange } from '../lib/timeRange.js'
 
 const adminStats = new Hono()
 
@@ -49,11 +18,12 @@ adminStats.get('/overview', (c) => {
 
   const pv = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'pageview'")
   const uv = cnt("SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'pageview'")
+  // UV 口径与下方 funnel 一致：上传含被拒（含老 drop/pick + 新 attempt/reject）；下载含失败（含老 click + 新 done/fail）
   const uploadUv = cnt(
-    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')",
+    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick','upload_attempt','upload_reject')",
   )
   const downloadUv = cnt(
-    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click')",
+    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click','download_done','download_fail')",
   )
   const uploadFiles = cnt(
     `SELECT COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)), 0) AS n
@@ -84,30 +54,77 @@ adminStats.get('/overview', (c) => {
   })
 })
 
-// 漏斗：上传(人) → 解密成功(人) → 下载(人)
+// 漏斗：人维度 4 层（访问→上传→解密→下载） / 件维度 3 层（上传→解密→下载）
+// 「上传」层含被拒文件（漏斗的诊断价值就在于看每个环节流失多少）
+// 兼容历史数据：旧事件 upload_drop/upload_pick + *_download_click 也计入对应层
 adminStats.get('/funnel', (c) => {
   const { from, to, range } = parseTimeRange(c)
   const cnt = (sql: string) => (db.prepare(sql).get(from, to) as { n: number }).n
 
-  const uploaded = cnt(
-    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')",
+  // 人维度（UV）
+  const userVisit = cnt(
+    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'pageview'",
   )
-  const decrypted = cnt(
+  const userUpload = cnt(
+    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_attempt','upload_reject','upload_drop','upload_pick')",
+  )
+  const userDecrypt = cnt(
     "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'",
   )
-  const downloaded = cnt(
-    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click')",
+  const userDownload = cnt(
+    "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('download_done','download_fail','row_download_click','btn_download_all_click','btn_download_zip_click')",
   )
+
+  // 件维度（文件数）
+  // 上传层：用 SUM(upload_drop/pick.count) 而不是 COUNT(upload_attempt)，因为前者
+  //   1) 含被拒文件（drop/pick 在校验前发，count 是总文件数）
+  //   2) 兼容 v0.3 之前没有 upload_attempt 的历史数据
+  // 与 overview 卡片「上传文件总数」同一公式，避免对不上
+  const fileUpload = cnt(
+    `SELECT COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)), 0) AS n
+       FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
+  )
+  const fileDecrypt = cnt(
+    "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'",
+  )
+  const fileDownload = cnt(
+    "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'download_done'",
+  )
+
+  const buildSteps = (raw: { name: string; n: number }[]) => {
+    const first = raw[0]?.n ?? 0
+    return raw.map((r, i) => {
+      const prev = i === 0 ? r.n : raw[i - 1].n
+      return {
+        name: r.name,
+        n: r.n,
+        // 兼容老前端字段（dim=user 时仍是 UV，dim=file 时是文件数）
+        uv: r.n,
+        pct_of_prev: prev > 0 ? r.n / prev : null,
+        pct_of_first: first > 0 ? r.n / first : null,
+      }
+    })
+  }
 
   return c.json({
     range,
     from,
     to,
-    steps: [
-      { name: '上传', uv: uploaded },
-      { name: '解密成功', uv: decrypted },
-      { name: '下载', uv: downloaded },
-    ],
+    user: {
+      steps: buildSteps([
+        { name: '访问', n: userVisit },
+        { name: '上传', n: userUpload },
+        { name: '解密成功', n: userDecrypt },
+        { name: '下载', n: userDownload },
+      ]),
+    },
+    file: {
+      steps: buildSteps([
+        { name: '上传', n: fileUpload },
+        { name: '解密成功', n: fileDecrypt },
+        { name: '下载', n: fileDownload },
+      ]),
+    },
   })
 })
 
@@ -259,7 +276,7 @@ adminStats.get('/devices', (c) => {
     )
     .all(from, to) as Array<{ visitor_id: string; ua: string }>
 
-  const visitors = rows.map((r) => parseDevice(r.ua))
+  const visitors = rows.map((r) => parseUA(r.ua))
 
   const browserMap = new Map<string, number>()
   const osMap = new Map<string, number>()
@@ -283,17 +300,5 @@ adminStats.get('/devices', (c) => {
     visitors,
   })
 })
-
-function parseDevice(ua: string | null): { browser: string; os: string; device_type: string } {
-  if (!ua) return { browser: '其他', os: '其他', device_type: '其他' }
-  const res = new UAParser(ua).getResult()
-  let browser = res.browser.name ?? '其他'
-  if (/MicroMessenger/i.test(ua)) browser = '微信内置'
-  if (browser === 'Mobile Safari') browser = 'Safari'
-  const os = res.os.name ?? '其他'
-  const t = res.device.type
-  const device_type = t === 'mobile' ? '手机' : t === 'tablet' ? '平板' : '桌面'
-  return { browser, os, device_type }
-}
 
 export default adminStats

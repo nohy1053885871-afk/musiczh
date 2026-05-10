@@ -15,8 +15,10 @@ const APP_VER = (import.meta.env?.VITE_APP_VERSION as string | undefined) ?? 'de
 
 type Props = Record<string, unknown>
 
+type FailureStage = 'decrypt' | 'transcode' | 'download'
+
 type FailurePayload = {
-  stage: 'decrypt' | 'transcode'
+  stage: FailureStage
   error_code?: string
   error_msg?: string
   error_stack?: string
@@ -24,6 +26,7 @@ type FailurePayload = {
   file_ext?: string
   file_size?: number
   source?: string
+  download_kind?: 'single' | 'all_separate' | 'zip'
 }
 
 type EventEnvelope = {
@@ -235,7 +238,7 @@ export const analytics = {
     enqueue(envelope(event, props))
   },
 
-  trackFailure(stage: 'decrypt' | 'transcode', payload: Omit<FailurePayload, 'stage'>) {
+  trackFailure(stage: FailureStage, payload: Omit<FailurePayload, 'stage'>) {
     const propsForEvent: Props = {
       file_name: payload.file_name,
       file_ext: payload.file_ext,
@@ -243,6 +246,7 @@ export const analytics = {
       error_code: payload.error_code,
       error_msg: payload.error_msg,
       source: payload.source,
+      download_kind: payload.download_kind,
     }
     Object.keys(propsForEvent).forEach((k) => {
       if (propsForEvent[k] === undefined) delete propsForEvent[k]
@@ -286,4 +290,4 @@ export const analytics = {
   },
 }
 
-export type { Props, FailurePayload }
+export type { Props, FailurePayload, FailureStage }
