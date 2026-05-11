@@ -194,13 +194,11 @@ adminStats.get('/funnel', (c) => {
   )
 
   // 件维度（文件数）
-  // 上传层：用 SUM(upload_drop/pick.count) 而不是 COUNT(upload_attempt)，因为前者
-  //   1) 含被拒文件（drop/pick 在校验前发，count 是总文件数）
-  //   2) 兼容 v0.3 之前没有 upload_attempt 的历史数据
-  // 与 overview 卡片「上传文件总数」同一公式，避免对不上
+  // 上传层口径与 overview 卡片「上传文件总数」严格一致：upload_attempt + upload_reject
+  // v0.4.1 起放弃 SUM(upload_drop/pick.count)——drop/pick 是动作事件，部分路径漏埋导致总数偏低
   const fileUpload = cnt(
-    `SELECT COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)), 0) AS n
-       FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ? AND event IN ('upload_attempt','upload_reject')`,
   )
   const fileDecrypt = cnt(
     `SELECT COUNT(*) AS n FROM events
@@ -316,19 +314,23 @@ adminStats.get('/timeseries', (c) => {
              GROUP BY day ORDER BY day`
       break
     case 'upload_uv':
+      // 口径与 overview 卡片「上传过的人 UV」一致：含 drop/pick（v0.3 前）+ attempt/reject（v0.4.1+）
       sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(DISTINCT visitor_id) AS v
-             FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')
+             FROM events WHERE ts >= ? AND ts <= ?
+               AND event IN ('upload_drop','upload_pick','upload_attempt','upload_reject')
              GROUP BY day ORDER BY day`
       break
     case 'download_uv':
       sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(DISTINCT visitor_id) AS v
-             FROM events WHERE ts >= ? AND ts <= ? AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click')
+             FROM events WHERE ts >= ? AND ts <= ?
+               AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click','download_done','download_fail')
              GROUP BY day ORDER BY day`
       break
     case 'upload_files':
-      sql = `SELECT ${DAY_BUCKET_SQL} AS day,
-                    COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)),0) AS v
-             FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')
+      // 口径与 overview 卡片「上传文件总数」一致：upload_attempt + upload_reject
+      sql = `SELECT ${DAY_BUCKET_SQL} AS day, COUNT(*) AS v
+             FROM events WHERE ts >= ? AND ts <= ?
+               AND event IN ('upload_attempt','upload_reject')
              GROUP BY day ORDER BY day`
       break
     case 'decrypt_done':
