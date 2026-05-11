@@ -40,6 +40,11 @@ export const EVENT_LABELS: Record<string, string> = {
   upload_reject:  '主站 - 业务 - 上传被拒（格式/大小/数量）',
   download_done:  '主站 - 业务 - 下载完成',
   download_fail:  '主站 - 业务 - 下载失败',
+
+  // v0.4.1 新增：心跳 + 中止
+  transcode_progress: '主站 - 业务 - 转码进度心跳（10/30/50/70/90 五桶）',
+  decrypt_abandon:    '主站 - 业务 - 解密中止（pagehide 时仍在 inflight）',
+  transcode_abandon:  '主站 - 业务 - 转码中止（pagehide 时仍在 inflight，auto-FLAC OOM 定位用）',
 }
 
 export function eventLabel(name: string): string {
@@ -57,6 +62,35 @@ export const REJECT_REASON_LABEL: Record<string, string> = {
   SIZE_EXCEEDED: '超出 200MB',
   QUEUE_FULL: '超出 50 个上限',
 }
+
+// v0.4.1 合并后的上传日志「状态」列：Tag 文案 + 颜色
+export type UploadStatusKey =
+  | 'rejected_format' | 'rejected_size' | 'rejected_queue'
+  | 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy'
+
+export const UPLOAD_STATUS_LABEL: Record<UploadStatusKey, { label: string; color: string }> = {
+  rejected_format: { label: '被拒-格式', color: 'red' },
+  rejected_size:   { label: '被拒-大小', color: 'red' },
+  rejected_queue:  { label: '被拒-队列', color: 'red' },
+  success:         { label: '成功',      color: 'green' },
+  failed:          { label: '失败',      color: 'volcano' },
+  abandoned:       { label: '中止',      color: 'orange' },
+  pending:         { label: '未完成',    color: 'default' },
+  legacy:          { label: '-',         color: 'default' },
+}
+
+// 工具栏下拉：把 8 种细分合并到 5 个粗粒度筛选项（被拒不再展开三种细分，避免选项过长）
+export const UPLOAD_STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '全部状态' },
+  { value: 'rejected_format', label: '被拒-格式' },
+  { value: 'rejected_size',   label: '被拒-大小' },
+  { value: 'rejected_queue',  label: '被拒-队列' },
+  { value: 'success',         label: '成功' },
+  { value: 'failed',          label: '失败' },
+  { value: 'abandoned',       label: '中止' },
+  { value: 'pending',         label: '未完成' },
+  { value: 'legacy',          label: '历史数据' },
+]
 
 export const DOWNLOAD_KIND_LABEL: Record<string, string> = {
   single: '单文件下载',

@@ -18,15 +18,17 @@ function fileExtOf(name: string): string {
 }
 
 // 给元素绑定曝光埋点：元素挂载且进入视口 >=50%、停留 >=300ms 时触发一次 *_view
+// callback ref：旧版用 useRef + useEffect([event])，但 FileRow 内按钮随 status 切换才挂载，
+// effect 首跑时 ref.current 还是 null，且 deps 不含 ref，observer 永远绑不上。
+// 改用 callback ref + useState 触发 effect 重跑：node 从 null 变成 DOM 元素时重绑。
 function useImpression<T extends HTMLElement>(event: string, props?: Record<string, unknown>) {
-  const ref = useRef<T | null>(null)
+  const [node, setNode] = useState<T | null>(null)
   useEffect(() => {
-    if (!ref.current) return
-    const dispose = analytics.observeImpression(ref.current, event, props)
-    return dispose
+    if (!node) return
+    return analytics.observeImpression(node, event, props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [event])
-  return ref
+  }, [node, event])
+  return setNode
 }
 
 const MAX_FILES = 50
@@ -797,13 +799,30 @@ function App() {
       updateFile(id, { status: 'transcoding', progress: 0 })
       const fromFormat = result.format
       analytics.track('transcode_start', {
+        file_id: id,
         file_name: result.suggestedName,
         from_format: fromFormat,
         file_size: result.audio.size,
       })
+      // register inflight：若用户在转码过程中关页（auto-FLAC 大文件易触发 Safari OOM）
+      // pagehide 会发 transcode_abandon，含最近一次 progress；本次的核心定位手段
+      analytics.registerInflight(id, 'transcode', {
+        file_name: result.suggestedName,
+        file_ext: fromFormat,
+        file_size: result.audio.size,
+        from_format: fromFormat,
+      })
       try {
         const mp3Blob = await transcodeToMp3(result.audio, (p) => {
           updateFile(id, { progress: p })
+          // 心跳：跨越 0.1 / 0.3 / 0.5 / 0.7 / 0.9 时各 emit 一次 transcode_progress
+          // SDK 内部自带 bucket 去重，安全调用
+          analytics.trackTranscodeProgress(id, p, {
+            file_name: result.suggestedName,
+            file_ext: fromFormat,
+            file_size: result.audio.size,
+            from_format: fromFormat,
+          })
         })
         const newName = result.suggestedName.replace(
           /\.(flac|ogg)$/i,
@@ -820,12 +839,14 @@ function App() {
           },
         })
         analytics.track('transcode_done', {
+          file_id: id,
           file_name: newName,
           file_ext: fromFormat,
           file_size: result.audio.size,
           source: result.meta?.source,
           from_format: fromFormat,
         })
+        analytics.unregisterInflight(id)
         notify('已转为 MP3')
       } catch (err) {
         let message = '转码失败'
@@ -841,11 +862,13 @@ function App() {
           error_code: err instanceof DecryptError ? err.code : undefined,
           error_msg: message,
           error_stack: err instanceof Error ? err.stack : undefined,
+          file_id: id,
           file_name: result.suggestedName,
           file_ext: fromFormat,
           file_size: result.audio.size,
           source: result.meta?.source,
         })
+        analytics.unregisterInflight(id)
         setWarning(message)
       }
     },
@@ -908,6 +931,7 @@ function App() {
           analytics.trackFailure('decrypt', {
             error_code: code,
             error_msg: message,
+            file_id: next.id,
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
@@ -933,6 +957,7 @@ function App() {
           analytics.trackFailure('decrypt', {
             error_code: code,
             error_msg: message,
+            file_id: next.id,
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
@@ -943,6 +968,13 @@ function App() {
         // 5) NCM / KGM / VPR：正常解密路径（按 sniff 真实格式分发，绕过扩展名）
         updateFile(next.id, { status: 'decrypting', progress: 0 })
         analytics.track('decrypt_start', {
+          file_id: next.id,
+          file_name: next.file.name,
+          file_ext: fileExt,
+          file_size: next.file.size,
+        })
+        // register inflight：若用户在解密过程中关页，pagehide 会发 decrypt_abandon
+        analytics.registerInflight(next.id, 'decrypt', {
           file_name: next.file.name,
           file_ext: fileExt,
           file_size: next.file.size,
@@ -958,12 +990,14 @@ function App() {
             : result.meta.albumPic || undefined
           updateFile(next.id, { status: 'done', result, coverUrl, progress: 1 })
           analytics.track('decrypt_done', {
+            file_id: next.id,
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
             source: result.meta?.source,
             format: result.format,
           })
+          analytics.unregisterInflight(next.id)
         } catch (err) {
           let code: DecryptErrorCode = 'UNKNOWN'
           let message = '未知错误'
@@ -978,11 +1012,13 @@ function App() {
             error_code: code,
             error_msg: message,
             error_stack: err instanceof Error ? err.stack : undefined,
+            file_id: next.id,
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
             source: realFormat,
           })
+          analytics.unregisterInflight(next.id)
         }
       }
     } finally {
@@ -1030,20 +1066,23 @@ function App() {
       } else setWarning(null)
       if (candidates.length === 0) return
 
-      candidates.forEach((f) => {
-        analytics.track('upload_attempt', {
-          file_name: f.name,
-          file_ext: fileExtOf(f.name),
-          file_size: f.size,
-        })
-      })
-
       const list: TrackedFile[] = candidates.map((f) => ({
-        id: `${f.name}-${f.size}-${f.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
+        // file_id 用 UUID v4，全程透传埋点；同时复用为 React key 和 state 索引
+        id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `f-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         file: f,
         status: 'pending' as FileStatus,
         progress: 0,
       }))
+      list.forEach((tf) => {
+        analytics.track('upload_attempt', {
+          file_id: tf.id,
+          file_name: tf.file.name,
+          file_ext: fileExtOf(tf.file.name),
+          file_size: tf.file.size,
+        })
+      })
       // 新批次插到列表最前，processQueue 会先处理最新意图，符合用户认知
       setFiles((prev) => [...list, ...prev])
       setTimeout(() => processQueue(), 0)

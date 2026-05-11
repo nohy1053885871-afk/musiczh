@@ -75,6 +75,10 @@
 | `referrer` | string | 来源 URL（仅 `pageview` 自动从 `document.referrer` 采集，用于访客日志渠道分析）|
 | `reject_reason` | string | 上传被拒原因：`FORMAT_UNSUPPORTED` / `SIZE_EXCEEDED` / `QUEUE_FULL` |
 | `download_kind` | string | 下载方式：`single` / `all_separate` / `zip` |
+| `file_id` | string | **v0.4.1 起新增** · 文件级 UUID v4，由 `addFiles` 用 `crypto.randomUUID()` 生成；贯穿 `upload_attempt → decrypt_*/transcode_*` 全链路，用来在后端关联出 `pipeline_status`。v0.4.1 之前的事件无此字段，运营后台显示「-（历史数据）」 |
+| `progress_bucket` | number | **v0.4.1 起新增** · `transcode_progress` 心跳的进度桶，仅取 `0.1 / 0.3 / 0.5 / 0.7 / 0.9` 五值，桶内去重 |
+| `last_progress` | number | **v0.4.1 起新增** · `*_abandon` 中止事件的最近一次 progress 值（0-1），辅助定位中止发生在哪一段 |
+| `stage` | string | **v0.4.1 起新增** · `*_abandon` 中止事件的阶段，`decrypt` / `transcode` |
 
 **绝对禁止**：上报文件二进制内容、文件内容哈希（指纹）、用户输入的密码 / 账号、网银卡号等隐私信息。
 
@@ -113,8 +117,14 @@
 | `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_msg, error_stack, ...` | 同步触发 `trackFailure` |
 | `download_done` | 主站 - 业务 - 下载完成 | [src/App.tsx](../src/App.tsx) `FileRow` 单文件 / `downloadAllSeparate` / `downloadAllAsZip` | `file_name, file_ext, file_size, download_kind` | ZIP 整批成功后按文件数批量发；漏斗件维度的「下载」层 |
 | `download_fail` | 主站 - 业务 - 下载失败 | 三处下载入口的 try/catch 兜底 | `download_kind, error_code, error_msg, file_name?` | 同步触发 `trackFailure('download',...)`；ZIP 整批失败时 `file_name` 留空 |
+| `transcode_progress` | **v0.4.1** 主站 - 业务 - 转码进度心跳 | [src/App.tsx](../src/App.tsx) `transcodeFile.onProgress` → SDK 分桶 | `file_id, file_name, file_ext, file_size, from_format, progress_bucket` | SDK 内按 `[0.1, 0.3, 0.5, 0.7, 0.9]` 五桶单向跨越触发，每桶每文件 emit 一次，用于定位 auto-FLAC 卡死在哪一段 |
+| `decrypt_abandon` | **v0.4.1** 主站 - 业务 - 解密中止 | [src/lib/analytics.ts](../src/lib/analytics.ts) `onHide` 遍历 inflight Map | `file_id, file_name, file_ext, file_size, last_progress, stage='decrypt'` | pagehide / visibilitychange=hidden 触发；走 sendBeacon 兜底 |
+| `transcode_abandon` | **v0.4.1** 主站 - 业务 - 转码中止 | [src/lib/analytics.ts](../src/lib/analytics.ts) `onHide` 遍历 inflight Map | `file_id, file_name, file_ext, file_size, from_format, last_progress, stage='transcode'` | 同上，**auto-FLAC OOM 静默崩定位用** |
 
 **曝光事件**（`*_view`）：通过组件局部的 `useImpression(eventName)` hook 给按钮 ref 绑定 IntersectionObserver。元素进入视口 ≥ 50% 且停留 ≥ 300ms 触发一次，**session 内同 visitor 同 event 全局去重**——所以单次会话每个按钮最多上报一次曝光，避免噪音。
+
+> v0.4.1 起 `useImpression` 改用 callback ref（旧版用 `useRef` + `useEffect([event])`，在 FileRow 内随 status 切换才挂载的动态按钮上 ref 始终为 null，观察器永远绑不上）。callback ref 模式下 node 从 null 变为 DOM 元素时会重跑 effect，自动重绑 observer。
+
 
 新增按钮时建议：
 ```tsx

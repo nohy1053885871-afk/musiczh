@@ -22,6 +22,7 @@ type FailurePayload = {
   error_code?: string
   error_msg?: string
   error_stack?: string
+  file_id?: string
   file_name?: string
   file_ext?: string
   file_size?: number
@@ -40,8 +41,29 @@ type EventEnvelope = {
   failure?: FailurePayload
 }
 
+type InflightStage = 'decrypt' | 'transcode'
+
+type InflightMeta = {
+  file_name?: string
+  file_ext?: string
+  file_size?: number
+  from_format?: string
+}
+
+type InflightEntry = {
+  stage: InflightStage
+  meta: InflightMeta
+  lastBucket: number // 已 emit 过的最高 progress bucket（0/1/3/5/7/9 对应 0/0.1/0.3/0.5/0.7/0.9）
+  lastProgress: number // 最近一次 progress（0-1），pagehide abandon 时回填
+}
+
+// transcode_progress 心跳分桶：0.1 / 0.3 / 0.5 / 0.7 / 0.9 共 5 个
+// 用 ×10 的整数表示（1/3/5/7/9），避免浮点比较
+const PROGRESS_BUCKETS = [1, 3, 5, 7, 9] as const
+
 const queue: EventEnvelope[] = []
 const seenImpressions = new Set<string>()
+const inflight = new Map<string, InflightEntry>()
 let flushTimer: number | null = null
 let initialized = false
 
@@ -209,6 +231,27 @@ async function drainRetry() {
   if (!ok) pushRetry(cur)
 }
 
+// pagehide / visibilitychange=hidden 时：把仍在 inflight Map 里的文件
+// 一律视为「中止」（用户主动关页 / 切到后台被系统杀 / Safari OOM 静默崩）
+// 每个文件 emit 一次 ${stage}_abandon；同一个 file_id 只在此处 emit 一次后从 Map 移除
+function emitAbandonForInflight() {
+  if (inflight.size === 0) return
+  for (const [fileId, entry] of inflight) {
+    enqueue(
+      envelope(`${entry.stage}_abandon`, {
+        file_id: fileId,
+        file_name: entry.meta.file_name,
+        file_ext: entry.meta.file_ext,
+        file_size: entry.meta.file_size,
+        from_format: entry.meta.from_format,
+        last_progress: entry.lastProgress,
+        stage: entry.stage,
+      }),
+    )
+  }
+  inflight.clear()
+}
+
 export const analytics = {
   init() {
     if (initialized) return
@@ -219,6 +262,7 @@ export const analytics = {
     void drainRetry()
 
     const onHide = () => {
+      emitAbandonForInflight()
       void flush(true)
     }
     window.addEventListener('pagehide', onHide)
@@ -240,6 +284,7 @@ export const analytics = {
 
   trackFailure(stage: FailureStage, payload: Omit<FailurePayload, 'stage'>) {
     const propsForEvent: Props = {
+      file_id: payload.file_id,
       file_name: payload.file_name,
       file_ext: payload.file_ext,
       file_size: payload.file_size,
@@ -252,6 +297,47 @@ export const analytics = {
       if (propsForEvent[k] === undefined) delete propsForEvent[k]
     })
     enqueue(envelope(`${stage}_fail`, propsForEvent, { stage, ...payload }))
+  },
+
+  // ── inflight 文件追踪：decrypt / transcode 开始时 register，结束时 unregister
+  // pagehide 时仍在 Map 里的，统一发 *_abandon（含 last_progress / stage）
+  registerInflight(fileId: string, stage: InflightStage, meta: InflightMeta) {
+    if (!fileId) return
+    inflight.set(fileId, { stage, meta, lastBucket: 0, lastProgress: 0 })
+  },
+
+  unregisterInflight(fileId: string) {
+    if (!fileId) return
+    inflight.delete(fileId)
+  },
+
+  // 转码进度回调里调一次。内部：① 更新 inflight.lastProgress；② 跨越新 bucket 时 emit transcode_progress
+  // 同一桶在同一文件内只 emit 一次（lastBucket 单调递增）
+  trackTranscodeProgress(fileId: string, progress: number, meta: InflightMeta) {
+    if (!fileId) return
+    const entry = inflight.get(fileId)
+    if (entry) {
+      entry.lastProgress = progress
+      // 不允许 inflight 在 progress 调用阶段被外部 meta 覆盖；保留 register 时的 meta
+    }
+    // bucket 用 floor(progress * 10)，落到 PROGRESS_BUCKETS 任意一个就 emit
+    const cur = Math.floor(progress * 10)
+    if (!entry) return
+    for (const b of PROGRESS_BUCKETS) {
+      if (cur >= b && entry.lastBucket < b) {
+        entry.lastBucket = b
+        enqueue(
+          envelope('transcode_progress', {
+            file_id: fileId,
+            file_name: meta.file_name ?? entry.meta.file_name,
+            file_ext: meta.file_ext ?? entry.meta.file_ext,
+            file_size: meta.file_size ?? entry.meta.file_size,
+            from_format: meta.from_format ?? entry.meta.from_format,
+            progress_bucket: b / 10, // 还原成 0.1 / 0.3 / ...
+          }),
+        )
+      }
+    }
   },
 
   // 元素进入视口 ≥50% 且停留 ≥300ms 触发一次 *_view，session 内同 event 去重
@@ -290,4 +376,4 @@ export const analytics = {
   },
 }
 
-export type { Props, FailurePayload, FailureStage }
+export type { Props, FailurePayload, FailureStage, InflightStage, InflightMeta }

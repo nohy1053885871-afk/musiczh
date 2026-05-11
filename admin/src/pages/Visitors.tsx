@@ -101,7 +101,7 @@ export function VisitorsPage() {
         <div>
           <Title level={4} style={{ margin: 0 }}>访客日志</Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            按 visitor_id 聚合的访问明细 · 末访倒序
+            按 visitor_id 聚合的访问明细（任意事件去重，与 Overview「UV」按 pageview 去重的口径不同）· 末访倒序
           </Text>
         </div>
         <Space>
