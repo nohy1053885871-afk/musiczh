@@ -81,10 +81,14 @@ export const api = {
 
   uploads: (params: {
     page?: number; size?: number; type?: 'attempt' | 'reject';
-    reason?: string; ext?: string; q?: string;
+    reason?: string; status?: UploadStatus; ext?: string; q?: string;
     from?: number; to?: number; range?: string
   }) => request<UploadsResp>(`/admin/uploads?${buildQuery(params)}`),
   uploadDetail: (id: number) => request<UploadDetail>(`/admin/uploads/${id}`),
+  uploadsTimeseries: (rangeQuery: string) =>
+    request<UploadsTimeseriesResp>(`/admin/uploads/timeseries?${rangeQuery}`),
+  uploadsByFormat: (rangeQuery: string) =>
+    request<UploadsByFormatResp>(`/admin/uploads/by-format?${rangeQuery}`),
 
   downloads: (params: {
     page?: number; size?: number; type?: 'done' | 'fail';
@@ -117,6 +121,16 @@ export type OverviewResp = {
   raw_flac_transcode_fail: number
   // 上传被拒件数（格式不支持 / 超大小 / 队列上限）
   upload_reject: number
+  // v0.4.1 新增：上传文件总数卡片拆分小字消费的精细字段
+  decrypt_abandon: number
+  transcode_abandon: number
+  abandon_total: number
+  pending_files: number
+  legacy_files: number
+  // 6 段口径（按 file_id 关联 upload_attempt 下游状态，加和 = upload_attempt + upload_reject = upload_files）
+  success_files: number
+  failed_files: number
+  abandoned_files: number
 }
 
 export type FunnelStep = {
@@ -266,16 +280,26 @@ export type VisitorDetail = VisitorRow & {
 export type UploadType = 'attempt' | 'reject'
 export type UploadRejectReason = 'FORMAT_UNSUPPORTED' | 'SIZE_EXCEEDED' | 'QUEUE_FULL'
 
+// v0.4.1：合并后的「状态」枚举（含被拒细分 + 下游 pipeline_status）
+export type UploadStatus =
+  | 'rejected_format' | 'rejected_size' | 'rejected_queue'
+  | 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy'
+
 export type UploadRow = {
   id: number
   ts: number
   visitor_id: string
   event: string
+  // 旧字段保留过渡期一版
   type: UploadType
+  reject_reason: UploadRejectReason | null
+  pipeline_status: 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy' | null
+  // 新字段：合并后的状态，前端 Tag 直接消费
+  status: UploadStatus | null
+  file_id: string | null
   file_name: string | null
   file_ext: string | null
   file_size: number | null
-  reject_reason: UploadRejectReason | null
   app_ver: string | null
   browser: string
   os: string
@@ -290,10 +314,53 @@ export type UploadsResp = {
   reason_agg: { reason: string | null; n: number }[]
 }
 
+export type UploadTimelineEvent = {
+  id: number
+  ts: number
+  event: string
+  props: Record<string, unknown> | null
+}
+
 export type UploadDetail = UploadRow & {
   ua: string | null
   ip: string | null
   page: string | null
+  timeline: UploadTimelineEvent[]
+}
+
+export type UploadsTimeseriesPoint = {
+  day: number
+  attempt: number
+  reject_total: number
+  reject_format: number
+  reject_size: number
+  reject_queue: number
+}
+
+export type UploadsTimeseriesResp = {
+  range: string
+  from: number
+  to: number
+  points: UploadsTimeseriesPoint[]
+}
+
+export type UploadsByFormatPerExt = {
+  total: number
+  success: number
+  fail: number
+}
+
+export type UploadsByFormatPoint = {
+  day: number
+  per_ext: Record<string, UploadsByFormatPerExt>
+}
+
+export type UploadsByFormatResp = {
+  range: string
+  from: number
+  to: number
+  exts: string[]
+  points: UploadsByFormatPoint[]
 }
 
 export type DownloadType = 'done' | 'fail'

@@ -18,6 +18,8 @@ CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_event_ts ON events(event, ts);
 CREATE INDEX IF NOT EXISTS idx_events_visitor_ts ON events(visitor_id, ts);
 
+-- v0.4.1 起新增：events.file_id 生成列 + 索引，由 db.ts 兜底执行（ALTER TABLE ADD COLUMN 不幂等）
+
 -- 失败详情表：解密 / 转码 / 下载失败专用，便于"复制 JSON"排查
 CREATE TABLE IF NOT EXISTS failures (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

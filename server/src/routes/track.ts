@@ -11,6 +11,9 @@ const ALLOWED_PROPS = new Set([
   'from_format', 'queue_size', 'action', 'status',
   'referrer',
   'reject_reason', 'download_kind',
+  // v0.4.1 新增：file_id 关联上传 → 解密/转码 → 完成/失败/中止
+  // progress_bucket（transcode_progress 心跳）；last_progress / stage（*_abandon 中止现场）
+  'file_id', 'progress_bucket', 'last_progress', 'stage',
 ])
 
 const FailureSchema = z.object({
@@ -18,10 +21,12 @@ const FailureSchema = z.object({
   error_code: z.string().max(64).optional(),
   error_msg: z.string().max(2000).optional(),
   error_stack: z.string().max(8000).optional(),
+  file_id: z.string().max(64).optional(),
   file_name: z.string().max(500).optional(),
   file_ext: z.string().max(32).optional(),
   file_size: z.number().int().nonnegative().optional(),
   source: z.string().max(32).optional(),
+  download_kind: z.enum(['single', 'all_separate', 'zip']).optional(),
 })
 
 const EventSchema = z.object({

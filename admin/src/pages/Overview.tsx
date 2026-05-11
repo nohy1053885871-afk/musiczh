@@ -129,7 +129,30 @@ export function OverviewPage() {
       {/* 第一组：流量 */}
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}><Card><Statistic title="PV（页面访问）" value={overview?.pv ?? 0} /></Card></Col>
-        <Col xs={12} md={6}><Card><Statistic title="UV（独立访客）" value={overview?.uv ?? 0} /></Card></Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title={
+                <Space size={6}>
+                  <span>UV（独立访客）</span>
+                  <AntTooltip
+                    title={(
+                      <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                        UV 口径 = <code>pageview</code> 事件去重 visitor_id。
+                        <br />⚠️ 与「访客日志」可能对不上：访客日志按<b>任意事件</b>去重，
+                        包含那些只发了 upload/decrypt 等业务事件但 pageview 因网络/SDK 早期路径丢失的访客。
+                        <br />差值 = 业务事件先于 pageview 上报或 pageview 发送失败的访客数，正常时趋近 0。
+                      </div>
+                    )}
+                  >
+                    <InfoCircleOutlined style={{ color: '#999' }} />
+                  </AntTooltip>
+                </Space>
+              }
+              value={overview?.uv ?? 0}
+            />
+          </Card>
+        </Col>
         <Col xs={12} md={6}><Card><Statistic title="上传过的人 UV" value={overview?.upload_uv ?? 0} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="下载过的人 UV" value={overview?.download_uv ?? 0} /></Card></Col>
       </Row>
@@ -142,7 +165,20 @@ export function OverviewPage() {
               title={
                 <Space size={6}>
                   <span>上传文件总数（件）</span>
-                  <AntTooltip title="用户尝试上传的总件数（含被拒、含未完成）。拆分小字 4 段：上传校验被拒 + 走过解密路径（NCM/KGM/VPR）的件数 + 走过原 flac 转码路径的件数 + 未完成（上报上传后没产生终态事件，多见于用户中途关页面 / v0.3 前历史数据无 upload_reject）。">
+                  <AntTooltip
+                    title={(
+                      <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                        用户尝试上传的总件数 = upload_attempt（进队列）+ upload_reject（被拒）。
+                        v0.4.1 起 6 段拆解按 file_id 关联下游事件，加和严格等于上方主数字：
+                        <br />· <b>成功</b>：file_id 下游有 decrypt_done / transcode_done
+                        <br />· <b>失败</b>：file_id 下游有 decrypt_fail / transcode_fail（无 done）
+                        <br />· <b>中止</b>：file_id 下游有 *_abandon（无 done / fail）—— auto-FLAC OOM 主嫌疑
+                        <br />· <b>被拒</b>：upload_reject（上传准入校验失败：格式/大小/队列）
+                        <br />· <b>未完成</b>：upload_attempt 有 file_id 但无任何下游事件（兜底，应趋近 0）
+                        <br />· <b>历史</b>：v0.4.1 前埋点无 file_id，无法追溯下游
+                      </div>
+                    )}
+                  >
                     <InfoCircleOutlined style={{ color: '#999' }} />
                   </AntTooltip>
                 </Space>
@@ -150,15 +186,23 @@ export function OverviewPage() {
               value={overview?.upload_files ?? 0}
             />
             {(() => {
+              // 6 段口径：按 file_id 关联 upload_attempt 的下游状态，互斥且穷举
+              // 加和 = upload_attempt + upload_reject = upload_files，与卡片主数字严格自洽
+              const success = overview?.success_files ?? 0
+              const fail = overview?.failed_files ?? 0
+              const abandon = overview?.abandoned_files ?? 0
               const reject = overview?.upload_reject ?? 0
-              const decrypt = (overview?.decrypt_done ?? 0) + (overview?.decrypt_fail ?? 0)
-              const rawFlac = (overview?.raw_flac_transcode_done ?? 0) + (overview?.raw_flac_transcode_fail ?? 0)
+              const pending = overview?.pending_files ?? 0
+              const legacy = overview?.legacy_files ?? 0
+              const sum = success + fail + abandon + reject + pending + legacy
               const total = overview?.upload_files ?? 0
-              const pending = Math.max(0, total - reject - decrypt - rawFlac)
+              const detail = `成功 ${success} + 失败 ${fail} + 中止 ${abandon} + 被拒 ${reject} + 未完成 ${pending} + 历史 ${legacy} = ${sum}（应等于上方 ${total}）`
               return (
                 <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(0,0,0,0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <AntTooltip title={`被拒 ${reject} + 解密 ${decrypt} + 原 flac ${rawFlac} + 未完成 ${pending}`}>
-                    <span>被拒 {reject} · 解密 {decrypt} · 原 flac {rawFlac} · 未完成 {pending}</span>
+                  <AntTooltip title={detail}>
+                    <span>
+                      成功 {success} · 失败 {fail} · 中止 {abandon} · 被拒 {reject} · 未完成 {pending} · 历史 {legacy}
+                    </span>
                   </AntTooltip>
                 </div>
               )

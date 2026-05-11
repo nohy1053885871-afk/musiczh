@@ -36,9 +36,13 @@ adminStats.get('/overview', (c) => {
   const downloadUv = cnt(
     "SELECT COUNT(DISTINCT visitor_id) AS n FROM events WHERE ts >= ? AND ts <= ? AND event IN ('row_download_click','btn_download_all_click','btn_download_zip_click','download_done','download_fail')",
   )
+  // 「上传文件总数」口径
+  // 历史：用 SUM(upload_drop/pick.count)，但 drop/pick 是动作事件，部分路径（剪贴板、API）漏埋导致总数偏低
+  // v0.4.1 起改用 file 级事件求和：upload_attempt（进队列）+ upload_reject（被拒），跟卡片 6 段拆解的语义严格自洽
+  // upload_attempt + upload_reject 这两个事件 v0.3 起每个文件都发，覆盖 100% 路径
   const uploadFiles = cnt(
-    `SELECT COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)), 0) AS n
-       FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ? AND event IN ('upload_attempt','upload_reject')`,
   )
   // 上传校验拒（格式 / 大小 / 队列上限），每个被拒文件一条
   const uploadReject = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'")
@@ -64,6 +68,70 @@ adminStats.get('/overview', (c) => {
   )
   const convertDone = decryptDone + rawFlacTranscodeDone
 
+  // v0.4.1 新增「中止 / 未完成 / 历史」三段，重梳「上传文件总数」卡片拆分小字
+  // 中止 = pagehide 时仍在 inflight 的文件（auto-FLAC OOM / 用户关页 / 切后台被杀）
+  const decryptAbandon = cnt(
+    "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_abandon'",
+  )
+  const transcodeAbandon = cnt(
+    "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'transcode_abandon'",
+  )
+  // 未完成 = upload_attempt 有 file_id 但无任何下游事件（含 done / fail / abandon）
+  // 这是埋点 SDK 没兜住的边界 case：JS 主线程异常 / 网络丢包 / pagehide 之外的销毁路径
+  const pendingFiles = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND event = 'upload_attempt'
+         AND file_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM events d WHERE d.file_id = events.file_id
+             AND d.event IN ('decrypt_done','decrypt_fail','decrypt_abandon',
+                             'transcode_done','transcode_fail','transcode_abandon')
+         )`,
+  )
+  // 历史 = v0.4.1 之前的 upload_attempt 事件，无 file_id 无法关联，单独标识
+  const legacyFiles = cnt(
+    "SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'upload_attempt' AND file_id IS NULL",
+  )
+
+  // 6 段拆解口径（按 file_id 关联 upload_attempt 的下游状态，保证加和 = upload_attempt 总数）
+  // success/failed/abandoned/pending/legacy 互斥；加 upload_reject 后 = upload_files
+  const successFiles = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND event = 'upload_attempt' AND file_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM events d WHERE d.file_id = events.file_id
+             AND d.event IN ('decrypt_done','transcode_done')
+         )`,
+  )
+  const failedFiles = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND event = 'upload_attempt' AND file_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM events d WHERE d.file_id = events.file_id
+             AND d.event IN ('decrypt_fail','transcode_fail')
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM events d WHERE d.file_id = events.file_id
+             AND d.event IN ('decrypt_done','transcode_done')
+         )`,
+  )
+  const abandonedFiles = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ?
+         AND event = 'upload_attempt' AND file_id IS NOT NULL
+         AND EXISTS (
+           SELECT 1 FROM events d WHERE d.file_id = events.file_id
+             AND d.event IN ('decrypt_abandon','transcode_abandon')
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM events d WHERE d.file_id = events.file_id
+             AND d.event IN ('decrypt_done','decrypt_fail','transcode_done','transcode_fail')
+         )`,
+  )
+
   return c.json({
     range,
     from,
@@ -85,6 +153,16 @@ adminStats.get('/overview', (c) => {
     raw_flac_transcode_done: rawFlacTranscodeDone,
     raw_flac_transcode_fail: rawFlacTranscodeFail,
     upload_reject: uploadReject,
+    // v0.4.1 新增字段（admin Overview 卡片拆分小字消费）
+    decrypt_abandon: decryptAbandon,
+    transcode_abandon: transcodeAbandon,
+    abandon_total: decryptAbandon + transcodeAbandon,
+    pending_files: pendingFiles,
+    legacy_files: legacyFiles,
+    // 6 段拆解口径：按 file_id 关联，加和 = upload_attempt 总数；再加 upload_reject = upload_files
+    success_files: successFiles,
+    failed_files: failedFiles,
+    abandoned_files: abandonedFiles,
   })
 })
 
