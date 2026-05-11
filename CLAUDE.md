@@ -148,6 +148,8 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 ## 待做事项
 
+> **历次复盘的 action items** 见 [docs/RETROSPECTIVES.md](docs/RETROSPECTIVES.md)。每次开始新迭代前优先扫一眼最新一节的 checklist，看上次哪些没完成需要继续推。本节是平时记录的零散 TODO 仓库，复盘时会被整理成 action items 搬过去。
+
 - [ ] CI/CD：GitHub Actions 自动构建 + rsync 部署到服务器
 - [ ] FLAC 文件 Vorbis Comments + PICTURE block 标签写入
 - [ ] 移动端适配优化

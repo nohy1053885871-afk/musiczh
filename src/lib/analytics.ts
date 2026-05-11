@@ -192,7 +192,19 @@ function scheduleFlush() {
   }, FLUSH_INTERVAL)
 }
 
+// dev 环境给每个上报事件打一条控制台日志，方便本地点一遍新功能时
+// 肉眼核对"应该有的事件都打印过了"——构建产物会因 dead code elimination 整段删掉
+function devLog(env: EventEnvelope) {
+  if (!import.meta.env.DEV) return
+  const isFail = !!env.failure
+  const tag = isFail ? '[analytics:fail]' : '[analytics]'
+  const tagStyle = `color:#fff;background:${isFail ? '#d33' : '#0a84ff'};padding:1px 5px;border-radius:3px;font-weight:bold`
+  const nameStyle = `color:${isFail ? '#d33' : '#0a84ff'};font-weight:bold`
+  console.log(`%c${tag}%c ${env.event}`, tagStyle, nameStyle, env.props ?? env.failure ?? '')
+}
+
 function enqueue(env: EventEnvelope) {
+  devLog(env)
   queue.push(env)
   if (queue.length >= FLUSH_THRESHOLD) {
     void flush(false)

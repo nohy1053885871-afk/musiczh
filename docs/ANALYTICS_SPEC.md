@@ -150,14 +150,25 @@ analytics.trackFailure('decrypt', {
 
 任何带 UI 的新功能上线前，开发者必须自检：
 
-- [ ] 新增按钮 → 同时埋 `btn_<x>_click`（SDK 已就绪）
-- [ ] 新增按钮 → 在挂载时 `analytics.observeImpression(el, 'btn_<x>_view')` 埋曝光
-- [ ] 新增异步流程 → 埋 `<x>_start` 与 `<x>_done` 或 `<x>_fail`
+**代码层**
+- [ ] 新增按钮 → 同时埋 `btn_<x>_click`（点击）
+- [ ] 新增按钮 → 同时埋 `btn_<x>_view`（曝光，用 `useImpression` hook 或 `analytics.observeImpression(el, ...)`）
+- [ ] 新增异步流程 → 埋 `<x>_start` 与 `<x>_done` / `<x>_fail`
 - [ ] 新增失败分支 → `analytics.trackFailure('<stage>', { error_code, error_stack, file_name, ... })`
+
+**文档层**
 - [ ] 在本文档「§4 事件全表」追加一行（含中文描述）
-- [ ] 若引入新业务字段：在「§3 业务字段白名单」加行 + 同步改 [server/src/routes/track.ts](../server/src/routes/track.ts) 的 `ALLOWED_PROPS`
-- [ ] 本地启动 `npm run dev` + `npm --prefix server run dev`，DevTools 看 `/api/track` 请求体里事件名齐全
-- [ ] 启动 `npm --prefix admin run dev` 进 `/admin`，「按钮埋点」页能看到新事件再合并 PR
+- [ ] 若引入新业务字段 → 「§3 业务字段白名单」加行 + 同步改 [server/src/routes/track.ts](../server/src/routes/track.ts) 的 `ALLOWED_PROPS`
+- [ ] 在 [admin/src/lib/format.ts](../admin/src/lib/format.ts) 的 `EVENT_LABELS` 加新事件的中文映射
+
+**自测层（必做）**
+- [ ] 本地 `npm run dev` 启动用户端
+- [ ] 浏览器 F12 打开「控制台 / Console」面板
+- [ ] 走一遍新功能的完整路径（点按钮、跑流程、触发失败分支）
+- [ ] **逐项核对**：你在「§4 事件全表」新增的**每一个事件**都在控制台看到过对应的 `[analytics] <event_name>` 蓝底 log（失败事件是红底 `[analytics:fail]`）；曝光事件需要滚动让按钮进入视口才会触发
+- [ ] 若缺失某条 → 当场修代码，不要上线
+
+> dev 环境的控制台 logger 由 [src/lib/analytics.ts](../src/lib/analytics.ts) 的 `devLog()` 提供。生产构建会因 `import.meta.env.DEV` 为 false 触发 dead code elimination 整段删掉，**不会泄漏到线上**，对用户和性能零影响。
 
 ---
 
