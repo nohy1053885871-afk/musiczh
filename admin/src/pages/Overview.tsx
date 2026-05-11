@@ -142,18 +142,27 @@ export function OverviewPage() {
               title={
                 <Space size={6}>
                   <span>上传文件总数（件）</span>
-                  <AntTooltip title="所有进入上传校验的文件件数（含被拒）。拆分小字按出口分类：走过解密路径（NCM/KGM/VPR）的件数 + 走过原 flac 转码路径的件数；差额是被上传校验拒的（见「上传失败」卡）。">
+                  <AntTooltip title="用户尝试上传的总件数（含被拒、含未完成）。拆分小字 4 段：上传校验被拒 + 走过解密路径（NCM/KGM/VPR）的件数 + 走过原 flac 转码路径的件数 + 未完成（上报上传后没产生终态事件，多见于用户中途关页面 / v0.3 前历史数据无 upload_reject）。">
                     <InfoCircleOutlined style={{ color: '#999' }} />
                   </AntTooltip>
                 </Space>
               }
               value={overview?.upload_files ?? 0}
-              suffix={
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {`= 解密 ${(overview?.decrypt_done ?? 0) + (overview?.decrypt_fail ?? 0)} + 原 flac 转 ${(overview?.raw_flac_transcode_done ?? 0) + (overview?.raw_flac_transcode_fail ?? 0)}`}
-                </Text>
-              }
             />
+            {(() => {
+              const reject = overview?.upload_reject ?? 0
+              const decrypt = (overview?.decrypt_done ?? 0) + (overview?.decrypt_fail ?? 0)
+              const rawFlac = (overview?.raw_flac_transcode_done ?? 0) + (overview?.raw_flac_transcode_fail ?? 0)
+              const total = overview?.upload_files ?? 0
+              const pending = Math.max(0, total - reject - decrypt - rawFlac)
+              return (
+                <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(0,0,0,0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <AntTooltip title={`被拒 ${reject} + 解密 ${decrypt} + 原 flac ${rawFlac} + 未完成 ${pending}`}>
+                    <span>被拒 {reject} · 解密 {decrypt} · 原 flac {rawFlac} · 未完成 {pending}</span>
+                  </AntTooltip>
+                </div>
+              )
+            })()}
           </Card>
         </Col>
         <Col xs={12} md={6}>
