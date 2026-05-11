@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.4.1（运营后台 v0.4.1）
+- 当前版本：v0.4.2（运营后台 v0.4.2）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -157,6 +157,14 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
+
+## 已完成（v0.4.2 / 运营后台 v0.4.2 · 20260512 上线）
+
+- 修 v0.4.1 漏改的 3 处「上传」口径，让全站数据自洽：
+  - 漏斗件维度「上传」层（adminStats.ts:fileUpload）
+  - 自定义指标趋势 `upload_files` timeseries
+  - 自定义指标趋势 `upload_uv` / `download_uv` timeseries（与 overview 卡片对齐）
+- 现在「漏斗·按文件数 → 上传」/「自定义趋势 → 上传文件总数」/「Overview 上传文件总数卡片」三处口径严格一致：`COUNT(upload_attempt) + COUNT(upload_reject)`
 
 ## 已完成（v0.4.1 / 运营后台 v0.4.1 · 20260512 上线）
 
