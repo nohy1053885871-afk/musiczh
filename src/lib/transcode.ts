@@ -62,7 +62,7 @@ export async function transcodeToMp3(
     }
     throw new DecryptError(
       'DECRYPT_FAILED',
-      '当前浏览器无法解码这个音频，请尝试用 Chrome / Edge 打开',
+      '转码失败：当前浏览器无法解码这个音频，请尝试用 Chrome / Edge 打开',
       e,
     )
   }
