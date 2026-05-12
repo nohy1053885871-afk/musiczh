@@ -181,14 +181,14 @@
     </style>
   </head>
   <body>
-    <div id="root">
-      <!--
-        SEO 兜底 HTML：
-        搜索引擎（特别是百度）首次抓取时若未执行 JS，可读取这段内容；
-        浏览器加载 React 后，main.tsx 中的 createRoot + render 会用应用 UI 覆盖整个 #root。
-        所有信息都和应用真实功能一致，没有 cloaking 风险。
-      -->
-      <main class="seo-bootstrap" aria-label="拾音 · 加载中">
+    <div id="root"></div>
+    <!--
+      SEO 兜底 HTML：放在 <noscript> 里。
+      浏览器开启 JS 时不会渲染（用户看不到闪屏），未执行 JS 的爬虫（百度首抓）可读取节点内容。
+      所有信息和应用真实功能一致，无 cloaking 风险。
+    -->
+    <noscript>
+      <main class="seo-bootstrap" aria-label="拾音">
         <h1>拾音 · 网易云 NCM、酷狗 KGM 在线转 MP3 工具</h1>
         <p>
           拾音是一个免费的在线音乐格式转换工具，可以将网易云音乐 .ncm、酷狗音乐 .kgm 与 .vpr
@@ -230,11 +230,9 @@
           <dd>支持。桌面与移动端浏览器都可以直接使用。</dd>
         </dl>
 
-        <p style="margin-top: 32px; font-size: 13px; color: #8A8680;">
-          正在加载应用…如长时间未加载，请刷新页面或检查网络。
-        </p>
+        <p>请启用 JavaScript 以使用拾音的完整功能。</p>
       </main>
-    </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

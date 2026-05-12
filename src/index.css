@@ -13,6 +13,12 @@
 .vinyl-spin      { animation: vinyl-spin 4s linear infinite; }
 .vinyl-spin-fast { animation: vinyl-spin 1.6s linear infinite; }
 
+@keyframes pulse-soft {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+.pulse-soft { animation: pulse-soft 1.6s ease-in-out infinite; }
+
 :root {
   color-scheme: light;
 }

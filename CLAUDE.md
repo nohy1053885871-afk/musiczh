@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.4.3（运营后台 v0.4.3）
+- 当前版本：v0.4.4（运营后台 v0.4.3）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -158,6 +158,18 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
 - [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
+
+## 已完成（v0.4.4 · 20260512 上线）
+
+- **主站设计稿落地**（Claude Design 交接包 `EdhylNGVEkdDFEMi0p4F1Q`）：
+  - DropZone 主文案统一为「点击或拖拽上传音乐文件 · 转为 MP3」（列表非空不切换、仅 dragging 时切「松手即可开始转换」）
+  - helper 改为「支持 NCM / KGM / FLAC · 单个最大 200MB · 还可上传 N 个」
+  - 拖拽区下方单行 mono 灰、左对齐：「网易云 / 酷狗 已支持 · QQ / 酷我 敬请期待」
+  - 「正在转换」指示器从拖拽区底部迁到队列 header（同字号 mono 灰 + 红 pulse 圆点 + 末尾红 NN%），跟在「N 个文件 · 已完成 M」之后；解密 / 转码两种状态统一口径
+  - FileRow 迷你黑胶规范统一：删除「done 无封面用音符占位」分支，五态全部黑碟 + groove 细环 + 状态色 label（进行中 `#D42B10` / 完成无封面 `#4D8B5C` / 失败 `#B85A4A`）+ 高光 spindle
+  - FileRow 格式徽章升级为「来源 › 输出」双段式（NCM 红 / KGM·VPR 蓝 / FLAC·MP3·OGG 茶），来源始终显示
+- **首屏 SEO 兜底闪屏修复**：原 `#root` 内置的 `.seo-bootstrap` SEO 文档在 React 挂载前会闪一帧；改为搬进 `<noscript>`，开启 JS 的浏览器永不渲染，未跑 JS 的爬虫（百度）仍能读 DOM
+- 顺手修了 `currentTitle` 在解密阶段拿不到 meta 时显示为空的 bug —— 兜底为文件名（去扩展名）
 
 ## 已完成（v0.4.3 / 运营后台 v0.4.3 · 20260512 上线）
 
