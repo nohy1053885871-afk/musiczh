@@ -17,6 +17,22 @@ function fileExtOf(name: string): string {
   return dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''
 }
 
+// 列表格式徽章：来源 › 输出 双段式
+// 来源色：不同上游平台给不同 hue（网易云红 / 酷狗蓝 / 原生格式茶）
+const SOURCE_TONES: Record<string, { label: string; tone: string }> = {
+  ncm:  { label: 'NCM',  tone: '#C4310E' },
+  kgm:  { label: 'KGM',  tone: '#1F6FB8' },
+  vpr:  { label: 'VPR',  tone: '#1F6FB8' },
+  flac: { label: 'FLAC', tone: '#3A2E20' },
+  mp3:  { label: 'MP3',  tone: '#3A2E20' },
+  ogg:  { label: 'OGG',  tone: '#3A2E20' },
+}
+
+function sourceFromName(name: string): { label: string; tone: string } {
+  const ext = fileExtOf(name)
+  return SOURCE_TONES[ext] ?? { label: ext.toUpperCase() || '?', tone: '#8A8680' }
+}
+
 // 给元素绑定曝光埋点：元素挂载且进入视口 >=50%、停留 >=300ms 时触发一次 *_view
 // callback ref：旧版用 useRef + useEffect([event])，但 FileRow 内按钮随 status 切换才挂载，
 // effect 首跑时 ref.current 还是 null，且 deps 不含 ref，observer 永远绑不上。
@@ -321,7 +337,7 @@ function DropZone({
           >
             {isDragging
               ? '松手即可开始转换'
-              : '把音频文件拖到这里或点击上传，转为 MP3'}
+              : '点击或拖拽上传音乐文件 · 转为 MP3'}
           </div>
           <div
             className="text-[12px]"
@@ -330,7 +346,7 @@ function DropZone({
               color: '#8A8680',
             }}
           >
-            支持多文件 · 单个最大 200MB ·{' '}
+            支持 NCM / KGM / FLAC · 单个最大 200MB ·{' '}
             {queueLeft === MAX_FILES ? '每次最多 50 个' : `还可上传 ${queueLeft} 个`}
           </div>
         </div>
@@ -388,7 +404,7 @@ function FileRow({
           'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.07)',
       }}
     >
-      {/* cover / placeholder / mini disc */}
+      {/* cover / mini disc */}
       <div className="relative shrink-0">
         {isDone && file.coverUrl ? (
           <img
@@ -400,52 +416,49 @@ function FileRow({
                 'inset 0 0 0 1px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.15)',
             }}
           />
-        ) : isDone ? (
-          // 完成态但没拿到封面（如 KGM/VPR）：用音符占位，外形和封面一致
-          <div
-            className="w-12 h-12 rounded flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(180deg, #ECEAE6 0%, #DDDAD3 100%)',
-              boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.08)',
-            }}
-            aria-hidden
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="w-6 h-6"
-              fill="none"
-              stroke="#1C1A18"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M9 17V5l12-2v12" />
-              <circle cx="6" cy="17" r="3" />
-              <circle cx="18" cy="15" r="3" />
-            </svg>
-          </div>
         ) : (
           <div
             className={`w-12 h-12 rounded-full relative ${isDecrypting || isTranscoding ? 'vinyl-spin-fast' : ''}`}
             style={{
-              background: 'radial-gradient(circle at 35% 30%, #2a2a2a, #0a0a0a 80%)',
+              background:
+                'radial-gradient(circle at 30% 22%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 50% 50%, #1A1A1A 0%, #0A0A0A 70%, #050505 100%)',
               boxShadow:
-                'inset 0 -2px 4px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.2)',
+                'inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 -2px 4px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.2)',
             }}
+            aria-hidden
           >
+            {/* groove rings */}
+            <div
+              className="absolute rounded-full"
+              style={{ inset: '12%', border: '0.5px solid rgba(255,255,255,0.06)' }}
+            />
+            <div
+              className="absolute rounded-full"
+              style={{ inset: '20%', border: '0.5px solid rgba(255,255,255,0.05)' }}
+            />
+            {/* center label — 状态色 */}
             <div
               className="absolute rounded-full"
               style={{
                 inset: '28%',
                 background: isFailed
                   ? 'radial-gradient(circle at 35% 30%, #B85A4A, #6B2A22)'
-                  : 'radial-gradient(circle at 35% 30%, #D42B10, #8A1A08)',
+                  : isDone
+                    ? 'radial-gradient(circle at 35% 30%, #4D8B5C, #2A5238)'
+                    : 'radial-gradient(circle at 35% 30%, #D42B10, #A81818)',
+                boxShadow:
+                  'inset 0 1px 1px rgba(255,255,255,0.18), inset 0 -1px 2px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.4)',
               }}
             />
+            {/* spindle 高光点 */}
             <div
               className="absolute rounded-full"
-              style={{ inset: '44%', background: '#0a0a0a' }}
+              style={{
+                inset: '44%',
+                background: '#0a0a0a',
+                boxShadow:
+                  'inset 0 0.5px 1px rgba(255,255,255,0.4), 0 0 0 0.5px rgba(0,0,0,0.6)',
+              }}
             />
           </div>
         )}
@@ -460,18 +473,37 @@ function FileRow({
           >
             {title}
           </div>
-          {format && (
-            <span
-              className="text-[10px] uppercase px-1.5 py-0.5 rounded shrink-0"
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                background: 'rgba(232,67,26,0.10)',
-                color: '#C4310E',
-              }}
-            >
-              {format}
-            </span>
-          )}
+          {(() => {
+            const src = sourceFromName(file.file.name)
+            const out = format ? format.toUpperCase() : null
+            return (
+              <span
+                className="text-[10px] uppercase shrink-0 inline-flex items-center rounded overflow-hidden"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                }}
+              >
+                <span
+                  className="px-1.5 py-0.5"
+                  style={{ background: `${src.tone}18`, color: src.tone }}
+                >
+                  {src.label}
+                </span>
+                {out && (
+                  <>
+                    <span className="px-0.5 opacity-50" style={{ color: src.tone }}>›</span>
+                    <span
+                      className="px-1.5 py-0.5"
+                      style={{ color: '#3A2E20', background: 'rgba(0,0,0,0.04)' }}
+                    >
+                      {out}
+                    </span>
+                  </>
+                )}
+              </span>
+            )
+          })()}
         </div>
         {isDecrypting || isTranscoding ? (
           <div className="mt-1.5 flex items-center gap-2">
@@ -1214,12 +1246,17 @@ function App() {
     setFiles([])
   }
 
-  const anyDecrypting = files.some((f) => f.status === 'decrypting')
-  const showVinylSpin = anyDecrypting || isDragging
   const queueLeft = MAX_FILES - files.length
-  const currentlyDecrypting = files.find((f) => f.status === 'decrypting')
-  const currentCoverUrl = currentlyDecrypting?.coverUrl ?? null
-  const currentTitle = currentlyDecrypting?.result?.meta?.musicName ?? ''
+  // 解密 / 转码都算「正在处理」，UI 表现同口径（黑胶旋转 + 队列 header 指示器）
+  const currentlyActive = files.find(
+    (f) => f.status === 'decrypting' || f.status === 'transcoding',
+  )
+  const showVinylSpin = !!currentlyActive || isDragging
+  const currentCoverUrl = currentlyActive?.coverUrl ?? null
+  const currentTitle =
+    currentlyActive?.result?.meta?.musicName ??
+    currentlyActive?.file.name.replace(SUPPORTED_EXT_REGEX, '') ??
+    ''
 
   const secondaryBtnStyle = {
     color: '#1C1A18',
@@ -1341,25 +1378,13 @@ function App() {
               />
             </div>
             <div
-              className="flex items-center justify-between gap-3 flex-wrap text-[11px]"
+              className="text-[11px]"
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
-                color: '#6A6058',
+                color: '#8A8680',
               }}
             >
-              <span>
-                目前支持 网易云（.ncm）/ 酷狗（.kgm / .vpr）/ .flac
-                <span className="mx-1.5" style={{ color: 'rgba(28,26,24,0.2)' }}>
-                  ·
-                </span>
-                <span style={{ color: '#A0988E' }}>QQ 音乐 / 酷我 即将到来</span>
-              </span>
-              {currentlyDecrypting && (
-                <span style={{ color: '#6A6058' }}>
-                  正在转换 ·{' '}
-                  <span style={{ color: '#1C1A18' }}>{currentTitle}</span>
-                </span>
-              )}
+              网易云 / 酷狗 已支持 · QQ / 酷我 敬请期待
             </div>
           </div>
         </section>
@@ -1450,6 +1475,35 @@ function App() {
                     <span style={{ color: '#B83020' }}> · {failedCount} 失败</span>
                   )}
                 </span>
+                {currentlyActive && (
+                  <span
+                    className="text-[11px] inline-flex items-baseline gap-1.5 min-w-0"
+                    style={{
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: '#8A8680',
+                    }}
+                  >
+                    <span className="opacity-40">·</span>
+                    <span
+                      className="inline-block w-1.5 h-1.5 rounded-full self-center shrink-0 pulse-soft"
+                      style={{ background: '#E8431A' }}
+                      aria-hidden
+                    />
+                    <span>正在转换</span>
+                    <span
+                      className="truncate"
+                      style={{ color: '#1C1A18', maxWidth: 280 }}
+                    >
+                      {currentTitle}
+                    </span>
+                    <span
+                      className="tabular-nums shrink-0"
+                      style={{ color: '#E8431A' }}
+                    >
+                      {Math.round((currentlyActive.progress ?? 0) * 100)}%
+                    </span>
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 {doneCount >= 2 && (
