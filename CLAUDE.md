@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.4.2（运营后台 v0.4.2）
+- 当前版本：v0.4.3（运营后台 v0.4.3）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -157,6 +157,14 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
+- [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
+
+## 已完成（v0.4.3 / 运营后台 v0.4.3 · 20260512 上线）
+
+- Overview 新增「上传文件总数（旧口径）」**临时观察卡片**，与新口径并列展示偏差 Δ
+- 旧口径 SQL = `SUM(upload_drop/pick.count)`；新口径 = `COUNT(upload_attempt + upload_reject)`
+- Δ 显示「新 − 旧 = N（占新口径 X%）」，新口径 < 旧口径时变红 + ⚠️ 提示（应不发生）
+- 预计 2026-07 评估稳定后整行删除（待办里已登记）
 
 ## 已完成（v0.4.2 / 运营后台 v0.4.2 · 20260512 上线）
 
