@@ -108,6 +108,8 @@ export type OverviewResp = {
   upload_uv: number
   download_uv: number
   upload_files: number
+  // v0.4.3 临时观察字段：旧口径 SUM(upload_drop/pick.count)，2026-07 评估稳定后移除
+  upload_files_legacy: number
   decrypt_done: number
   decrypt_fail: number
   decrypt_success_rate: number | null

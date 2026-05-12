@@ -252,6 +252,53 @@ export function OverviewPage() {
         </Col>
       </Row>
 
+      {/* v0.4.3 观察期临时卡片：「上传文件总数（旧口径）」与新口径并列做新旧对比 */}
+      {/* 预计 2026-07 评估，新口径稳定后整行删除 */}
+      <Row gutter={[16, 16]}>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title={
+                <Space size={6}>
+                  <span>上传文件总数（旧口径）</span>
+                  <AntTooltip
+                    title={(
+                      <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                        旧口径 = <code>SUM(upload_drop / upload_pick 的 count)</code>，v0.4.1 之前的算法。
+                        <br />部分上传路径（剪贴板、API 测试等）不发 drop/pick 事件 → 总数偏低。
+                        <br />本卡片为 <b>v0.4.3 临时观察用</b>，新口径稳定后（预计 2026-07）移除。
+                      </div>
+                    )}
+                  >
+                    <InfoCircleOutlined style={{ color: '#999' }} />
+                  </AntTooltip>
+                </Space>
+              }
+              value={overview?.upload_files_legacy ?? 0}
+              valueStyle={{ color: 'rgba(0,0,0,0.55)' }}
+            />
+            {(() => {
+              const cur = overview?.upload_files ?? 0
+              const legacy = overview?.upload_files_legacy ?? 0
+              const delta = cur - legacy
+              const pct = cur > 0 ? (delta / cur * 100) : null
+              const anomaly = delta < 0
+              const text = pct == null
+                ? `Δ = 新 ${cur} − 旧 ${legacy} = ${delta}`
+                : `Δ = 新 ${cur} − 旧 ${legacy} = ${delta}（占新口径 ${pct.toFixed(1)}%）`
+              return (
+                <div style={{
+                  marginTop: 4, fontSize: 12,
+                  color: anomaly ? '#F5222D' : 'rgba(0,0,0,0.45)',
+                }}>
+                  {anomaly && '⚠️ '}{text}
+                </div>
+              )
+            })()}
+          </Card>
+        </Col>
+      </Row>
+
       {/* 第三组：件维度 - 失败口径（上传 / 解密 / 转码） */}
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}>

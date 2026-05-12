@@ -44,6 +44,12 @@ adminStats.get('/overview', (c) => {
     `SELECT COUNT(*) AS n FROM events
        WHERE ts >= ? AND ts <= ? AND event IN ('upload_attempt','upload_reject')`,
   )
+  // v0.4.3 临时观察字段：保留 v0.4.0 之前的旧口径，运营后台并列展示做新旧对比
+  // 1-2 月若新口径稳定收敛（即新 ≥ 旧 且偏差平稳），移除本字段 + 对应观察卡片
+  const uploadFilesLegacy = cnt(
+    `SELECT COALESCE(SUM(CAST(json_extract(props,'$.count') AS INTEGER)), 0) AS n
+       FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
+  )
   // 上传校验拒（格式 / 大小 / 队列上限），每个被拒文件一条
   const uploadReject = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'")
   const decryptDone = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'")
@@ -141,6 +147,7 @@ adminStats.get('/overview', (c) => {
     upload_uv: uploadUv,
     download_uv: downloadUv,
     upload_files: uploadFiles,
+    upload_files_legacy: uploadFilesLegacy,
     decrypt_done: decryptDone,
     decrypt_fail: decryptFail,
     decrypt_success_rate:
