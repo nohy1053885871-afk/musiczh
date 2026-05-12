@@ -45,10 +45,37 @@ export const EVENT_LABELS: Record<string, string> = {
   transcode_progress: '主站 - 业务 - 转码进度心跳（10/30/50/70/90 五桶）',
   decrypt_abandon:    '主站 - 业务 - 解密中止（pagehide 时仍在 inflight）',
   transcode_abandon:  '主站 - 业务 - 转码中止（pagehide 时仍在 inflight，auto-FLAC OOM 定位用）',
+
+  // v0.5.0 新增：大批量性能警告弹窗
+  dialog_large_batch_view:         '主站 - 性能警告弹窗（≥50 文件）- 曝光',
+  dialog_large_batch_confirm:      '主站 - 性能警告弹窗 - 选择（continue / reselect）',
+
+  // v0.5.0 新增：上传拦截详情入口与弹窗
+  btn_reject_details_view:    '主站 - 拦截横条 - 查看详情按钮（曝光）',
+  btn_reject_details_click:   '主站 - 拦截横条 - 查看详情按钮（点击）',
+  dialog_reject_details_view: '主站 - 拦截详情弹窗 - 曝光',
+  dialog_reject_details_close:'主站 - 拦截详情弹窗 - 关闭',
+
+  // v0.5.0 新增：FLAC 一键转 MP3 引导横条
+  banner_flac_prompt_view:        '主站 - FLAC 转 MP3 横条 - 曝光',
+  banner_flac_prompt_dismiss:     '主站 - FLAC 转 MP3 横条 - 关闭',
+  btn_flac_batch_transcode_view:  '主站 - FLAC 横条 - 一键转 MP3 按钮（曝光）',
+  btn_flac_batch_transcode_click: '主站 - FLAC 横条 - 一键转 MP3 按钮（点击）',
 }
 
 export function eventLabel(name: string): string {
   return EVENT_LABELS[name] ?? name
+}
+
+// 给「按钮埋点」聚合行用：base 可能对应多种行动后缀（_click / _confirm / _close / _dismiss），
+// 按优先级试一遍，第一个命中 EVENT_LABELS 的中文标签即返回；都没命中时 fallback 到 _view 标签或 base 名
+const LABEL_SUFFIXES = ['_click', '_confirm', '_close', '_dismiss', '_view'] as const
+export function labelForButtonBase(base: string): string {
+  for (const suffix of LABEL_SUFFIXES) {
+    const label = EVENT_LABELS[`${base}${suffix}`]
+    if (label) return label
+  }
+  return base
 }
 
 export const STAGE_LABEL: Record<string, string> = {

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 import JSZip from 'jszip'
 import {
   decryptAudioFile,
@@ -11,6 +12,14 @@ import { transcodeToMp3 } from './lib/transcode'
 import { sniffRealFormat } from './lib/sniff'
 import { stripFileExtensions } from './lib/filename'
 import { analytics } from './lib/analytics'
+import { useImpression } from './lib/useImpression'
+import {
+  LargeBatchWarningModal,
+  RejectDetailsModal,
+  WarningBannerV2,
+  FlacBatchPromptBanner,
+  type RejectedItem,
+} from './components/v050'
 
 function fileExtOf(name: string): string {
   const dot = name.lastIndexOf('.')
@@ -33,21 +42,8 @@ function sourceFromName(name: string): { label: string; tone: string } {
   return SOURCE_TONES[ext] ?? { label: ext.toUpperCase() || '?', tone: '#8A8680' }
 }
 
-// 给元素绑定曝光埋点：元素挂载且进入视口 >=50%、停留 >=300ms 时触发一次 *_view
-// callback ref：旧版用 useRef + useEffect([event])，但 FileRow 内按钮随 status 切换才挂载，
-// effect 首跑时 ref.current 还是 null，且 deps 不含 ref，observer 永远绑不上。
-// 改用 callback ref + useState 触发 effect 重跑：node 从 null 变成 DOM 元素时重绑。
-function useImpression<T extends HTMLElement>(event: string, props?: Record<string, unknown>) {
-  const [node, setNode] = useState<T | null>(null)
-  useEffect(() => {
-    if (!node) return
-    return analytics.observeImpression(node, event, props)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node, event])
-  return setNode
-}
-
-const MAX_FILES = 50
+// v0.5.0：50 不再是硬上限，仅作为弹性能警告的阈值；硬上限取消
+const LARGE_BATCH_THRESHOLD = 50
 const MAX_FILE_SIZE = 200 * 1024 * 1024
 
 type FileStatus = 'pending' | 'decrypting' | 'done' | 'failed' | 'transcoding'
@@ -240,12 +236,14 @@ function DropZone({
   onFiles,
   isDragging,
   setIsDragging,
-  queueLeft,
+  queueSize,
+  inputRef,
 }: {
   onFiles: (files: FileList | File[]) => void
   isDragging: boolean
   setIsDragging: (v: boolean) => void
-  queueLeft: number
+  queueSize: number
+  inputRef?: RefObject<HTMLInputElement | null>
 }) {
   const embossedShadow =
     'inset 0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)'
@@ -291,6 +289,7 @@ function DropZone({
       }}
     >
       <input
+        ref={inputRef}
         type="file"
         multiple
         accept=".ncm,.kgm,.vpr,.flac"
@@ -347,7 +346,9 @@ function DropZone({
             }}
           >
             支持 NCM / KGM / FLAC · 单个最大 200MB ·{' '}
-            {queueLeft === MAX_FILES ? '每次最多 50 个' : `还可上传 ${queueLeft} 个`}
+            {queueSize === 0
+              ? '单次建议 ≤ 50 个'
+              : `队列已有 ${queueSize} 个`}
           </div>
         </div>
       </div>
@@ -801,8 +802,23 @@ function App() {
   const [isDragging, setIsDragging] = useState(false)
   const [isZipping, setIsZipping] = useState(false)
   const [zipProgress, setZipProgress] = useState(0)
-  const [warning, setWarning] = useState<string | null>(null)
+  // v0.5.0：warning 升级为结构化（拦截详情）+ 兜底文本（转码/打包失败等场景）
+  const [rejected, setRejected] = useState<RejectedItem[]>([])
+  const [textWarning, setTextWarning] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  // 拦截详情弹窗
+  const [showRejectDetails, setShowRejectDetails] = useState(false)
+  // 大批量性能警告弹窗：保存待入队的文件列表，确认后才真正入队
+  const [pendingLargeBatch, setPendingLargeBatch] = useState<{
+    files: File[]
+    currentCount: number
+  } | null>(null)
+  // FLAC 引导横条 dismiss：dismiss 后记录已 dismiss 的 file_id 集合，下次出现新 FLAC 时重显
+  const [flacBannerDismissedIds, setFlacBannerDismissedIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  // 隐藏 input 的 ref：「重新选择」用来重新拉起系统文件选择框
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const notify = useCallback((msg: string) => setToast(msg), [])
 
@@ -901,7 +917,7 @@ function App() {
           source: result.meta?.source,
         })
         analytics.unregisterInflight(id)
-        setWarning(message)
+        setTextWarning(message)
       }
     },
     [updateFile, notify],
@@ -1058,51 +1074,17 @@ function App() {
     }
   }, [updateFile, transcodeFile])
 
-  const addFiles = useCallback(
-    (incoming: FileList | File[]) => {
-      const reasons: string[] = []
-      let candidates = Array.from(incoming)
-
-      const trackReject = (f: File, reject_reason: 'FORMAT_UNSUPPORTED' | 'SIZE_EXCEEDED' | 'QUEUE_FULL') => {
-        analytics.track('upload_reject', {
-          file_name: f.name,
-          file_ext: fileExtOf(f.name),
-          file_size: f.size,
-          reject_reason,
-        })
-      }
-
-      const wrongExt = candidates.filter((f) => !SUPPORTED_EXT_REGEX.test(f.name))
-      if (wrongExt.length) reasons.push(`${wrongExt.length} 个文件格式不支持`)
-      wrongExt.forEach((f) => trackReject(f, 'FORMAT_UNSUPPORTED'))
-      candidates = candidates.filter((f) => SUPPORTED_EXT_REGEX.test(f.name))
-
-      const oversize = candidates.filter((f) => f.size > MAX_FILE_SIZE)
-      if (oversize.length) reasons.push(`${oversize.length} 个文件超过 200MB`)
-      oversize.forEach((f) => trackReject(f, 'SIZE_EXCEEDED'))
-      candidates = candidates.filter((f) => f.size <= MAX_FILE_SIZE)
-
-      const currentCount = filesRef.current.length
-      const remaining = MAX_FILES - currentCount
-      let hitLimit = false
-      if (candidates.length > remaining) {
-        hitLimit = true
-        reasons.push(`${candidates.length - remaining} 个文件超过 50 个上限`)
-        const dropped = candidates.slice(Math.max(0, remaining))
-        dropped.forEach((f) => trackReject(f, 'QUEUE_FULL'))
-        candidates = candidates.slice(0, Math.max(0, remaining))
-      }
-      if (reasons.length) {
-        const suffix = hitLimit ? '，请下载并清空当前列表后继续' : ''
-        setWarning(`已跳过：${reasons.join('；')}${suffix}`)
-      } else setWarning(null)
+  // 真正入队：candidates 已通过格式/大小校验，且用户已确认（≥50 弹窗后或不触发弹窗时直接调）
+  const commitFiles = useCallback(
+    (candidates: File[]) => {
       if (candidates.length === 0) return
-
       const list: TrackedFile[] = candidates.map((f) => ({
         // file_id 用 UUID v4，全程透传埋点；同时复用为 React key 和 state 索引
-        id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID()
-          : `f-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        id:
+          typeof crypto !== 'undefined' &&
+          typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `f-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         file: f,
         status: 'pending' as FileStatus,
         progress: 0,
@@ -1121,6 +1103,111 @@ function App() {
     },
     [processQueue],
   )
+
+  const addFiles = useCallback(
+    (incoming: FileList | File[]) => {
+      let candidates = Array.from(incoming)
+      const newRejected: RejectedItem[] = []
+
+      const trackReject = (
+        f: File,
+        reject_reason: 'FORMAT_UNSUPPORTED' | 'SIZE_EXCEEDED',
+      ) => {
+        analytics.track('upload_reject', {
+          file_name: f.name,
+          file_ext: fileExtOf(f.name),
+          file_size: f.size,
+          reject_reason,
+        })
+      }
+
+      const wrongExt = candidates.filter(
+        (f) => !SUPPORTED_EXT_REGEX.test(f.name),
+      )
+      wrongExt.forEach((f) => {
+        trackReject(f, 'FORMAT_UNSUPPORTED')
+        newRejected.push({
+          fileName: f.name,
+          size: f.size,
+          reason: 'FORMAT_UNSUPPORTED',
+        })
+      })
+      candidates = candidates.filter((f) => SUPPORTED_EXT_REGEX.test(f.name))
+
+      const oversize = candidates.filter((f) => f.size > MAX_FILE_SIZE)
+      oversize.forEach((f) => {
+        trackReject(f, 'SIZE_EXCEEDED')
+        newRejected.push({
+          fileName: f.name,
+          size: f.size,
+          reason: 'SIZE_EXCEEDED',
+        })
+      })
+      candidates = candidates.filter((f) => f.size <= MAX_FILE_SIZE)
+
+      // 拦截列表：覆盖式更新，每次 addFiles 只展示本次被拒的
+      setRejected(newRejected)
+      // 兜底文本横条与拦截横条互斥；本次有拦截就清掉旧兜底文本
+      if (newRejected.length) setTextWarning(null)
+
+      if (candidates.length === 0) return
+
+      // v0.5.0：50 不再硬拦截；新增后总数 ≥ 50 弹性能警告，由用户确认是否真正入队
+      const currentCount = filesRef.current.length
+      const projectedTotal = currentCount + candidates.length
+      if (projectedTotal >= LARGE_BATCH_THRESHOLD) {
+        setPendingLargeBatch({
+          files: candidates,
+          currentCount,
+        })
+        return
+      }
+      commitFiles(candidates)
+    },
+    [commitFiles],
+  )
+
+  // 大批量弹窗：仍要继续 → 入队；重新选择 → 关弹窗 + 重新拉起系统选择框
+  const onLargeBatchContinue = useCallback(() => {
+    if (!pendingLargeBatch) return
+    commitFiles(pendingLargeBatch.files)
+    setPendingLargeBatch(null)
+  }, [pendingLargeBatch, commitFiles])
+
+  const onLargeBatchReselect = useCallback(() => {
+    setPendingLargeBatch(null)
+    // 重新选择：清掉本次拦截展示（避免误导）并拉起系统选择框
+    setRejected([])
+    // 等弹窗关闭后再 click，避免遮罩层吃掉点击
+    setTimeout(() => fileInputRef.current?.click(), 50)
+  }, [])
+
+  // 批量转 MP3：列表里所有 done 状态且 format=flac 的文件
+  const onBatchTranscodeFlac = useCallback(() => {
+    const targets = filesRef.current.filter(
+      (f) => f.status === 'done' && f.result?.format === 'flac',
+    )
+    targets.forEach((t) => {
+      // transcodeFile 内部会做 status/result 校验，直接触发即可；串行由 await 节奏控制
+      transcodeFile(t.id)
+    })
+  }, [transcodeFile])
+
+  // 列表中当前可批量转换的 FLAC 文件
+  const flacReady = useMemo(
+    () =>
+      files.filter((f) => f.status === 'done' && f.result?.format === 'flac'),
+    [files],
+  )
+  // dismiss 策略：dismiss 时把当前 flacReady 的 id 全部记下来；
+  // 下次列表里出现新的、不在该集合的 FLAC id 时，flacBannerHasNew 自然回 true 重显横条。
+  // 集合不主动清理已离队的 id —— 单文件级 UUID 不会复用，记忆体不会无限增长（清空列表后 dismiss 也会被覆盖）
+  const flacBannerHasNew = flacReady.some(
+    (f) => !flacBannerDismissedIds.has(f.id),
+  )
+  const onFlacBannerDismiss = useCallback(() => {
+    setFlacBannerDismissedIds(new Set(flacReady.map((f) => f.id)))
+  }, [flacReady])
 
   // warning 不自动消失，由用户点关闭按钮（×）手动关；toast 仍 2s 自动消失
   useEffect(() => {
@@ -1232,7 +1319,7 @@ function App() {
         file_size: doneFiles.reduce((sum, f) => sum + f.result!.audio.size, 0),
         download_kind: 'zip',
       })
-      setWarning(msg)
+      setTextWarning(msg)
     } finally {
       setIsZipping(false)
       setZipProgress(0)
@@ -1246,7 +1333,6 @@ function App() {
     setFiles([])
   }
 
-  const queueLeft = MAX_FILES - files.length
   // 解密 / 转码都算「正在处理」，UI 表现同口径（黑胶旋转 + 队列 header 指示器）
   const currentlyActive = files.find(
     (f) => f.status === 'decrypting' || f.status === 'transcoding',
@@ -1374,7 +1460,8 @@ function App() {
                 onFiles={addFiles}
                 isDragging={isDragging}
                 setIsDragging={setIsDragging}
-                queueLeft={queueLeft}
+                queueSize={files.length}
+                inputRef={fileInputRef}
               />
             </div>
             <div
@@ -1389,57 +1476,76 @@ function App() {
           </div>
         </section>
 
-        {/* Warning banner — 手动关闭，不自动消失 */}
-        {warning && (
-          <div
-            className="mb-4 rounded-2xl pl-4 pr-2 py-2.5 text-[12px] flex items-start gap-3"
-            style={{
-              background: '#FBF0D8',
-              color: '#7B5A14',
-              boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 0 1px rgba(180,130,40,0.2)',
-            }}
-          >
-            <span className="flex-1 leading-snug pt-0.5 flex items-start gap-2">
-              <svg
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="shrink-0 mt-[2px]"
-                aria-hidden
+        {/* v0.5.0：横条堆叠（FLAC 引导在上 / 拦截 / 兜底文本横条），距下方列表 mb-4 */}
+        {(flacBannerHasNew || rejected.length > 0 || textWarning) && (
+          <div className="mb-4 space-y-2">
+            {flacBannerHasNew && (
+              <FlacBatchPromptBanner
+                flacCount={flacReady.length}
+                onConvert={onBatchTranscodeFlac}
+                onDismiss={onFlacBannerDismiss}
+              />
+            )}
+            {rejected.length > 0 && (
+              <WarningBannerV2
+                rejected={rejected}
+                onViewDetails={() => setShowRejectDetails(true)}
+                onDismiss={() => setRejected([])}
+              />
+            )}
+            {textWarning && (
+              <div
+                className="rounded-2xl pl-4 pr-2 py-2.5 text-[12px] flex items-start gap-3"
+                style={{
+                  background:
+                    'linear-gradient(180deg, #FBF0D8 0%, #F4E4B8 100%)',
+                  color: '#7B5A14',
+                  boxShadow:
+                    'inset 0 1px 0 rgba(255,255,255,0.5), inset 0 0 0 1px rgba(180,130,40,0.2)',
+                }}
               >
-                <path d="M12 3l10 18H2L12 3z" />
-                <path d="M12 10v5" />
-                <circle cx="12" cy="18" r="0.6" fill="currentColor" />
-              </svg>
-              <span>{warning}</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setWarning(null)}
-              aria-label="关闭"
-              className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center transition-colors hover:bg-[rgba(123,90,20,0.12)]"
-              style={{ color: '#7B5A14' }}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="6" y1="6" x2="18" y2="18" />
-                <line x1="18" y1="6" x2="6" y2="18" />
-              </svg>
-            </button>
+                <span className="flex-1 leading-snug pt-0.5 flex items-start gap-2">
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="shrink-0 mt-[2px]"
+                    aria-hidden
+                  >
+                    <path d="M12 3l10 18H2L12 3z" />
+                    <path d="M12 10v5" />
+                    <circle cx="12" cy="18" r="0.6" fill="currentColor" />
+                  </svg>
+                  <span>{textWarning}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTextWarning(null)}
+                  aria-label="关闭"
+                  className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center transition-colors hover:bg-[rgba(123,90,20,0.12)]"
+                  style={{ color: '#7B5A14' }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1597,6 +1703,25 @@ function App() {
         >
           {toast}
         </div>
+      )}
+
+      {/* v0.5.0：大批量性能警告（阻塞）+ 拦截详情（可关闭） */}
+      {pendingLargeBatch && (
+        <LargeBatchWarningModal
+          currentCount={pendingLargeBatch.currentCount}
+          addedCount={pendingLargeBatch.files.length}
+          total={
+            pendingLargeBatch.currentCount + pendingLargeBatch.files.length
+          }
+          onContinue={onLargeBatchContinue}
+          onReselect={onLargeBatchReselect}
+        />
+      )}
+      {showRejectDetails && rejected.length > 0 && (
+        <RejectDetailsModal
+          items={rejected}
+          onClose={() => setShowRejectDetails(false)}
+        />
       )}
     </div>
   )

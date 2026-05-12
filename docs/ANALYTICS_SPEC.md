@@ -73,7 +73,7 @@
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
 | `status` | string | 文件当时状态 |
 | `referrer` | string | 来源 URL（仅 `pageview` 自动从 `document.referrer` 采集，用于访客日志渠道分析）|
-| `reject_reason` | string | 上传被拒原因：`FORMAT_UNSUPPORTED` / `SIZE_EXCEEDED` / `QUEUE_FULL` |
+| `reject_reason` | string | 上传被拒原因：`FORMAT_UNSUPPORTED` / `SIZE_EXCEEDED` / `QUEUE_FULL`（**v0.5.0 起 QUEUE_FULL 不再产生**，50 上限改为性能警告弹窗；枚举值保留兼容历史数据） |
 | `download_kind` | string | 下载方式：`single` / `all_separate` / `zip` |
 | `file_id` | string | **v0.4.1 起新增** · 文件级 UUID v4，由 `addFiles` 用 `crypto.randomUUID()` 生成；贯穿 `upload_attempt → decrypt_*/transcode_*` 全链路，用来在后端关联出 `pipeline_status`。v0.4.1 之前的事件无此字段，运营后台显示「-（历史数据）」 |
 | `progress_bucket` | number | **v0.4.1 起新增** · `transcode_progress` 心跳的进度桶，仅取 `0.1 / 0.3 / 0.5 / 0.7 / 0.9` 五值，桶内去重 |
@@ -120,6 +120,14 @@
 | `transcode_progress` | **v0.4.1** 主站 - 业务 - 转码进度心跳 | [src/App.tsx](../src/App.tsx) `transcodeFile.onProgress` → SDK 分桶 | `file_id, file_name, file_ext, file_size, from_format, progress_bucket` | SDK 内按 `[0.1, 0.3, 0.5, 0.7, 0.9]` 五桶单向跨越触发，每桶每文件 emit 一次，用于定位 auto-FLAC 卡死在哪一段 |
 | `decrypt_abandon` | **v0.4.1** 主站 - 业务 - 解密中止 | [src/lib/analytics.ts](../src/lib/analytics.ts) `onHide` 遍历 inflight Map | `file_id, file_name, file_ext, file_size, last_progress, stage='decrypt'` | pagehide / visibilitychange=hidden 触发；走 sendBeacon 兜底 |
 | `transcode_abandon` | **v0.4.1** 主站 - 业务 - 转码中止 | [src/lib/analytics.ts](../src/lib/analytics.ts) `onHide` 遍历 inflight Map | `file_id, file_name, file_ext, file_size, from_format, last_progress, stage='transcode'` | 同上，**auto-FLAC OOM 静默崩定位用** |
+| `dialog_large_batch_view` | **v0.5.0** 主站 - 性能警告弹窗（≥50 文件）- 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `LargeBatchWarningModal` mount | `queue_size, count` | `queue_size` = 合计总数；`count` = 本次新增数。弹窗内两个按钮不另埋 `_view`（孤立曝光会拉低按钮埋点页 CTR） |
+| `dialog_large_batch_confirm` | **v0.5.0** 主站 - 性能警告弹窗 - 选择 | [src/components/v050.tsx](../src/components/v050.tsx) `LargeBatchWarningModal` 按钮 onClick | `action: 'continue' \| 'reselect', queue_size, count` | `reselect` 会拉起系统选择框重选。**与 `_view` 组队进入按钮埋点页 CTR 计算**（v0.5.0 起后端把 `_confirm/_close/_dismiss` 视作行动后缀） |
+| `btn_reject_details_view` / `btn_reject_details_click` | **v0.5.0** 主站 - 上传拦截横条 - 查看详情按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `WarningBannerV2` 按钮 | `count` | `count` = 本次被拒文件数 |
+| `dialog_reject_details_view` | **v0.5.0** 主站 - 拦截详情弹窗 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `RejectDetailsModal` mount | `count` | |
+| `dialog_reject_details_close` | **v0.5.0** 主站 - 拦截详情弹窗 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `RejectDetailsModal` × / 底部按钮 / 遮罩 | `count` | |
+| `banner_flac_prompt_view` | **v0.5.0** 主站 - FLAC 一键转 MP3 横条 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` div ref | `count` | `count` = 当前列表 FLAC 数量 |
+| `banner_flac_prompt_dismiss` | **v0.5.0** 主站 - FLAC 一键转 MP3 横条 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` × | `count` | 关闭后下次列表出现**新**的 FLAC 文件才重显 |
+| `btn_flac_batch_transcode_view` / `btn_flac_batch_transcode_click` | **v0.5.0** 主站 - FLAC 横条 - 一键转 MP3 按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` CTA | `count` | 点击后批量触发所有 done-flac 行的 `transcodeFile`，与单行手动转码共用同一管线 |
 
 **曝光事件**（`*_view`）：通过组件局部的 `useImpression(eventName)` hook 给按钮 ref 绑定 IntersectionObserver。元素进入视口 ≥ 50% 且停留 ≥ 300ms 触发一次，**session 内同 visitor 同 event 全局去重**——所以单次会话每个按钮最多上报一次曝光，避免噪音。
 

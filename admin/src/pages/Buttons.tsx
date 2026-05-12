@@ -6,7 +6,7 @@ import { api, type ButtonsResp } from '../lib/api'
 import { AppRangePicker, DEFAULT_RANGE, type Range, rangeQueryString } from '../components/biz/AppRangePicker'
 import { DataTableCard } from '../components/biz/DataTableCard'
 import { DownloadCSVButton } from '../components/biz/DownloadCSVButton'
-import { eventLabel, formatPct } from '../lib/format'
+import { eventLabel, labelForButtonBase, formatPct } from '../lib/format'
 
 const { Title, Text } = Typography
 
@@ -34,16 +34,22 @@ export function ButtonsPage() {
     const label = eventLabel(event).toLowerCase()
     return event.toLowerCase().includes(lowered) || label.includes(lowered)
   }
-  const filteredButtons = (data?.buttons ?? []).filter(
-    (b) => matches(b.base) || matches(`${b.base}_click`) || matches(`${b.base}_view`),
-  )
+  const filteredButtons = (data?.buttons ?? []).filter((b) => {
+    if (!lowered) return true
+    if (b.base.toLowerCase().includes(lowered)) return true
+    // 沿着所有可能的后缀检查中文描述，命中即视为匹配
+    if (labelForButtonBase(b.base).toLowerCase().includes(lowered)) return true
+    return ['_click', '_view', '_confirm', '_close', '_dismiss'].some((s) =>
+      matches(`${b.base}${s}`),
+    )
+  })
   const filteredRaw = (data?.raw ?? []).filter((r) => matches(r.event))
 
   const buttonsColumns: ColumnsType<ButtonRow> = [
     { title: '事件名', dataIndex: 'base', key: 'base',
       render: (v) => <code style={{ fontSize: 12 }}>{v}</code> },
     { title: '中文描述', key: 'label',
-      render: (_, r) => eventLabel(`${r.base}_click`) },
+      render: (_, r) => labelForButtonBase(r.base) },
     { title: '曝光 PV', dataIndex: 'view_pv', key: 'view_pv', align: 'right', width: 90 },
     { title: '曝光 UV', dataIndex: 'view_uv', key: 'view_uv', align: 'right', width: 90 },
     { title: '点击 PV', dataIndex: 'click_pv', key: 'click_pv', align: 'right', width: 90,
@@ -94,7 +100,7 @@ export function ButtonsPage() {
             filename={`buttons-aggregated-${Date.now()}.csv`}
             columns={[
               { key: 'base', title: '事件名' },
-              { key: 'label', title: '中文描述', format: (r) => eventLabel(`${r.base}_click`) },
+              { key: 'label', title: '中文描述', format: (r) => labelForButtonBase(r.base) },
               { key: 'view_pv', title: '曝光 PV' },
               { key: 'view_uv', title: '曝光 UV' },
               { key: 'click_pv', title: '点击 PV' },
@@ -112,7 +118,7 @@ export function ButtonsPage() {
       />
 
       <DataTableCard<RawRow>
-        title="原始事件计数（含所有 *_click / *_view）"
+        title="原始事件计数（*_click / *_view / *_confirm / *_close / *_dismiss）"
         toolbar={
           <DownloadCSVButton<RawRow>
             filename={`buttons-raw-${Date.now()}.csv`}

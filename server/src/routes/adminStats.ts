@@ -255,6 +255,9 @@ adminStats.get('/funnel', (c) => {
 })
 
 // 按钮 曝光 / 点击 PV / UV
+// 「行动后缀」= _click / _confirm / _close / _dismiss（弹窗的 confirm/close/dismiss 与按钮 click 同视为「点击行为」）
+// 「曝光后缀」= _view
+// 同 base 下 click_pv 取所有行动后缀的总和（一般同 base 只会出现一种行动后缀，安全求和）
 adminStats.get('/buttons', (c) => {
   const { from, to, range } = parseTimeRange(c)
 
@@ -265,23 +268,31 @@ adminStats.get('/buttons', (c) => {
               COUNT(DISTINCT visitor_id) AS uv
          FROM events
         WHERE ts >= ? AND ts <= ?
-          AND (SUBSTR(event, -6) = '_click' OR SUBSTR(event, -5) = '_view')
+          AND (SUBSTR(event, -6)  = '_click'
+            OR SUBSTR(event, -5)  = '_view'
+            OR SUBSTR(event, -8)  = '_confirm'
+            OR SUBSTR(event, -6)  = '_close'
+            OR SUBSTR(event, -8)  = '_dismiss')
         GROUP BY event
         ORDER BY pv DESC`,
     )
     .all(from, to) as { event: string; pv: number; uv: number }[]
+
+  // 剥离任何已识别的后缀；带前导下划线，避免类似 'overview' 误剥
+  const SUFFIX_RE = /_(click|view|confirm|close|dismiss)$/
+  const ACTION_RE = /_(click|confirm|close|dismiss)$/
 
   const byBase = new Map<
     string,
     { base: string; click_pv: number; click_uv: number; view_pv: number; view_uv: number }
   >()
   for (const r of rows) {
-    const isClick = r.event.endsWith('_click')
-    const base = r.event.replace(/_(click|view)$/, '')
+    const isAction = ACTION_RE.test(r.event)
+    const base = r.event.replace(SUFFIX_RE, '')
     const slot = byBase.get(base) ?? {
       base, click_pv: 0, click_uv: 0, view_pv: 0, view_uv: 0,
     }
-    if (isClick) { slot.click_pv = r.pv; slot.click_uv = r.uv }
+    if (isAction) { slot.click_pv += r.pv; slot.click_uv += r.uv }
     else { slot.view_pv = r.pv; slot.view_uv = r.uv }
     byBase.set(base, slot)
   }
