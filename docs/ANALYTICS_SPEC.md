@@ -73,7 +73,7 @@
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
 | `status` | string | 文件当时状态 |
 | `referrer` | string | 来源 URL（仅 `pageview` 自动从 `document.referrer` 采集，用于访客日志渠道分析）|
-| `reject_reason` | string | 上传被拒原因：`FORMAT_UNSUPPORTED` / `SIZE_EXCEEDED` / `QUEUE_FULL`（**v0.5.0 起 QUEUE_FULL 不再产生**，50 上限改为性能警告弹窗；枚举值保留兼容历史数据） |
+| `reject_reason` | string | 上传被拒原因：`FORMAT_UNSUPPORTED` / `SIZE_EXCEEDED` / `QUEUE_FULL` / `LARGE_BATCH_DISMISSED`。`QUEUE_FULL` **v0.5.0 起不再产生**（50 上限改为性能警告弹窗，枚举值保留兼容历史数据）。`LARGE_BATCH_DISMISSED` **v0.5.2 起新增**——用户在 ≥50 文件警告弹窗里选「重新选择」或按 ESC 关闭、pending files 被丢弃时由 `onLargeBatchReselect` 补发，让旧/新口径自洽（修复 v0.5.0-v0.5.1 期间「旧 > 新」anomaly） |
 | `download_kind` | string | 下载方式：`single` / `all_separate` / `zip` |
 | `file_id` | string | **v0.4.1 起新增** · 文件级 UUID v4，由 `addFiles` 用 `crypto.randomUUID()` 生成；贯穿 `upload_attempt → decrypt_*/transcode_*` 全链路，用来在后端关联出 `pipeline_status`。v0.4.1 之前的事件无此字段，运营后台显示「-（历史数据）」 |
 | `progress_bucket` | number | **v0.4.1 起新增** · `transcode_progress` 心跳的进度桶，仅取 `0.1 / 0.3 / 0.5 / 0.7 / 0.9` 五值，桶内去重 |

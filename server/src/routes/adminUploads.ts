@@ -12,7 +12,7 @@ adminUploads.use('*', requireAdmin)
 // rejected_* 直接来自 upload_reject + reject_reason
 // success/failed/abandoned/pending/legacy 通过 file_id 关联下游事件计算
 const STATUS_VALUES = [
-  'rejected_format', 'rejected_size', 'rejected_queue',
+  'rejected_format', 'rejected_size', 'rejected_queue', 'rejected_large_batch',
   'success', 'failed', 'abandoned', 'pending', 'legacy',
 ] as const
 type StatusValue = typeof STATUS_VALUES[number]
@@ -54,6 +54,8 @@ function statusToWhere(status: StatusValue): { sql: string; params: any[] } {
       return { sql: "event = 'upload_reject' AND json_extract(props,'$.reject_reason') = ?", params: ['SIZE_EXCEEDED'] }
     case 'rejected_queue':
       return { sql: "event = 'upload_reject' AND json_extract(props,'$.reject_reason') = ?", params: ['QUEUE_FULL'] }
+    case 'rejected_large_batch':
+      return { sql: "event = 'upload_reject' AND json_extract(props,'$.reject_reason') = ?", params: ['LARGE_BATCH_DISMISSED'] }
     case 'success':
       return {
         sql: `event = 'upload_attempt' AND file_id IS NOT NULL
@@ -159,6 +161,7 @@ adminUploads.get('/', (c) => {
       if (r.reject_reason === 'FORMAT_UNSUPPORTED') mergedStatus = 'rejected_format'
       else if (r.reject_reason === 'SIZE_EXCEEDED') mergedStatus = 'rejected_size'
       else if (r.reject_reason === 'QUEUE_FULL')    mergedStatus = 'rejected_queue'
+      else if (r.reject_reason === 'LARGE_BATCH_DISMISSED') mergedStatus = 'rejected_large_batch'
     } else if (r.pipeline_status) {
       mergedStatus = r.pipeline_status
     }
@@ -212,7 +215,8 @@ adminUploads.get('/timeseries', (c) => {
               SUM(CASE WHEN event = 'upload_reject' THEN 1 ELSE 0 END) AS reject_total,
               SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'FORMAT_UNSUPPORTED' THEN 1 ELSE 0 END) AS reject_format,
               SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'SIZE_EXCEEDED'       THEN 1 ELSE 0 END) AS reject_size,
-              SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'QUEUE_FULL'          THEN 1 ELSE 0 END) AS reject_queue
+              SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'QUEUE_FULL'          THEN 1 ELSE 0 END) AS reject_queue,
+              SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'LARGE_BATCH_DISMISSED' THEN 1 ELSE 0 END) AS reject_large_batch
          FROM events
         WHERE ts >= ? AND ts <= ?
           AND event IN ('upload_attempt','upload_reject')
@@ -220,7 +224,7 @@ adminUploads.get('/timeseries', (c) => {
     )
     .all(from, to) as Array<{
       day: number; attempt: number; reject_total: number
-      reject_format: number; reject_size: number; reject_queue: number
+      reject_format: number; reject_size: number; reject_queue: number; reject_large_batch: number
     }>
 
   return c.json({ range, from, to, points: rows })

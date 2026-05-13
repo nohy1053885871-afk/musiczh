@@ -307,7 +307,7 @@ export function OverviewPage() {
               title={
                 <Space size={6}>
                   <span>上传失败（件）</span>
-                  <AntTooltip title="上传校验阶段被拒的文件件数：格式不支持 / 超出 200MB / 超过 50 个队列上限。明细见「解密分析 → 上传日志」按 reject_reason 筛选。">
+                  <AntTooltip title="上传校验阶段被拒的文件件数：格式不支持 / 超出 200MB / 超过 50 个队列上限 / 大批量取消（v0.5.2 起，用户在 ≥50 文件警告弹窗选『重新选择』或 ESC 时补发）。明细见「解密分析 → 上传日志」按 reject_reason 筛选。">
                     <InfoCircleOutlined style={{ color: '#999' }} />
                   </AntTooltip>
                 </Space>
