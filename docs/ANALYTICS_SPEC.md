@@ -67,7 +67,7 @@
 | `count` | number | 一次操作牵涉的文件数 |
 | `total_size` | number | 多文件总字节 |
 | `format` | string | `mp3` / `flac` / `ogg` |
-| `source` | string | `ncm` / `kgm` / `vpr` |
+| `source` | string | `ncm` / `kgm` / `vpr` / `qq_mflac`（**v0.5.1 起**：QQ 音乐 mflac/mgg 改后缀上传被识别后的 decrypt_fail 上报值，运营后台据此按 source 列统计 QQ 格式占比） |
 | `from_format` | string | 转码前的格式 |
 | `queue_size` | number | 当前队列长度 |
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
@@ -111,7 +111,7 @@
 | `btn_download_zip_click` / `btn_download_zip_view` | 主站 - 工具栏 - 打包下载（ZIP） | [src/App.tsx](../src/App.tsx) 工具栏 | `count` | |
 | `decrypt_start` | 主站 - 业务 - 解密任务开始 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size` | |
 | `decrypt_done` | 主站 - 业务 - 解密成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, source, format` | |
-| `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, ...` | 同步触发 `trackFailure` |
+| `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, ...` | 同步触发 `trackFailure`；**v0.5.1 起** sniff 识别为 QQ mflac/mgg 时 `source='qq_mflac'`，便于后台区分通用 INVALID_HEADER 与 QQ 改后缀场景 |
 | `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size` | `source` 为空 = 原始 .flac 上传；带值（ncm/kgm/vpr）= 解密产物再转码。运营后台「转换成功」漏斗 / 卡片靠此区分以避双计数 |
 | `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, source` | 同上；`source IS NULL` 是原始 flac 上传转码 |
 | `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_msg, error_stack, ...` | 同步触发 `trackFailure` |

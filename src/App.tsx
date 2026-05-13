@@ -828,7 +828,14 @@ function App() {
 
   const updateFile = useCallback(
     (id: string, patch: Partial<TrackedFile>) => {
-      setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)))
+      setFiles((prev) => {
+        const next = prev.map((f) => (f.id === id ? { ...f, ...patch } : f))
+        // 同步写回 ref：processQueue 的 while 循环依赖 filesRef 找下一个 pending，
+        // 仅靠 render 阶段同步会在 setFiles → commit 之间产生窗口，让循环误读到 stale status
+        // 再走一次失败分支（v0.5.0 sniff 失败时同一 file_id 出 2 条 decrypt_fail 的根因）
+        filesRef.current = next
+        return next
+      })
     },
     [],
   )
@@ -983,6 +990,29 @@ function App() {
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
+          })
+          continue
+        }
+
+        // 3.5) QQ 音乐 mflac / mgg：本工具暂不支持，给精准错误（与通用 INVALID_HEADER 区分，
+        // source=qq_mflac 让运营后台能按 source 列统计实际占比，决定是否优先做支持）
+        if (realFormat === 'qq_unsupported') {
+          const code: DecryptErrorCode = 'INVALID_HEADER'
+          const message =
+            '这是 QQ 音乐加密格式（mflac/mgg），本工具暂不支持，可关注后续版本'
+          updateFile(next.id, {
+            status: 'failed',
+            errorCode: code,
+            errorMessage: message,
+          })
+          analytics.trackFailure('decrypt', {
+            error_code: code,
+            error_msg: message,
+            file_id: next.id,
+            file_name: next.file.name,
+            file_ext: fileExt,
+            file_size: next.file.size,
+            source: 'qq_mflac',
           })
           continue
         }
