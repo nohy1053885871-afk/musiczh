@@ -1205,12 +1205,25 @@ function App() {
   }, [pendingLargeBatch, commitFiles])
 
   const onLargeBatchReselect = useCallback(() => {
+    // 让新口径自洽：dismiss 的文件本就在 upload_drop/pick.count 里，但既不走 commitFiles
+    // 也不进 rejected → 新口径 (COUNT(upload_attempt)+COUNT(upload_reject)) 会漏掉这批
+    // → 旧 > 新 anomaly。补发 upload_reject 让两口径对齐。ESC 经 Modal.useEscClose 也走这里
+    if (pendingLargeBatch) {
+      pendingLargeBatch.files.forEach((f) => {
+        analytics.track('upload_reject', {
+          file_name: f.name,
+          file_ext: fileExtOf(f.name),
+          file_size: f.size,
+          reject_reason: 'LARGE_BATCH_DISMISSED',
+        })
+      })
+    }
     setPendingLargeBatch(null)
     // 重新选择：清掉本次拦截展示（避免误导）并拉起系统选择框
     setRejected([])
     // 等弹窗关闭后再 click，避免遮罩层吃掉点击
     setTimeout(() => fileInputRef.current?.click(), 50)
-  }, [])
+  }, [pendingLargeBatch])
 
   // 批量转 MP3：列表里所有 done 状态且 format=flac 的文件
   const onBatchTranscodeFlac = useCallback(() => {

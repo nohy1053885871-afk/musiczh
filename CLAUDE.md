@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.5.1（运营后台 v0.4.3）
+- 当前版本：v0.5.2（运营后台 v0.4.5）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -158,6 +158,12 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
 - [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
+
+## 已完成（v0.5.2 / 运营后台 v0.4.5 · 20260513 上线）
+
+- **修「上传文件总数·新 < 旧」数据 anomaly**（今日 Overview 旧 856 / 新 671 / Δ −185，触发 v0.4.3 设计的红色告警）：根因是 v0.5.0 引入的「≥50 文件大批量警告弹窗」`onLargeBatchReselect` 路径——`upload_drop/pick` 已 emit（旧口径 +N），但用户点「重新选择」或 ESC 时 `setPendingLargeBatch(null)` 直接丢 pending files，既不走 commitFiles 也不进 rejected，新口径 (COUNT(upload_attempt)+COUNT(upload_reject)) +0，导致 anomaly。修复：在 [src/App.tsx](src/App.tsx) `onLargeBatchReselect` 里对 pendingLargeBatch.files 逐个补发 `upload_reject(reject_reason='LARGE_BATCH_DISMISSED')`，让两口径自洽。
+- **运营后台新增「被拒-大批量取消」细分**：server [adminUploads.ts](server/src/routes/adminUploads.ts) STATUS_VALUES / statusToWhere / mergedStatus / timeseries SQL 加 `rejected_large_batch` / `LARGE_BATCH_DISMISSED`；admin [api.ts](admin/src/lib/api.ts) `UploadStatus` 加 `'rejected_large_batch'` + `UploadsTimeseriesPoint.reject_large_batch`；[format.ts](admin/src/lib/format.ts) REJECT_REASON_LABEL / UploadStatusKey / UPLOAD_STATUS_LABEL / FILTER_OPTIONS 四处加「大批量取消」；[Overview.tsx](admin/src/pages/Overview.tsx)「上传失败」卡片 tooltip 补「大批量取消」枚举；[UploadsTrendChart.tsx](admin/src/pages/decrypt-analysis/uploads/UploadsTrendChart.tsx) 折线图加 `reject_large_batch` 数 + 占比双序列（color #13C2C2 / #08979C）。
+- **历史 185 条无法回填**：drop/pick 事件只记 count 总数没记单文件 detail，v0.5.2 之前的差异只能保留作为观察数据。CLAUDE.md「2026-07 评估旧口径卡片移除」时间窗保持不变。
 
 ## 已完成（v0.5.1 · 20260513 上线）
 

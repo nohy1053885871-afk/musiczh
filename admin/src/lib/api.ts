@@ -280,11 +280,15 @@ export type VisitorDetail = VisitorRow & {
 }
 
 export type UploadType = 'attempt' | 'reject'
-export type UploadRejectReason = 'FORMAT_UNSUPPORTED' | 'SIZE_EXCEEDED' | 'QUEUE_FULL'
+export type UploadRejectReason =
+  | 'FORMAT_UNSUPPORTED'
+  | 'SIZE_EXCEEDED'
+  | 'QUEUE_FULL'
+  | 'LARGE_BATCH_DISMISSED'
 
 // v0.4.1：合并后的「状态」枚举（含被拒细分 + 下游 pipeline_status）
 export type UploadStatus =
-  | 'rejected_format' | 'rejected_size' | 'rejected_queue'
+  | 'rejected_format' | 'rejected_size' | 'rejected_queue' | 'rejected_large_batch'
   | 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy'
 
 export type UploadRow = {
@@ -337,6 +341,7 @@ export type UploadsTimeseriesPoint = {
   reject_format: number
   reject_size: number
   reject_queue: number
+  reject_large_batch: number
 }
 
 export type UploadsTimeseriesResp = {
