@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.4.4（运营后台 v0.4.3）
+- 当前版本：v0.5.1（运营后台 v0.4.3）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -158,6 +158,11 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
 - [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
+
+## 已完成（v0.5.1 · 20260513 上线）
+
+- **修「同 file_id 1ms 内连发 2 条 decrypt_fail」埋点 bug**：根因是 [src/App.tsx](src/App.tsx) `updateFile` 只调 `setFiles`，没同步写回 `filesRef.current`；processQueue 的 sniff 失败分支全程同步（updateFile → trackFailure → continue），下一轮 while 在 React commit 之前又读到 stale 'pending' 状态，对同一文件再走一次失败分支。修复：在 setFiles 的 updater 里把新 list 同步写回 ref，循环立即看到新 status。正常解密路径不复现是因为 `await decryptAudioFile` 给了 commit 时间窗。
+- **识别 QQ 音乐 mflac / mgg 改后缀上传**：[src/lib/sniff.ts](src/lib/sniff.ts) 新增 `qq_unsupported` RealFormat + 文件名识别（`/\.(mflac\d*|mflach|mgg\d*)(\.|$)/i` + `/\[mqms\d*\]/i`）；[src/App.tsx](src/App.tsx) 新增 qq_unsupported 分支，文案「这是 QQ 音乐加密格式（mflac/mgg），本工具暂不支持，可关注后续版本」；trackFailure 带 `source: 'qq_mflac'` 让运营后台失败日志能按 source 列统计实际占比（决策是否优先做 mflac 支持）。不新增 error_code，复用 INVALID_HEADER。
 
 ## 已完成（v0.4.4 · 20260512 上线）
 
