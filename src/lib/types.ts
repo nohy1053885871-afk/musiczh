@@ -10,6 +10,9 @@ export type DecryptErrorCode =
   | 'FILE_TOO_LARGE'
   | 'DECRYPT_FAILED'
   | 'KGM_V4_UNSUPPORTED'
+  // QQ 音乐新版（v20+）：密钥已迁移到云端，文件尾部仅有 'STag' 标记，无法纯前端解密。
+  // 引导用户下载旧版（v19.51 Windows）重新生成可解密文件。
+  | 'QMC_NEW_VERSION_UNSUPPORTED'
   | 'UNSUPPORTED_FORMAT'
   // 真 FLAC 头但浏览器内置 codec 解不了（高概率是 24-bit / 96kHz+ Hi-Res FLAC）
   | 'HIRES_NOT_SUPPORTED'
@@ -27,7 +30,7 @@ export class DecryptError extends Error {
 }
 
 /** 来源平台 */
-export type AudioSource = 'ncm' | 'kgm' | 'vpr'
+export type AudioSource = 'ncm' | 'kgm' | 'vpr' | 'qmc'
 
 /** 输出音频格式 */
 export type AudioFormat = 'mp3' | 'flac' | 'ogg'

@@ -67,7 +67,7 @@
 | `count` | number | 一次操作牵涉的文件数 |
 | `total_size` | number | 多文件总字节 |
 | `format` | string | `mp3` / `flac` / `ogg` |
-| `source` | string | `ncm` / `kgm` / `vpr` / `qq_mflac`（**v0.5.1 起**：QQ 音乐 mflac/mgg 改后缀上传被识别后的 decrypt_fail 上报值，运营后台据此按 source 列统计 QQ 格式占比） |
+| `source` | string | `ncm` / `kgm` / `vpr` / `qmc`（**v0.6.0 起**：QQ 音乐 QMCv2 系列解密成功 / 失败时上报，含 STag 新版兜底）/ `qq_mflac`（**v0.5.1-v0.5.2** 仅 sniff 拦截阶段使用，运营后台 SOURCE_LABEL 仍保留映射便于回看历史失败日志） |
 | `from_format` | string | 转码前的格式 |
 | `queue_size` | number | 当前队列长度 |
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
@@ -79,6 +79,8 @@
 | `progress_bucket` | number | **v0.4.1 起新增** · `transcode_progress` 心跳的进度桶，仅取 `0.1 / 0.3 / 0.5 / 0.7 / 0.9` 五值，桶内去重 |
 | `last_progress` | number | **v0.4.1 起新增** · `*_abandon` 中止事件的最近一次 progress 值（0-1），辅助定位中止发生在哪一段 |
 | `stage` | string | **v0.4.1 起新增** · `*_abandon` 中止事件的阶段，`decrypt` / `transcode` |
+| `trigger` | string | **v0.6.0 起新增** · QQ 引导弹窗触发来源：`entry` / `failure` / `auto` / `matrix`。`qq_guide_view` / `qq_guide_dismiss` / `qq_download_click` 都带，用来评估各入口的转化效率 |
+| `sha256` | string | **v0.6.0 起新增** · QQ 安装包文件的 SHA-256（小写 hex，长度 64），仅 `qq_download_click` 携带。用于追踪服务器上的安装包是否被替换/篡改 |
 
 **绝对禁止**：上报文件二进制内容、文件内容哈希（指纹）、用户输入的密码 / 账号、网银卡号等隐私信息。
 
@@ -111,7 +113,7 @@
 | `btn_download_zip_click` / `btn_download_zip_view` | 主站 - 工具栏 - 打包下载（ZIP） | [src/App.tsx](../src/App.tsx) 工具栏 | `count` | |
 | `decrypt_start` | 主站 - 业务 - 解密任务开始 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size` | |
 | `decrypt_done` | 主站 - 业务 - 解密成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, source, format` | |
-| `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, ...` | 同步触发 `trackFailure`；**v0.5.1 起** sniff 识别为 QQ mflac/mgg 时 `source='qq_mflac'`，便于后台区分通用 INVALID_HEADER 与 QQ 改后缀场景 |
+| `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, ...` | 同步触发 `trackFailure`。**v0.6.0 起**：QQ 文件走 `decryptQmc` 真解密，`source='qmc'`；新版客户端文件抛 `error_code='QMC_NEW_VERSION_UNSUPPORTED'`，运营后台单独显示「QQ 新版（密钥在云端）」。v0.5.1-v0.5.2 期间 sniff 直接拦截阶段使用 `source='qq_mflac'`，保留映射便于历史日志可读 |
 | `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size` | `source` 为空 = 原始 .flac 上传；带值（ncm/kgm/vpr）= 解密产物再转码。运营后台「转换成功」漏斗 / 卡片靠此区分以避双计数 |
 | `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, source` | 同上；`source IS NULL` 是原始 flac 上传转码 |
 | `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_msg, error_stack, ...` | 同步触发 `trackFailure` |
@@ -128,6 +130,13 @@
 | `banner_flac_prompt_view` | **v0.5.0** 主站 - FLAC 一键转 MP3 横条 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` div ref | `count` | `count` = 当前列表 FLAC 数量 |
 | `banner_flac_prompt_dismiss` | **v0.5.0** 主站 - FLAC 一键转 MP3 横条 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` × | `count` | 关闭后下次列表出现**新**的 FLAC 文件才重显 |
 | `btn_flac_batch_transcode_view` / `btn_flac_batch_transcode_click` | **v0.5.0** 主站 - FLAC 横条 - 一键转 MP3 按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` CTA | `count` | 点击后批量触发所有 done-flac 行的 `transcodeFile`，与单行手动转码共用同一管线 |
+| `qq_guide_entry_view` / `qq_guide_entry_click` | **v0.6.0** 主站 - 拖拽区下方 QQ 引导入口 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideEntry` | — | 常驻入口，曝光率应接近拖拽区 |
+| `qq_guide_view` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 曝光 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` mount | `trigger: 'entry' \| 'failure' \| 'auto' \| 'matrix'` | 触发来源：entry=拖拽区入口点击；failure=QMC_NEW_VERSION_UNSUPPORTED 失败行 CTA；auto=首次拖入 QMC 文件且 localStorage 未标记；matrix=从平台/格式总览弹窗跳来 |
+| `qq_guide_dismiss` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 关闭 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` close | `trigger` | 与对应 `qq_guide_view` 组队 |
+| `qq_download_click` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 下载旧版安装包按钮 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` CTA | `trigger, sha256?` | `sha256` 用于追踪安装包版本一致性 |
+| `support_matrix_entry_view` / `support_matrix_entry_click` | **v0.6.0** 主站 - 拖拽区下方「查看全部格式」入口 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixEntry` | — | |
+| `support_matrix_view` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 曝光 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` mount | — | |
+| `support_matrix_dismiss` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 关闭 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` close | — | |
 
 **曝光事件**（`*_view`）：通过组件局部的 `useImpression(eventName)` hook 给按钮 ref 绑定 IntersectionObserver。元素进入视口 ≥ 50% 且停留 ≥ 300ms 触发一次，**session 内同 visitor 同 event 全局去重**——所以单次会话每个按钮最多上报一次曝光，避免噪音。
 

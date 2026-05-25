@@ -606,9 +606,9 @@ export function FlacBatchPromptBanner({
       </div>
 
       <span className="flex-1 min-w-0 truncate">
-        <span className="font-medium">列表中有 {flacCount} 个 FLAC 文件</span>
+        <span className="font-medium">列表中有 {flacCount} 个 FLAC / OGG 文件</span>
         <span className="opacity-50 mx-1.5">·</span>
-        <span>FLAC 音质好，MP3 兼容更广</span>
+        <span>转为 MP3 兼容更广</span>
       </span>
 
       <div className="flex items-center gap-2 shrink-0">
