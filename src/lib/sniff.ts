@@ -6,25 +6,26 @@
  */
 
 import type { AudioFormat } from './types'
+import { QMC_EXT_REGEX } from './qmc/handler-map'
 
 /**
  * 真实格式：
  * - ncm/kgm/vpr：本工具能解密
+ * - qmc：QQ 音乐加密格式（mflac/mgg/qmcXXX/bkc 等系列），走 src/lib/qmc.ts 解密
  * - flac/ogg：本工具能直接转 MP3
  * - mp3：已经是目标格式，无需处理
  * - kgg_or_kgmv4：酷狗新版（KGG/KGM v4，需联网拿密钥），本工具不支持
- * - qq_unsupported：QQ 音乐加密格式（mflac/mgg 系列），本工具暂不支持
  * - unknown：上面都不是
  */
 export type RealFormat =
   | 'ncm'
   | 'kgm'
   | 'vpr'
+  | 'qmc'
   | 'flac'
   | 'ogg'
   | 'mp3'
   | 'kgg_or_kgmv4'
-  | 'qq_unsupported'
   | 'unknown'
 
 /** RealFormat → AudioFormat（仅 mp3/flac/ogg 三种重叠） */
@@ -85,10 +86,12 @@ export async function sniffRealFormat(file: File): Promise<RealFormat> {
   // 名字识别只是辅助，magic 才是权威；这里覆盖「.kgg / .kgg (n).flac」之类
   if (/\.kgg(\.|$|[^a-z])/i.test(file.name)) return 'kgg_or_kgmv4'
 
-  // QQ 音乐加密格式：mflac / mflac0 / mflach / mgg / mgg1 等；用户常把扩展名改成 .flac/.mp3 想绕过，
-  // 这里靠脏后缀链 + [mqms*] tag 兜底识别。真 .flac 在上面的 fLaC magic 已经命中，不会被这里误伤。
-  if (/\.(mflac\d*|mflach|mgg\d*)(\.|$)/i.test(file.name)) return 'qq_unsupported'
-  if (/\[mqms\d*\]/i.test(file.name)) return 'qq_unsupported'
+  // QQ 音乐加密格式：mflac/mflac0/mflach/mgg/mgg1/mggl/mmp4/qmcflac/qmcogg/qmc0-8/bkcXXX/tkm
+  // 旧版（v19.51 及以下）密钥嵌在文件尾，可解；新版（v20+）'STag' 标记会在解密阶段抛精准错误
+  // 真 .flac/.mp3/.ogg 在上面的 magic 已经命中，不会被这里误伤
+  if (QMC_EXT_REGEX.test(file.name)) return 'qmc'
+  // [mqms*] tag 是 QQ 音乐改后缀绕过的常见标记
+  if (/\[mqms\d*\]/i.test(file.name)) return 'qmc'
 
   return 'unknown'
 }

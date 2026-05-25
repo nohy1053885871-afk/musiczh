@@ -14,6 +14,8 @@ const ALLOWED_PROPS = new Set([
   // v0.4.1 新增：file_id 关联上传 → 解密/转码 → 完成/失败/中止
   // progress_bucket（transcode_progress 心跳）；last_progress / stage（*_abandon 中止现场）
   'file_id', 'progress_bucket', 'last_progress', 'stage',
+  // v0.6.0 新增：QQ 引导面板触发来源 + 安装包 sha256 防篡改追踪
+  'trigger', 'sha256',
 ])
 
 const FailureSchema = z.object({

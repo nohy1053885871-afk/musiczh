@@ -2,13 +2,13 @@
 
 加密音乐文件 → MP3/FLAC/OGG 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
 
-支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥）；以及原始 .flac（自动转 MP3）。
+支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导）；以及原始 .flac（自动转 MP3）。
 解密后可一键二次转码为 MP3（基于浏览器原生 AudioContext + lamejs，有损）；原始 .flac 上传走同一管线，无需点击按钮。
 
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.5.2（运营后台 v0.4.5）
+- 当前版本：v0.6.0（运营后台 v0.4.6）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -32,11 +32,22 @@ src/                     # 用户端（拾音主站）
   index.css              # Tailwind 入口 + vinyl-spin 动画 + color-scheme: light
   lib/
     types.ts             # 跨解密器共享类型：DecryptError / DecryptResult / AudioMeta
-    decrypt.ts           # 统一入口，按扩展名分发到 ncm.ts / kgm.ts
+    decrypt.ts           # 统一入口，按扩展名分发到 ncm.ts / kgm.ts / qmc.ts
     ncm.ts               # 网易云 NCM 解密：AES → RC4 流 → Blob + ID3
     kgm.ts               # 酷狗 KGM/VPR v2 解密：表查 + XOR；首次使用懒加载 mask
+    qmc.ts               # QQ 音乐 QMCv2 解密入口（v0.6.0 新增）：footer 解析 + cipher 分发
+    qmc/                 # QMCv2 算法（移植自 unlock-music MIT mirror ipid/unlock-music）
+      cipher.ts          #   QmcStatic / QmcMap / QmcRC4 三种 stream cipher
+      key.ts             #   TEA-CBC key 派生（base64 + 双层 mix key + 自定义包裹）
+      tea.ts             #   TEA cipher（Tiny Encryption Algorithm）
+      handler-map.ts     #   扩展名 → 目标格式映射 + QMC_EXT_REGEX
     transcode.ts         # FLAC/OGG → MP3：AudioContext 解码 + lamejs 编码
+    sniff.ts             # 文件头 magic 识别 + 扩展名兜底，输出 RealFormat
     analytics.ts         # 数据埋点 SDK（详见 docs/ANALYTICS_SPEC.md）
+  components/
+    v050.tsx             # v0.5.0 弹窗 / 横条组件
+    qq-guide.tsx         # v0.6.0 QQ 音乐使用说明弹窗 + 拖拽区下方入口
+    support-matrix.tsx   # v0.6.0 平台/格式总览弹窗 + 拖拽区下方入口
 
 admin/                   # 运营后台前端（独立 vite 项目，base: '/admin/'）
   src/{pages,components,lib}/
@@ -61,7 +72,7 @@ public/
 
 | 关键词 / 描述 | 改动范围 | 入口文件 |
 |---|---|---|
-| 解密 / 转码 / 上传 UI / 拖拽 / 主站按钮 / 主站文案 / 黑胶动画 | **主站** | `src/App.tsx` · `src/lib/{decrypt,ncm,kgm,transcode}.ts` |
+| 解密 / 转码 / 上传 UI / 拖拽 / 主站按钮 / 主站文案 / 黑胶动画 | **主站** | `src/App.tsx` · `src/lib/{decrypt,ncm,kgm,qmc,transcode}.ts` · `src/lib/qmc/*` |
 | 数据看板 / 折线图 / 漏斗 / 失败日志页 / 登录页 / 时间筛选 / 后台 UI | **运营后台前端** | `admin/src/pages/{Overview,Buttons,Failures,Login}.tsx` · `admin/src/components/` |
 | `/api/track` / 鉴权 / SQLite / DDL / 数据保留 cron / 后端聚合查询 | **后端 API** | `server/src/routes/` · `server/src/schema.sql` · `server/src/middleware/` |
 | 埋点（新事件 / 新接入点 / 字段白名单） | **跨子项目** | `src/lib/analytics.ts` + `src/App.tsx` 调用点 + `server/src/routes/track.ts` + `docs/ANALYTICS_SPEC.md`（必登记） |
@@ -153,11 +164,39 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 移动端适配优化
 - [ ] 移动端 .flac >100MB 上传时给软提示（避免 transcodeToMp3 一次性 PCM 解码导致 Safari OOM 闪退）
 - [ ] FLAC 流式转码改造（用 WASM FLAC decoder 取代 AudioContext.decodeAudioData，把内存峰值从 ~1GB 降到 ~50MB）
-- [ ] QQ 音乐 / 酷我音乐 / 酷狗 v4 格式支持
+- [ ] QQ 音乐 macOS / 移动端方案（v0.6.0 Windows 版已完成 + 旧版安装包托管引导，但 macOS 用户尚无路径）
+- [ ] 酷我音乐 .kwm 格式支持
+- [ ] 酷狗 v4 / KGG 格式支持（联网密钥协议，需后端代理）
+- [ ] QMC 新版 STag 文件长期方案：v0.6.0 仅引导用旧版重下；未来若有官方/社区的离线 ekey 获取通道可考虑接入
+- [ ] QQ 旧版安装包定期复查 sha256（docs/QQ_INSTALLER_SHA256.md），确保服务器 /downloads/ 未被替换
+- [ ] 评估 RC4 大文件性能：观察 v0.6.0 上线后 QMC 文件 ≥100MB 的占比 + abandon 率，必要时给 3 个解密器统一接入 Web Worker
 - [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
 - [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
+
+## 已完成（v0.6.0 / 运营后台 v0.4.6 · 20260525 上线）
+
+- **新增 QQ 音乐 QMCv2 解密**（旧版 v19.51 Windows 客户端下载的 .mflac / .mgg / .mflac0 / .mflach / .mgg0 / .mgg1 / .mggl / .mmp4 / .qmcflac / .qmcogg / .qmc0 / .qmc2 / .qmc3 / .qmc4 / .qmc6 / .qmc8 等 17 个扩展名）：
+  - 新增 [src/lib/qmc/](src/lib/qmc/) 子目录：`cipher.ts`（QmcStaticCipher / QmcMapCipher / QmcRC4Cipher）+ `key.ts`（TEA-CBC key 派生，去 Node Buffer 改 atob/Uint8Array）+ `tea.ts`（TEA 算法）+ `handler-map.ts`（扩展名映射 + QMC_EXT_REGEX）
+  - 新增 [src/lib/qmc.ts](src/lib/qmc.ts) 入口：footer 解析（STag / QTag / 末尾 4B LE keySize 三种格式）+ cipher 自动分发（keyDec.length > 300 → RC4，否则 → Map；keySize ≥ 0x400 → Static）+ 分块解密让出主线程
+  - 算法移植自 [ipid/unlock-music](https://github.com/ipid/unlock-music)（MIT，unlock-music 主仓 2022-11 被 DMCA 下架但镜像仍可用）
+- **新版 STag 文件精准引导**：检测到文件尾 'STag' 标记抛 `QMC_NEW_VERSION_UNSUPPORTED` 错误码，FileRow 显示精准错误文案 + 一键唤起 QqGuideModal
+- **sniff 改造**：[src/lib/sniff.ts](src/lib/sniff.ts) RealFormat `'qq_unsupported'` → `'qmc'`（语义从「不支持」变成「走 QMC 解密器」），识别 regex 扩到全部 17 个 QMC 扩展名
+- **decrypt 分发**：[src/lib/decrypt.ts](src/lib/decrypt.ts) SUPPORTED_EXTS / SUPPORTED_EXT_REGEX 扩到 QMC 系列，`decryptAudioFile` 加 'qmc' formatOverride
+- **主站 UI 引导**（QqGuide + SupportMatrix，由 Claude Design 出稿 + 工程移植）：
+  - 拖拽区下方常驻 2 个入口：`查看全部支持的格式 →` / `QQ 音乐用户 · 看怎么用 →`
+  - QqGuideModal：「只支持旧版 QQ 音乐（v19.51 Windows）下载的文件，新版不支持」+ 5 步操作 + 3 条注意 + 下载按钮（含安装包 SHA-256 展示）
+  - SupportMatrixModal：4 平台 × 加密扩展名 × 解密后格式 × 备注限制的总览表格，QQ 行内嵌「查看 QQ 使用说明 →」跳到 QqGuideModal
+  - QqGuideModal 自动唤起：用户首次拖入任意 QMC 后缀文件、且 localStorage 无 `qq_guide_seen` 标记时弹出（仅一次）
+- **运营后台口径**（v0.4.6）：[admin/src/lib/format.ts](admin/src/lib/format.ts) 新增 `SOURCE_LABEL`（保留 qq_mflac 历史映射）+ `ERROR_CODE_LABEL`（含 QMC_NEW_VERSION_UNSUPPORTED）+ EXT_LABELS 扩 17 项 QMC 扩展名 + EVENT_LABELS 加 9 个 qq_guide_* / support_matrix_* 事件；[UploadsByFormatChart](admin/src/pages/decrypt-analysis/uploads/UploadsByFormatChart.tsx) 加 17 项 QMC 颜色 + ALL_EXTS；3 个 SubSection EXT_OPTIONS 加 mflac / mgg / qmcflac / qmcogg 主要项
+- **埋点 9 新事件**：`qq_guide_entry_view/click`、`qq_guide_view/dismiss`（带 trigger='entry'/'failure'/'auto'/'matrix'）、`qq_download_click`（带 sha256）、`support_matrix_entry_view/click`、`support_matrix_view/dismiss`。字段白名单加 `trigger` / `sha256`（[server/src/routes/track.ts](server/src/routes/track.ts) ALLOWED_PROPS）
+- **安装包托管**：QQ 音乐 v19.51 Windows 安装包放服务器 `/www/wwwroot/musiczh/downloads/`（**不进 git、不进部署 zip**），nginx `location /` 自动服务；前端硬编码下载链接 `/downloads/qq-music-v19.51-windows.zip`；sha256 记录在 [docs/QQ_INSTALLER_SHA256.md](docs/QQ_INSTALLER_SHA256.md)
+- **SEO**：[index.html](index.html) title / description / keywords / OG / Twitter / JSON-LD WebApplication / FAQ / noscript SEO 兜底文档全部加 QQ 音乐 mflac/mgg 相关关键字与说明；sitemap.xml lastmod 更新到 2026-05-25
+- **已知边界**：
+  - 改后缀绕过（.mflac → .flac）走不进 sniff 的 qmc 分支，会被通用 INVALID_HEADER 兜底——本期不做内容嗅探
+  - RC4 cipher 解大文件（≥100MB）主线程会卡 5-15s，本期不引入 Web Worker，沿用 NCM/KGM 的现状（上线后看占比再决定是否单独排期）
+  - 历史 `source='qq_mflac'` 失败日志在 SOURCE_LABEL 映射为「QQ 音乐（v0.6.0 前 sniff 拦截）」便于回看
 
 ## 已完成（v0.5.2 / 运营后台 v0.4.5 · 20260513 上线）
 

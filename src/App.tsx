@@ -20,6 +20,16 @@ import {
   FlacBatchPromptBanner,
   type RejectedItem,
 } from './components/v050'
+import {
+  QqGuideEntry,
+  QqGuideModal,
+  QqWhyCta,
+  type QqGuideTrigger,
+} from './components/qq-guide'
+import {
+  SupportMatrixEntry,
+  SupportMatrixModal,
+} from './components/support-matrix'
 
 function fileExtOf(name: string): string {
   const dot = name.lastIndexOf('.')
@@ -292,7 +302,7 @@ function DropZone({
         ref={inputRef}
         type="file"
         multiple
-        accept=".ncm,.kgm,.vpr,.flac"
+        accept=".ncm,.kgm,.vpr,.flac,.mflac,.mflac0,.mflach,.mgg,.mgg0,.mgg1,.mggl,.mmp4,.qmcflac,.qmcogg,.qmc0,.qmc2,.qmc3,.qmc4,.qmc6,.qmc8"
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) {
@@ -345,7 +355,7 @@ function DropZone({
               color: '#8A8680',
             }}
           >
-            支持 NCM / KGM / FLAC · 单个最大 200MB ·{' '}
+            支持 NCM / KGM / QQ · 单个最大 200MB ·{' '}
             {queueSize === 0
               ? '单次建议 ≤ 50 个'
               : `队列已有 ${queueSize} 个`}
@@ -363,12 +373,14 @@ function FileRow({
   onRemove,
   onNotify,
   onTranscode,
+  onQqGuide,
 }: {
   file: TrackedFile
   onRetry: (id: string) => void
   onRemove: (id: string) => void
   onNotify: (msg: string) => void
   onTranscode: (id: string) => void
+  onQqGuide: (trigger: QqGuideTrigger) => void
 }) {
   const meta = file.result?.meta
   const title = meta?.musicName || file.file.name.replace(SUPPORTED_EXT_REGEX, '')
@@ -536,11 +548,16 @@ function FileRow({
             </span>
           </div>
         ) : isFailed ? (
-          <div
-            className="mt-0.5 text-[11px] truncate"
-            style={{ color: '#B83020' }}
-          >
-            {file.errorMessage || '解析失败'}
+          <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+            <span
+              className="text-[11px] truncate"
+              style={{ color: '#B83020' }}
+            >
+              {file.errorMessage || '解析失败'}
+            </span>
+            {file.errorCode === 'QMC_NEW_VERSION_UNSUPPORTED' && (
+              <QqWhyCta onOpen={onQqGuide} />
+            )}
           </div>
         ) : (
           <div
@@ -817,10 +834,33 @@ function App() {
   const [flacBannerDismissedIds, setFlacBannerDismissedIds] = useState<Set<string>>(
     () => new Set(),
   )
+  // v0.6.0：QQ 使用说明弹窗 + 平台格式总览弹窗
+  const [qqGuide, setQqGuide] = useState<{ open: boolean; trigger: QqGuideTrigger }>({
+    open: false,
+    trigger: 'entry',
+  })
+  const [matrixOpen, setMatrixOpen] = useState(false)
+  const openQqGuide = useCallback((trigger: QqGuideTrigger) => {
+    setQqGuide({ open: true, trigger })
+  }, [])
   // 隐藏 input 的 ref：「重新选择」用来重新拉起系统文件选择框
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const notify = useCallback((msg: string) => setToast(msg), [])
+
+  // v0.6.0：用户首次拖入任意 QMC 后缀文件 + localStorage 未标记 → 自动唤起 QqGuide
+  // 标记一次后永不再弹（除非用户清浏览器存储）
+  useEffect(() => {
+    if (qqGuide.open) return
+    if (localStorage.getItem('qq_guide_seen') === '1') return
+    const QMC_NAME_RE =
+      /\.(mflac\d*|mflach|mgg\d*|mggl|mmp4|qmcflac|qmcogg|qmc[02346])(\.|$)/i
+    const hasQmc = files.some((f) => QMC_NAME_RE.test(f.file.name))
+    if (hasQmc) {
+      setQqGuide({ open: true, trigger: 'auto' })
+      localStorage.setItem('qq_guide_seen', '1')
+    }
+  }, [files, qqGuide.open])
 
   const filesRef = useRef(files)
   filesRef.current = files
@@ -994,39 +1034,18 @@ function App() {
           continue
         }
 
-        // 3.5) QQ 音乐 mflac / mgg：本工具暂不支持，给精准错误（与通用 INVALID_HEADER 区分，
-        // source=qq_mflac 让运营后台能按 source 列统计实际占比，决定是否优先做支持）
-        if (realFormat === 'qq_unsupported') {
-          const code: DecryptErrorCode = 'INVALID_HEADER'
-          const message =
-            '这是 QQ 音乐加密格式（mflac/mgg），本工具暂不支持，可关注后续版本'
-          updateFile(next.id, {
-            status: 'failed',
-            errorCode: code,
-            errorMessage: message,
-          })
-          analytics.trackFailure('decrypt', {
-            error_code: code,
-            error_msg: message,
-            file_id: next.id,
-            file_name: next.file.name,
-            file_ext: fileExt,
-            file_size: next.file.size,
-            source: 'qq_mflac',
-          })
-          continue
-        }
-
         // 4) 完全不识别 → 上传准入已经放行（因为后缀是 .flac/.ncm/.kgm 等），
         // 但内容头不匹配，给精准错误
+        // 注：QMC 系列（mflac/mgg/qmcXXX）走 'qmc' 分支进解密器，由 qmc.ts 内部按 footer 判定新旧版
         if (
           realFormat !== 'ncm' &&
           realFormat !== 'kgm' &&
-          realFormat !== 'vpr'
+          realFormat !== 'vpr' &&
+          realFormat !== 'qmc'
         ) {
           const code: DecryptErrorCode = 'INVALID_HEADER'
           const message =
-            '无法识别这个文件，请确认是网易云 .ncm / 酷狗 .kgm / .vpr 或原始 .flac / .ogg / .mp3'
+            '无法识别这个文件，请确认是网易云 .ncm / 酷狗 .kgm / .vpr / QQ .mflac / .mgg 或原始 .flac / .ogg / .mp3'
           updateFile(next.id, {
             status: 'failed',
             errorCode: code,
@@ -1225,10 +1244,13 @@ function App() {
     setTimeout(() => fileInputRef.current?.click(), 50)
   }, [pendingLargeBatch])
 
-  // 批量转 MP3：列表里所有 done 状态且 format=flac 的文件
+  // 批量转 MP3：列表里所有 done 状态且 format=flac/ogg 的文件
+  // （v0.6.0：QQ 音乐 mgg 解出来是 OGG，也走批量转 MP3 路径）
   const onBatchTranscodeFlac = useCallback(() => {
     const targets = filesRef.current.filter(
-      (f) => f.status === 'done' && f.result?.format === 'flac',
+      (f) =>
+        f.status === 'done' &&
+        (f.result?.format === 'flac' || f.result?.format === 'ogg'),
     )
     targets.forEach((t) => {
       // transcodeFile 内部会做 status/result 校验，直接触发即可；串行由 await 节奏控制
@@ -1236,10 +1258,14 @@ function App() {
     })
   }, [transcodeFile])
 
-  // 列表中当前可批量转换的 FLAC 文件
+  // 列表中当前可批量转换的非 MP3 音频（FLAC + OGG）
   const flacReady = useMemo(
     () =>
-      files.filter((f) => f.status === 'done' && f.result?.format === 'flac'),
+      files.filter(
+        (f) =>
+          f.status === 'done' &&
+          (f.result?.format === 'flac' || f.result?.format === 'ogg'),
+      ),
     [files],
   )
   // dismiss 策略：dismiss 时把当前 flacReady 的 id 全部记下来；
@@ -1508,13 +1534,19 @@ function App() {
               />
             </div>
             <div
-              className="text-[11px]"
+              className="text-[11px] flex flex-wrap items-center"
               style={{
                 fontFamily: "'JetBrains Mono', monospace",
                 color: '#8A8680',
+                rowGap: 4,
+                lineHeight: 1.8,
               }}
             >
-              网易云 / 酷狗 已支持 · QQ / 酷我 敬请期待
+              <span>网易云 / 酷狗 / QQ 已支持</span>
+              <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
+              <SupportMatrixEntry onOpen={() => setMatrixOpen(true)} />
+              <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
+              <QqGuideEntry onOpen={openQqGuide} />
             </div>
           </div>
         </section>
@@ -1719,6 +1751,7 @@ function App() {
                   onRemove={removeFile}
                   onNotify={notify}
                   onTranscode={transcodeFile}
+                  onQqGuide={openQqGuide}
                 />
               ))}
             </div>
@@ -1764,6 +1797,19 @@ function App() {
         <RejectDetailsModal
           items={rejected}
           onClose={() => setShowRejectDetails(false)}
+        />
+      )}
+      {/* v0.6.0：QQ 音乐使用说明 + 平台格式总览 */}
+      {qqGuide.open && (
+        <QqGuideModal
+          trigger={qqGuide.trigger}
+          onClose={() => setQqGuide((g) => ({ ...g, open: false }))}
+        />
+      )}
+      {matrixOpen && (
+        <SupportMatrixModal
+          onClose={() => setMatrixOpen(false)}
+          onJumpToQqGuide={openQqGuide}
         />
       )}
     </div>

@@ -22,6 +22,7 @@ const METRICS: MetricMeta[] = [
 ]
 
 // 每个格式一个色系，搭配 metric 区分线型 / 暗度——这里简单用同色系一种色，靠线名识别
+// QMC 系列共享同一蓝紫色族（用户视角它们都是「QQ 音乐」，分细只是 mflac/mgg 二选一的目标格式区别）
 const EXT_COLORS: Record<string, string> = {
   ncm:  '#1677FF',
   kgm:  '#52C41A',
@@ -29,6 +30,23 @@ const EXT_COLORS: Record<string, string> = {
   flac: '#FAAD14',
   ogg:  '#722ED1',
   mp3:  '#FA541C',
+  // QMC 系列：紫红渐变区分
+  mflac:   '#EB2F96',
+  mflac0:  '#C41D7F',
+  mflach:  '#9E1068',
+  mgg:     '#F759AB',
+  mgg0:    '#FF85C0',
+  mgg1:    '#FFADD2',
+  mggl:    '#FFD6E7',
+  mmp4:    '#820014',
+  qmcflac: '#A8071A',
+  qmcogg:  '#CF1322',
+  qmc0:    '#F5222D',
+  qmc2:    '#FF4D4F',
+  qmc3:    '#FF7875',
+  qmc4:    '#FFA39E',
+  qmc6:    '#FFCCC7',
+  qmc8:    '#FFF1F0',
 }
 const fallback = '#999'
 
@@ -81,7 +99,12 @@ function buildSeries(
   return { rows, series }
 }
 
-const ALL_EXTS = ['ncm', 'kgm', 'vpr', 'flac', 'ogg', 'mp3']
+const ALL_EXTS = [
+  'ncm', 'kgm', 'vpr',
+  'mflac', 'mflac0', 'mflach', 'mgg', 'mgg0', 'mgg1', 'mggl', 'mmp4',
+  'qmcflac', 'qmcogg', 'qmc0', 'qmc2', 'qmc3', 'qmc4', 'qmc6', 'qmc8',
+  'flac', 'ogg', 'mp3',
+]
 
 export function UploadsByFormatChart({ rq, reloadKey }: { rq: string; reloadKey: number }) {
   const [points, setPoints] = useState<UploadsByFormatPoint[]>([])

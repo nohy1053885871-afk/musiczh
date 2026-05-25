@@ -61,6 +61,17 @@ export const EVENT_LABELS: Record<string, string> = {
   banner_flac_prompt_dismiss:     '主站 - FLAC 转 MP3 横条 - 关闭',
   btn_flac_batch_transcode_view:  '主站 - FLAC 横条 - 一键转 MP3 按钮（曝光）',
   btn_flac_batch_transcode_click: '主站 - FLAC 横条 - 一键转 MP3 按钮（点击）',
+
+  // v0.6.0 新增：QQ 音乐使用引导 + 平台格式总览
+  qq_guide_entry_view:           '主站 - 拖拽区下方 QQ 引导入口 - 曝光',
+  qq_guide_entry_click:          '主站 - 拖拽区下方 QQ 引导入口 - 点击',
+  qq_guide_view:                 '主站 - QQ 使用说明弹窗 - 曝光（带触发来源 entry/failure/auto/matrix）',
+  qq_guide_dismiss:              '主站 - QQ 使用说明弹窗 - 关闭',
+  qq_download_click:             '主站 - QQ 使用说明弹窗 - 下载旧版安装包按钮',
+  support_matrix_entry_view:     '主站 - 拖拽区下方「查看全部格式」入口 - 曝光',
+  support_matrix_entry_click:    '主站 - 拖拽区下方「查看全部格式」入口 - 点击',
+  support_matrix_view:           '主站 - 平台/格式总览弹窗 - 曝光',
+  support_matrix_dismiss:        '主站 - 平台/格式总览弹窗 - 关闭',
 }
 
 export function eventLabel(name: string): string {
@@ -132,11 +143,52 @@ export const EXT_LABELS: Record<string, string> = {
   ncm: 'NCM 网易云',
   kgm: 'KGM 酷狗',
   vpr: 'VPR 酷狗',
+  // v0.6.0：QQ 音乐 QMCv2 系列
+  mflac:  'mflac QQ',
+  mflac0: 'mflac0 QQ',
+  mflach: 'mflach QQ',
+  mgg:    'mgg QQ',
+  mgg0:   'mgg0 QQ',
+  mgg1:   'mgg1 QQ',
+  mggl:   'mggl QQ',
+  mmp4:   'mmp4 QQ',
+  qmcflac: 'qmcflac QQ',
+  qmcogg:  'qmcogg QQ',
+  qmc0: 'qmc0 QQ',
+  qmc2: 'qmc2 QQ',
+  qmc3: 'qmc3 QQ',
+  qmc4: 'qmc4 QQ',
+  qmc6: 'qmc6 QQ',
+  qmc8: 'qmc8 QQ',
+  // 通用
   mp3: 'MP3',
   flac: 'FLAC',
   ogg: 'OGG',
   wav: 'WAV',
   m4a: 'M4A',
+}
+
+// source 平台 → 中文标签。失败日志按 source 列展示时复用这张表。
+// 'qq_mflac' 是 v0.4.1-v0.5.2 旧版 source 值（当时仅 sniff 拦截，没真正解密），保留映射便于历史回看
+export const SOURCE_LABEL: Record<string, string> = {
+  ncm: '网易云',
+  kgm: '酷狗',
+  vpr: '酷狗 VPR',
+  qmc: 'QQ 音乐',
+  qq_mflac: 'QQ 音乐（v0.6.0 前 sniff 拦截）',
+}
+
+// 失败错误码 → 中文标签。运营后台失败日志 / 漏斗损失分析时复用
+export const ERROR_CODE_LABEL: Record<string, string> = {
+  INVALID_HEADER:              '文件头不匹配',
+  FILE_TOO_SMALL:              '文件过小',
+  FILE_TOO_LARGE:              '文件过大',
+  DECRYPT_FAILED:              '解密失败',
+  KGM_V4_UNSUPPORTED:          '酷狗 KGM v4（联网密钥）',
+  QMC_NEW_VERSION_UNSUPPORTED: 'QQ 新版（密钥在云端）',
+  UNSUPPORTED_FORMAT:          '不支持的格式',
+  HIRES_NOT_SUPPORTED:         'Hi-Res FLAC 浏览器解不了',
+  UNKNOWN:                     '未知错误',
 }
 
 export function extLabel(ext: string | null | undefined): string {
