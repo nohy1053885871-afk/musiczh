@@ -38,8 +38,8 @@ const ROWS: Row[] = [
   { platform: 'QQ 音乐', extsCell: '.mgg / .mgg0 / .mgg1 / .mggl', noteAction: 'open-qq-guide', parity: 'even', skipPlatformCell: true },
   { platform: 'QQ 音乐', extsCell: '.qmcflac / .qmcogg / .qmc0/2/3/…', parity: 'odd', skipPlatformCell: true },
   // 通用音频（2 行 rowspan）
-  { platform: '通用音频', extsCell: '.flac', noteCell: '自动转码', parity: 'even', isPlatformHead: true, platformRowspan: 2 },
-  { platform: '通用音频', extsCell: '.mp3 / .ogg', noteCell: '已是目标格式', parity: 'odd', skipPlatformCell: true },
+  { platform: '通用音频', extsCell: '.flac / .ogg', noteCell: '自动转码', parity: 'even', isPlatformHead: true, platformRowspan: 2 },
+  { platform: '通用音频', extsCell: '.mp3', noteCell: '已是目标格式', parity: 'odd', skipPlatformCell: true },
 ]
 
 // ── Esc 关闭 hook（与 qq-guide.tsx 同源逻辑；本组件独立持有一份避免相互依赖） ──

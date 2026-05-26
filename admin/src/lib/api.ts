@@ -116,9 +116,10 @@ export type OverviewResp = {
   transcode_done: number
   transcode_fail: number
   transcode_success_rate: number | null
-  // 「转换成功（件）」= 解密成功 + 原始 .flac 直接转码成功；同一文件解密+转码不双计数
+  // 「转换成功（件）」= 解密成功 + 原始 .flac / .ogg 直接转码成功；同一文件解密+转码不双计数
   convert_done: number
-  // 原始 flac 上传走转码路径的件数（用于上传文件总数卡的拆分展示）
+  // 原始 flac / ogg 上传走转码路径的件数（口径=transcode_done 且 source 为空）。
+  // 字段名沿用 raw_flac_*（v0.4.0 定）历史命名，v0.6.1 起 OGG 直传同口径合并进来。
   raw_flac_transcode_done: number
   raw_flac_transcode_fail: number
   // 上传被拒件数（格式不支持 / 超大小 / 队列上限）

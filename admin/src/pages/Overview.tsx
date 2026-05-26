@@ -215,7 +215,7 @@ export function OverviewPage() {
               title={
                 <Space size={6}>
                   <span>转换成功数（件）</span>
-                  <AntTooltip title="解密成功（件） + 原始 .flac 直接转码成功（件）。同一个文件先解密再转码不会被双计数。">
+                  <AntTooltip title="解密成功（件） + 原始 .flac / .ogg 直接转码成功（件）。同一个文件先解密再转码不会被双计数。">
                     <InfoCircleOutlined style={{ color: '#999' }} />
                   </AntTooltip>
                 </Space>
@@ -224,7 +224,7 @@ export function OverviewPage() {
               valueStyle={{ color: '#1677FF' }}
               suffix={
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {`= 解密 ${overview?.decrypt_done ?? 0} + 原 flac 转 ${overview?.raw_flac_transcode_done ?? 0}`}
+                  {`= 解密 ${overview?.decrypt_done ?? 0} + 原 flac/ogg 转 ${overview?.raw_flac_transcode_done ?? 0}`}
                 </Text>
               }
             />

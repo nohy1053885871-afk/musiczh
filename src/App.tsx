@@ -246,13 +246,11 @@ function DropZone({
   onFiles,
   isDragging,
   setIsDragging,
-  queueSize,
   inputRef,
 }: {
   onFiles: (files: FileList | File[]) => void
   isDragging: boolean
   setIsDragging: (v: boolean) => void
-  queueSize: number
   inputRef?: RefObject<HTMLInputElement | null>
 }) {
   const embossedShadow =
@@ -302,7 +300,7 @@ function DropZone({
         ref={inputRef}
         type="file"
         multiple
-        accept=".ncm,.kgm,.vpr,.flac,.mflac,.mflac0,.mflach,.mgg,.mgg0,.mgg1,.mggl,.mmp4,.qmcflac,.qmcogg,.qmc0,.qmc2,.qmc3,.qmc4,.qmc6,.qmc8"
+        accept=".ncm,.kgm,.vpr,.flac,.ogg,.mflac,.mflac0,.mflach,.mgg,.mgg0,.mgg1,.mggl,.mmp4,.qmcflac,.qmcogg,.qmc0,.qmc2,.qmc3,.qmc4,.qmc6,.qmc8"
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) {
@@ -355,10 +353,7 @@ function DropZone({
               color: '#8A8680',
             }}
           >
-            支持 NCM / KGM / QQ · 单个最大 200MB ·{' '}
-            {queueSize === 0
-              ? '单次建议 ≤ 50 个'
-              : `队列已有 ${queueSize} 个`}
+            网易云 / 酷狗 / QQ 已支持 · 单个最大 200MB · 单次建议 ≤ 50 个
           </div>
         </div>
       </div>
@@ -1529,7 +1524,6 @@ function App() {
                 onFiles={addFiles}
                 isDragging={isDragging}
                 setIsDragging={setIsDragging}
-                queueSize={files.length}
                 inputRef={fileInputRef}
               />
             </div>
@@ -1542,8 +1536,6 @@ function App() {
                 lineHeight: 1.8,
               }}
             >
-              <span>网易云 / 酷狗 / QQ 已支持</span>
-              <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
               <SupportMatrixEntry onOpen={() => setMatrixOpen(true)} />
               <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
               <QqGuideEntry onOpen={openQqGuide} />
