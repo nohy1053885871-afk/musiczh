@@ -168,7 +168,7 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 酷我音乐 .kwm 格式支持
 - [ ] 酷狗 v4 / KGG 格式支持（联网密钥协议，需后端代理）
 - [ ] QMC 新版 STag 文件长期方案：v0.6.0 仅引导用旧版重下；未来若有官方/社区的离线 ekey 获取通道可考虑接入
-- [ ] QQ 旧版安装包定期复查 sha256（docs/QQ_INSTALLER_SHA256.md），确保服务器 /downloads/ 未被替换
+- [ ] QQ 旧版安装包定期复查 sha256（docs/QQ_INSTALLER_SHA256.md，物理目录 `/www/wwwroot/musiczh-downloads/`），确保服务器 /downloads/ 未被替换；建议每月外网 curl 一次
 - [ ] 评估 RC4 大文件性能：观察 v0.6.0 上线后 QMC 文件 ≥100MB 的占比 + abandon 率，必要时给 3 个解密器统一接入 Web Worker
 - [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
@@ -191,7 +191,7 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
   - QqGuideModal 自动唤起：用户首次拖入任意 QMC 后缀文件、且 localStorage 无 `qq_guide_seen` 标记时弹出（仅一次）
 - **运营后台口径**（v0.4.6）：[admin/src/lib/format.ts](admin/src/lib/format.ts) 新增 `SOURCE_LABEL`（保留 qq_mflac 历史映射）+ `ERROR_CODE_LABEL`（含 QMC_NEW_VERSION_UNSUPPORTED）+ EXT_LABELS 扩 17 项 QMC 扩展名 + EVENT_LABELS 加 9 个 qq_guide_* / support_matrix_* 事件；[UploadsByFormatChart](admin/src/pages/decrypt-analysis/uploads/UploadsByFormatChart.tsx) 加 17 项 QMC 颜色 + ALL_EXTS；3 个 SubSection EXT_OPTIONS 加 mflac / mgg / qmcflac / qmcogg 主要项
 - **埋点 9 新事件**：`qq_guide_entry_view/click`、`qq_guide_view/dismiss`（带 trigger='entry'/'failure'/'auto'/'matrix'）、`qq_download_click`（带 sha256）、`support_matrix_entry_view/click`、`support_matrix_view/dismiss`。字段白名单加 `trigger` / `sha256`（[server/src/routes/track.ts](server/src/routes/track.ts) ALLOWED_PROPS）
-- **安装包托管**：QQ 音乐 v19.51 Windows 安装包放服务器 `/www/wwwroot/musiczh/downloads/`（**不进 git、不进部署 zip**），nginx `location /` 自动服务；前端硬编码下载链接 `/downloads/qq-music-v19.51-windows.zip`；sha256 记录在 [docs/QQ_INSTALLER_SHA256.md](docs/QQ_INSTALLER_SHA256.md)
+- **安装包托管**：QQ 音乐 v19.51 Windows 安装包放服务器 **独立目录** `/www/wwwroot/musiczh-downloads/`（**不进 git、不进部署 zip**，与主站 `/www/wwwroot/musiczh/` 完全隔离，避免日常 user.zip 部署误删）；nginx 加 `location ^~ /downloads/ { alias /www/wwwroot/musiczh-downloads/; }` 把 URL `/downloads/qq-music-v19.51-windows.zip` alias 过去；前端硬编码下载链接保持不变；sha256 记录在 [docs/QQ_INSTALLER_SHA256.md](docs/QQ_INSTALLER_SHA256.md)。上线后 v0.6.0 当晚因物理目录在主站下被 user.zip 部署误删过一次，故迁出至独立目录
 - **SEO**：[index.html](index.html) title / description / keywords / OG / Twitter / JSON-LD WebApplication / FAQ / noscript SEO 兜底文档全部加 QQ 音乐 mflac/mgg 相关关键字与说明；sitemap.xml lastmod 更新到 2026-05-25
 - **已知边界**：
   - 改后缀绕过（.mflac → .flac）走不进 sniff 的 qmc 分支，会被通用 INVALID_HEADER 兜底——本期不做内容嗅探
