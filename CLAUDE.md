@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.6.0（运营后台 v0.4.6）
+- 当前版本：v0.6.1（运营后台 v0.4.7）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -174,6 +174,16 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
 - [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
+
+## 已完成（v0.6.1 / 运营后台 v0.4.7 · 20260526 上线）
+
+- **OGG 直传自动转 MP3**：原始 .ogg 文件接入主站上传，复用 v0.4.0 为原始 .flac 设计的 transcode-only 路径（sniff → processQueue 跳过解密 → AudioContext.decodeAudioData + lamejs）。底层管线在 v0.4.0/v0.6.0 已就绪，只补了三处：
+  - [src/lib/decrypt.ts](src/lib/decrypt.ts) `SUPPORTED_EXT_REGEX` 加 `ogg`（开放上传准入）
+  - [src/App.tsx](src/App.tsx) `<input accept>` 加 `.ogg`（系统选择框可选）
+  - [src/components/support-matrix.tsx](src/components/support-matrix.tsx) 平台/格式总览表里 `.ogg` 从「已是目标格式」行移到与 `.flac` 同行「自动转码」
+- **运营后台口径**：后端 `raw_flac_transcode_done` 字段（口径=transcode_done 且 source 为空）天然合并 OGG 直传——不动 DB、不动 SQL。Overview「转换成功数」卡片 tooltip + 副文案带上「.flac / .ogg」字样防误读（[admin/src/pages/Overview.tsx](admin/src/pages/Overview.tsx) + [admin/src/lib/api.ts](admin/src/lib/api.ts) 注释）。
+- **拖拽区文案重排**（[src/App.tsx](src/App.tsx)）：箭头位置 helper 文案从「支持 NCM / KGM / QQ · 单个最大 200MB · 单次建议 ≤ 50 个」（动态切换队列已有 N 个）改为固定的「网易云 / 酷狗 / QQ 已支持 · 单个最大 200MB · 单次建议 ≤ 50 个」；拖拽区下方左侧删掉重复的「网易云 / 酷狗 / QQ 已支持」span，仅保留两个入口链接「查看全部支持的格式 → · 如何转换 QQ 音乐文件 →」。DropZone 不再依赖 queueSize prop。
+- **埋点不新增事件 / 字段**：现有 `transcode_*` 事件已带 `from_format`（取值 `'flac'` / `'ogg'`），且后端白名单已收，flac vs ogg 可按 `from_format` SQL 精准拆分。`source` 仍保持空，与 raw flac 完全合并口径。[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 在 `from_format` / `upload_attempt` / `transcode_start` / `transcode_done` 行追加 v0.6.1 注释说明。
 
 ## 已完成（v0.6.0 / 运营后台 v0.4.6 · 20260525 上线）
 

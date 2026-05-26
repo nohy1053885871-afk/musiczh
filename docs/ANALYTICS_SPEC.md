@@ -68,7 +68,7 @@
 | `total_size` | number | 多文件总字节 |
 | `format` | string | `mp3` / `flac` / `ogg` |
 | `source` | string | `ncm` / `kgm` / `vpr` / `qmc`（**v0.6.0 起**：QQ 音乐 QMCv2 系列解密成功 / 失败时上报，含 STag 新版兜底）/ `qq_mflac`（**v0.5.1-v0.5.2** 仅 sniff 拦截阶段使用，运营后台 SOURCE_LABEL 仍保留映射便于回看历史失败日志） |
-| `from_format` | string | 转码前的格式 |
+| `from_format` | string | 转码前的格式：`flac` / `ogg`（**v0.6.1 起 OGG 直传接入主站**，新枚举值出现）。配合 `source IS NULL` 即可拆分「原始 flac 转码」vs「原始 ogg 转码」 |
 | `queue_size` | number | 当前队列长度 |
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
 | `status` | string | 文件当时状态 |
@@ -101,7 +101,7 @@
 | `upload_zone_view` | 主站 - 上传区 - 曝光 | [src/App.tsx](../src/App.tsx) `DropZone` ref | — | session 内只触发一次 |
 | `upload_drop` | 主站 - 上传区 - 拖拽文件松手 | [src/App.tsx](../src/App.tsx) `DropZone.onDrop` | `count, total_size` | 批量动作事件，文件级请看 `upload_attempt` |
 | `upload_pick` | 主站 - 上传区 - 点击选择文件后确认 | [src/App.tsx](../src/App.tsx) `input.onChange` | `count` | 批量动作事件 |
-| `upload_attempt` | 主站 - 业务 - 上传成功（进入队列） | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size` | **每个通过限制规则的文件一条**；漏斗件维度的「上传」层；原始 .flac 上传也走此事件 |
+| `upload_attempt` | 主站 - 业务 - 上传成功（进入队列） | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size` | **每个通过限制规则的文件一条**；漏斗件维度的「上传」层；原始 .flac / .ogg 上传也走此事件（**v0.6.1 起 .ogg 接入**） |
 | `upload_reject` | 主站 - 业务 - 上传被拒 | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size, reject_reason` | **每个被拒文件一条**；用于诊断"哪些格式 / 多大 / 多少超限" |
 | `btn_transcode_click` / `btn_transcode_view` | 主站 - 列表行 - 转 MP3 按钮 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, file_ext, file_size, format` | 仅 flac/ogg 才显示 |
 | `row_download_click` / `row_download_view` | 主站 - 列表行 - 单文件下载 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, format, file_size` | 仅 done 状态显示 |
@@ -114,8 +114,8 @@
 | `decrypt_start` | 主站 - 业务 - 解密任务开始 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size` | |
 | `decrypt_done` | 主站 - 业务 - 解密成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, source, format` | |
 | `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, ...` | 同步触发 `trackFailure`。**v0.6.0 起**：QQ 文件走 `decryptQmc` 真解密，`source='qmc'`；新版客户端文件抛 `error_code='QMC_NEW_VERSION_UNSUPPORTED'`，运营后台单独显示「QQ 新版（密钥在云端）」。v0.5.1-v0.5.2 期间 sniff 直接拦截阶段使用 `source='qq_mflac'`，保留映射便于历史日志可读 |
-| `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size` | `source` 为空 = 原始 .flac 上传；带值（ncm/kgm/vpr）= 解密产物再转码。运营后台「转换成功」漏斗 / 卡片靠此区分以避双计数 |
-| `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, source` | 同上；`source IS NULL` 是原始 flac 上传转码 |
+| `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size` | `source` 为空 = 原始 .flac / .ogg 上传（**v0.6.1 起 .ogg 接入**，`from_format` 区分两者）；带值（ncm/kgm/vpr）= 解密产物再转码。运营后台「转换成功」漏斗 / 卡片靠此区分以避双计数 |
+| `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, source` | 同上；`source IS NULL` 是原始 flac / ogg 上传转码，按 `from_format` 拆分 |
 | `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_msg, error_stack, ...` | 同步触发 `trackFailure` |
 | `download_done` | 主站 - 业务 - 下载完成 | [src/App.tsx](../src/App.tsx) `FileRow` 单文件 / `downloadAllSeparate` / `downloadAllAsZip` | `file_name, file_ext, file_size, download_kind` | ZIP 整批成功后按文件数批量发；漏斗件维度的「下载」层 |
 | `download_fail` | 主站 - 业务 - 下载失败 | 三处下载入口的 try/catch 兜底 | `download_kind, error_code, error_msg, file_name?` | 同步触发 `trackFailure('download',...)`；ZIP 整批失败时 `file_name` 留空 |
