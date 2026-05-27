@@ -16,6 +16,8 @@ const ALLOWED_PROPS = new Set([
   'file_id', 'progress_bucket', 'last_progress', 'stage',
   // v0.6.0 新增：QQ 引导面板触发来源 + 安装包 sha256 防篡改追踪
   'trigger', 'sha256',
+  // v0.6.2 新增：转码编码器标识 + 输出 MP3 字节数（用于分析平均码率分布）
+  'encoder', 'output_size',
 ])
 
 const FailureSchema = z.object({
