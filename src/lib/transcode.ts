@@ -3,10 +3,11 @@
  *
  * 流程：
  *   1. AudioContext.decodeAudioData() 把任意浏览器原生支持的格式（MP3/FLAC/OGG/WAV）解码成 PCM
- *   2. 转 Float32Array → Int16Array
- *   3. lamejs（动态导入）按 1152 sample 一帧编码成 128kbps CBR MP3
+ *   2. 拿 Float32 声道数据（编码器直接吃 Float32，不用先转 Int16）
+ *   3. wasm-media-encoders（动态导入）按 LAME -V 2 编码，平均 ~190 kbps VBR
  *
- * 注意：转码是有损的，FLAC → MP3 会有音质降级。
+ * 注意：转码仍是有损的，但 -V 2 接近无损（普通耳几乎 ABX 失败）；
+ * 文件比 v0.6.1 的 128 CBR 大约 +50%。
  */
 
 import {
@@ -14,8 +15,11 @@ import {
   type ProgressCallback,
 } from './types'
 
-const TARGET_BITRATE = 128 // kbps
-const MP3_FRAME_SAMPLES = 1152
+const VBR_QUALITY = 2 // LAME -V 2，平均 ~190 kbps
+const FRAME_SAMPLES = 1152 // MP3 帧样本数；用于节流 + 进度，编码器内部对齐由库处理
+const ENCODER_TAG = 'wasm-lame-v2'
+
+export const TRANSCODE_ENCODER = ENCODER_TAG
 
 export async function transcodeToMp3(
   source: Blob,
@@ -46,13 +50,11 @@ export async function transcodeToMp3(
     try {
       audioBuffer = await ctx.decodeAudioData(arrayBuffer)
     } finally {
-      // 关闭 AudioContext，避免泄漏
       if (typeof ctx.close === 'function') {
         ctx.close().catch(() => {})
       }
     }
   } catch (e) {
-    // 真 FLAC 头但 decodeAudioData 失败，大概率是 Hi-Res 编码（24-bit / ≥96kHz）当前浏览器解不了
     if (isFlac) {
       throw new DecryptError(
         'HIRES_NOT_SUPPORTED',
@@ -68,52 +70,49 @@ export async function transcodeToMp3(
   }
   onProgress?.(0.1)
 
-  // ========== 2. 拿声道数据并转成 Int16 PCM ==========
-  const numChannels = Math.min(audioBuffer.numberOfChannels, 2)
+  // ========== 2. 拿 Float32 声道数据 ==========
+  const numChannels = Math.min(audioBuffer.numberOfChannels, 2) as 1 | 2
   const sampleRate = audioBuffer.sampleRate
   const totalSamples = audioBuffer.length
 
-  const left = floatToInt16(audioBuffer.getChannelData(0))
-  const right =
-    numChannels === 2 ? floatToInt16(audioBuffer.getChannelData(1)) : null
+  const left = audioBuffer.getChannelData(0)
+  const right = numChannels === 2 ? audioBuffer.getChannelData(1) : null
   onProgress?.(0.2)
 
-  // ========== 3. 动态加载 lamejs（用 @breezystack/lamejs，原版 ESM 下 cross-file 全局会丢） ==========
-  const { Mp3Encoder } = await import('@breezystack/lamejs')
-  const encoder = new Mp3Encoder(numChannels, sampleRate, TARGET_BITRATE)
+  // ========== 3. 动态加载 wasm-media-encoders（LAME WASM 编译） ==========
+  const { createMp3Encoder } = await import('wasm-media-encoders')
+  const encoder = await createMp3Encoder()
+  encoder.configure({
+    channels: numChannels,
+    sampleRate,
+    vbrQuality: VBR_QUALITY,
+  })
   onProgress?.(0.25)
 
   // ========== 4. 分帧编码 ==========
+  // 关键：encoder.encode() / finalize() 返回的 Uint8Array 指向 wasm 内部内存，
+  // 下次调用会被覆盖；必须立即用 new Uint8Array(view) 拷出来再 push
   const buffers: Uint8Array[] = []
   let processed = 0
-  for (let i = 0; i < totalSamples; i += MP3_FRAME_SAMPLES) {
-    const leftChunk = left.subarray(i, i + MP3_FRAME_SAMPLES)
-    const mp3buf = right
-      ? encoder.encodeBuffer(leftChunk, right.subarray(i, i + MP3_FRAME_SAMPLES))
-      : encoder.encodeBuffer(leftChunk)
-    if (mp3buf.length > 0) buffers.push(mp3buf)
+  for (let i = 0; i < totalSamples; i += FRAME_SAMPLES) {
+    const leftChunk = left.subarray(i, i + FRAME_SAMPLES)
+    const view = right
+      ? encoder.encode([leftChunk, right.subarray(i, i + FRAME_SAMPLES)])
+      : encoder.encode([leftChunk])
+    if (view.length > 0) buffers.push(new Uint8Array(view))
 
-    processed += MP3_FRAME_SAMPLES
+    processed += FRAME_SAMPLES
     // 每 200 帧（~5s 音频）让一下事件循环并报进度
-    if ((processed / MP3_FRAME_SAMPLES) % 200 === 0) {
+    if ((processed / FRAME_SAMPLES) % 200 === 0) {
       onProgress?.(0.25 + Math.min(processed / totalSamples, 1) * 0.7)
       await yieldToEventLoop()
     }
   }
-  const tail = encoder.flush()
-  if (tail.length > 0) buffers.push(tail)
+  const tail = encoder.finalize()
+  if (tail.length > 0) buffers.push(new Uint8Array(tail))
   onProgress?.(1)
 
   return new Blob(buffers as BlobPart[], { type: 'audio/mpeg' })
-}
-
-function floatToInt16(input: Float32Array): Int16Array {
-  const out = new Int16Array(input.length)
-  for (let i = 0; i < input.length; i++) {
-    const s = Math.max(-1, Math.min(1, input[i]))
-    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-  }
-  return out
 }
 
 function yieldToEventLoop(): Promise<void> {

@@ -8,7 +8,7 @@ import {
   type DecryptResult,
   type DecryptErrorCode,
 } from './lib/decrypt'
-import { transcodeToMp3 } from './lib/transcode'
+import { transcodeToMp3, TRANSCODE_ENCODER } from './lib/transcode'
 import { sniffRealFormat } from './lib/sniff'
 import { stripFileExtensions } from './lib/filename'
 import { analytics } from './lib/analytics'
@@ -601,7 +601,7 @@ function FileRow({
               boxShadow:
                 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.1)',
             }}
-            title={`将当前 ${format} 强制转码为 MP3（有损）`}
+            title={`将当前 ${format} 转码为 MP3（~190 kbps VBR，接近无损）`}
           >
             转 MP3
           </button>
@@ -893,6 +893,7 @@ function App() {
         file_name: result.suggestedName,
         from_format: fromFormat,
         file_size: result.audio.size,
+        encoder: TRANSCODE_ENCODER,
       })
       // register inflight：若用户在转码过程中关页（auto-FLAC 大文件易触发 Safari OOM）
       // pagehide 会发 transcode_abandon，含最近一次 progress；本次的核心定位手段
@@ -935,6 +936,8 @@ function App() {
           file_size: result.audio.size,
           source: result.meta?.source,
           from_format: fromFormat,
+          encoder: TRANSCODE_ENCODER,
+          output_size: mp3Blob.size,
         })
         analytics.unregisterInflight(id)
         notify('已转为 MP3')

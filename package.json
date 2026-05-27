@@ -1,7 +1,7 @@
 {
   "name": "musiczh",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,8 +14,8 @@
     "build:admin": "npm --prefix admin run build"
   },
   "dependencies": {
-    "@breezystack/lamejs": "^1.2.7",
     "@tailwindcss/vite": "^4.2.4",
+    "wasm-media-encoders": "^0.7.0",
     "aes-js": "^3.1.2",
     "browser-id3-writer": "^6.3.1",
     "jszip": "^3.10.1",

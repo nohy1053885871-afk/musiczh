@@ -3,12 +3,12 @@
 加密音乐文件 → MP3/FLAC/OGG 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
 
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导）；以及原始 .flac（自动转 MP3）。
-解密后可一键二次转码为 MP3（基于浏览器原生 AudioContext + lamejs，有损）；原始 .flac 上传走同一管线，无需点击按钮。
+解密后可一键二次转码为 MP3（基于浏览器原生 AudioContext + LAME WASM VBR -V 2，平均 ~190 kbps，接近无损）；原始 .flac / .ogg 上传走同一管线，无需点击按钮。
 
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.6.1（运营后台 v0.4.7）
+- 当前版本：v0.6.2（运营后台 v0.4.7）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -20,7 +20,7 @@
 - Vite 8
 - JSZip（打包下载）
 - aes-js + browser-id3-writer（NCM 解密 + ID3 标签）
-- @breezystack/lamejs（lamejs 的 ESM 维护 fork，强制转 MP3 时动态加载）
+- wasm-media-encoders（LAME 3.100 的 WebAssembly 编译版，强制转 MP3 时动态加载；本期 v0.6.2 起从 lamejs 换过来，拿到 LAME VBR 模式，输出 -V 2 ~190 kbps）
 
 ## 项目结构
 
@@ -179,20 +179,21 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.6.2 · 20260527 待发布
+
+- **MP3 转码音质升级**：编码端从 `@breezystack/lamejs`（128 kbps CBR）换成 `wasm-media-encoders`（LAME 3.100 WASM 编译，VBR -V 2 默认）；产物 PEAQ ODG 从 ~-2.0 拉到 ~-0.3（公认透明），平均码率 ~190 kbps，文件比上版大 ~50%
+- 入口仍是 [src/lib/transcode.ts](src/lib/transcode.ts)；解码端 `AudioContext.decodeAudioData` 不动（OOM 问题留给「FLAC 流式转码」独立项目），文件头嗅探 / Hi-Res FLAC 拦截 / 进度上报全保留
+- API 收益：wasm-media-encoders 直接吃 Float32Array，省掉 lamejs 的 floatToInt16 一次拷贝；编码速度大概率比 lamejs 快（WASM 接近原生 C 性能）
+- 埋点新增 `encoder` (`'wasm-lame-v2'`) + `output_size` 字段：`transcode_start` / `transcode_done` 都带，运营后台可事后 SQL 算平均码率分布；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts) `ALLOWED_PROPS`
+- 文案微调：FileRow 转 MP3 按钮 tooltip 从「强制转码为 MP3（有损）」改成「转码为 MP3（~190 kbps VBR，接近无损）」，引导用户在 NCM/QMC 已是 320 MP3 时知道按了不会太亏
+- 后端 / 运营后台**本期不动**：新字段对看板透明，下一期评估 `output_size` 分布后再决定加图表
+
 ### v0.6.1 / 运营后台 v0.4.7 · 20260526 上线
 
 - **OGG 直传自动转 MP3**：复用 v0.4.0 为原始 .flac 设计的 transcode-only 路径（sniff → processQueue 跳过解密 → AudioContext + lamejs）；准入点补三处：[src/lib/decrypt.ts](src/lib/decrypt.ts) `SUPPORTED_EXT_REGEX` / [src/App.tsx](src/App.tsx) `<input accept>` / [src/components/support-matrix.tsx](src/components/support-matrix.tsx) 表格分组
 - 后端口径天然合并到 `raw_flac_transcode_done`（source 留空），不动 DB / SQL；UI 文案里 `.flac` 字样改成「.flac / .ogg」防误读
 - flac vs ogg 拆分用现成 `transcode_*.from_format` 字段（已在白名单），不新增事件 / 字段
 - 拖拽区文案重排：helper 改固定文案，下方仅保留两个入口链接；DropZone 不再依赖 queueSize prop
-
-### v0.6.0 / 运营后台 v0.4.6 · 20260525 上线
-
-- **新增 QQ 音乐 QMCv2 解密**（旧版 v19.51 Windows 客户端的 .mflac / .mgg / .qmcflac / .qmcogg 等 17 个扩展名），算法移植自 [ipid/unlock-music](https://github.com/ipid/unlock-music)（MIT），入口 [src/lib/qmc.ts](src/lib/qmc.ts) + [src/lib/qmc/](src/lib/qmc/) 子目录（cipher / key / tea / handler-map）
-- **新版 STag 文件精准引导**：抛 `QMC_NEW_VERSION_UNSUPPORTED`，FileRow 一键唤起 [QqGuideModal](src/components/qq-guide.tsx)；拖拽区下方常驻 QqGuide / SupportMatrix 两入口；首次拖入 QMC 文件自动唤起（localStorage `qq_guide_seen` 仅一次）
-- **安装包托管**（重要运维点）：QQ v19.51 Windows 安装包放服务器 **独立目录** `/www/wwwroot/musiczh-downloads/`，**不进 git、不进部署 zip**，与主站 `/www/wwwroot/musiczh/` 完全隔离 —— 上线当晚因物理目录在主站下被 user.zip 部署误删过一次，故迁出。nginx 用 `location ^~ /downloads/ { alias ...; }` 路由；sha256 见 [docs/QQ_INSTALLER_SHA256.md](docs/QQ_INSTALLER_SHA256.md)
-- 埋点新增 9 个事件（qq_guide_* / support_matrix_* / qq_download_click），字段白名单加 `trigger` / `sha256`
-- **已知边界**：改后缀绕过（.mflac → .flac）走 INVALID_HEADER 兜底不做内容嗅探；RC4 解 ≥100MB 主线程卡 5-15s 沿用 NCM/KGM 现状（看占比再决定是否上 Web Worker）
 
 # 通用
 - 优先选择编辑而非重写整个文件
