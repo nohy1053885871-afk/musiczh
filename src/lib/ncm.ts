@@ -20,7 +20,6 @@
  */
 
 import aesjs from 'aes-js'
-import { ID3Writer } from 'browser-id3-writer'
 import {
   DecryptError,
   type AudioMeta,
@@ -28,6 +27,7 @@ import {
   type ProgressCallback,
 } from './types'
 import { stripFileExtensions } from './filename'
+import { writeId3ToMp3, writeFlacMeta } from './metadata'
 
 // 两个固定的 AES 密钥（来自网易云客户端，业内公开）
 const CORE_KEY = new Uint8Array([
@@ -123,7 +123,9 @@ export async function decryptNcm(
   let cover: Blob | null = null
   if (coverLen > 0) {
     const coverBytes = new Uint8Array(buffer.slice(offset, offset + coverLen))
-    cover = new Blob([coverBytes], { type: 'image/jpeg' })
+    // NCM 容器对 cover 字段不带 mime 信息，硬编码 image/jpeg 仅用于 Blob.type，
+    // 浏览器 img 标签宽容能渲染各种格式；下游 browser-id3-writer 会按 magic 二次嗅探
+    cover = new Blob([coverBytes as BlobPart], { type: 'image/jpeg' })
   }
   offset += coverLen
   onProgress?.(0.2)
@@ -167,34 +169,18 @@ export async function decryptNcm(
     format = 'flac'
   }
 
-  // ========== 8. 写入 ID3 标签（仅 MP3） ==========
+  // ========== 8. 写入标签（MP3 用 ID3v2 / FLAC 用 VORBIS_COMMENT + PICTURE） ==========
   let audio: Blob = new Blob([audioData], {
     type: format === 'flac' ? 'audio/flac' : 'audio/mpeg',
   })
-  if (format === 'mp3') {
-    try {
-      const writer = new ID3Writer(audioData.buffer)
-      if (meta.musicName) writer.setFrame('TIT2', meta.musicName)
-      if (meta.artist?.length) {
-        writer.setFrame(
-          'TPE1',
-          meta.artist.map((a) => a[0]),
-        )
-      }
-      if (meta.album) writer.setFrame('TALB', meta.album)
-      if (cover) {
-        const coverArrayBuffer = await cover.arrayBuffer()
-        writer.setFrame('APIC', {
-          type: 3,
-          data: coverArrayBuffer,
-          description: 'Cover',
-        })
-      }
-      writer.addTag()
-      audio = writer.getBlob()
-    } catch {
-      // 标签写入失败不影响主流程
+  try {
+    if (format === 'mp3') {
+      audio = await writeId3ToMp3(audio, cover, meta)
+    } else if (format === 'flac') {
+      audio = await writeFlacMeta(audio, cover, meta)
     }
+  } catch {
+    // 标签写入失败不影响主流程
   }
   onProgress?.(1)
 

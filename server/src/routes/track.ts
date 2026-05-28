@@ -18,6 +18,9 @@ const ALLOWED_PROPS = new Set([
   'trigger', 'sha256',
   // v0.6.2 新增：转码编码器标识 + 输出 MP3 字节数（用于分析平均码率分布）
   'encoder', 'output_size',
+  // v0.6.3 新增：转码/解密产物是否含封面（FLAC/OGG 直传转 MP3 是否能从原文件拿到 cover，
+  // 以及 KGM/QMC 解密原文件本身有没有内嵌封面）
+  'has_cover',
 ])
 
 const FailureSchema = z.object({

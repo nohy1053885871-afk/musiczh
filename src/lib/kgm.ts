@@ -33,6 +33,7 @@ import {
   type ProgressCallback,
 } from './types'
 import { stripFileExtensions } from './filename'
+import { readMetaFromBlob } from './metadata'
 
 // ============== Magic ==============
 
@@ -223,19 +224,25 @@ export async function decryptKgm(
   // 用户可能上传 xxx.kgm.flac / xxx.kgm (1).flac 这种多重伪后缀文件名，
   // stripFileExtensions 会把所有连续扩展名 + macOS 副本编号都剥掉，得到干净 base
   const baseName = stripFileExtensions(file.name)
-  // 酷狗下载的文件名一般是「歌手 - 歌名.kgm」，按首个 ' - ' 拆
+
+  // 从解密产物里读 ID3v2 / Vorbis Comment，拿到原始内嵌的封面 + 标签
+  // 解密路径不重写文件本身（原 ID3 已完整），只把 cover/meta 暴露给 UI
+  const parsed = await readMetaFromBlob(audioBlob, format)
+
+  // 文件名 fallback：酷狗下载文件名一般是「歌手 - 歌名.kgm」，按首个 ' - ' 拆
   const sepIdx = baseName.indexOf(' - ')
-  const meta: AudioMeta =
-    sepIdx > 0
-      ? {
-          musicName: baseName.slice(sepIdx + 3).trim(),
-          artist: [[baseName.slice(0, sepIdx).trim(), 0]],
-          source: isVpr ? 'vpr' : 'kgm',
-        }
-      : {
-          musicName: baseName,
-          source: isVpr ? 'vpr' : 'kgm',
-        }
+  const fileNameTitle = sepIdx > 0 ? baseName.slice(sepIdx + 3).trim() : baseName
+  const fileNameArtist = sepIdx > 0 ? baseName.slice(0, sepIdx).trim() : ''
+  const meta: AudioMeta = {
+    musicName: parsed.title || fileNameTitle,
+    artist: parsed.artist
+      ? [[parsed.artist, 0]]
+      : fileNameArtist
+        ? [[fileNameArtist, 0]]
+        : undefined,
+    album: parsed.album,
+    source: isVpr ? 'vpr' : 'kgm',
+  }
   const suggestedName = sanitizeFilename(`${baseName}.${format}`)
 
   onProgress?.(1)
@@ -244,7 +251,7 @@ export async function decryptKgm(
     audio: audioBlob,
     format,
     meta,
-    cover: null,
+    cover: parsed.cover,
     suggestedName,
   }
 }
