@@ -31,6 +31,7 @@ import {
   QmcRC4Cipher,
 } from './qmc/cipher'
 import { deriveQmcKey } from './qmc/key'
+import { readMetaFromBlob } from './metadata'
 
 const BYTE_COMMA = 0x2c // ','
 
@@ -66,9 +67,9 @@ export async function decryptQmc(
   onProgress?.(0.05)
 
   // ========== 1. 解析 footer，取出 cipher ==========
-  let parsed: FooterParsed
+  let footer: FooterParsed
   try {
-    parsed = parseFooter(bytes)
+    footer = parseFooter(bytes)
   } catch (e) {
     if (e instanceof DecryptError) throw e
     // 把内部错误暴露到 console + errorMessage，方便排查（base64 / TEA padding 等具体故障点）
@@ -84,16 +85,16 @@ export async function decryptQmc(
   onProgress?.(0.1)
 
   // ========== 2. 拷贝加密音频区（避免破坏原 buffer） ==========
-  const audio = new Uint8Array(parsed.audioSize)
-  audio.set(bytes.subarray(0, parsed.audioSize))
+  const audio = new Uint8Array(footer.audioSize)
+  audio.set(bytes.subarray(0, footer.audioSize))
 
   // ========== 3. 分块解密，让出主线程汇报进度 ==========
   const CHUNK = 256 * 1024
-  for (let start = 0; start < parsed.audioSize; start += CHUNK) {
-    const end = Math.min(start + CHUNK, parsed.audioSize)
-    parsed.cipher.decrypt(audio.subarray(start, end), start)
-    onProgress?.(0.1 + (end / parsed.audioSize) * 0.85)
-    if (end < parsed.audioSize) await yieldToEventLoop()
+  for (let start = 0; start < footer.audioSize; start += CHUNK) {
+    const end = Math.min(start + CHUNK, footer.audioSize)
+    footer.cipher.decrypt(audio.subarray(start, end), start)
+    onProgress?.(0.1 + (end / footer.audioSize) * 0.85)
+    if (end < footer.audioSize) await yieldToEventLoop()
   }
 
   // ========== 4. 识别解密后真实音频格式 ==========
@@ -115,20 +116,26 @@ export async function decryptQmc(
     format === 'mp3' ? 'audio/mpeg' : format === 'flac' ? 'audio/flac' : 'audio/ogg'
   const audioBlob = new Blob([audio], { type: mimeType })
 
-  // QMC 文件名通常是「歌手 - 歌名.mflac」格式，按首个 ' - ' 拆
+  // QMC 文件名通常是「歌手 - 歌名.mflac」格式
   const baseName = stripFileExtensions(file.name)
+
+  // 从解密产物里读原始 ID3v2 / Vorbis Comment（QMC 原文件结构完整保留）
+  // 仅暴露给 UI 用，不重写文件本身
+  const parsed = await readMetaFromBlob(audioBlob, format)
+
   const sepIdx = baseName.indexOf(' - ')
-  const meta: AudioMeta =
-    sepIdx > 0
-      ? {
-          musicName: baseName.slice(sepIdx + 3).trim(),
-          artist: [[baseName.slice(0, sepIdx).trim(), 0]],
-          source: 'qmc',
-        }
-      : {
-          musicName: baseName,
-          source: 'qmc',
-        }
+  const fileNameTitle = sepIdx > 0 ? baseName.slice(sepIdx + 3).trim() : baseName
+  const fileNameArtist = sepIdx > 0 ? baseName.slice(0, sepIdx).trim() : ''
+  const meta: AudioMeta = {
+    musicName: parsed.title || fileNameTitle,
+    artist: parsed.artist
+      ? [[parsed.artist, 0]]
+      : fileNameArtist
+        ? [[fileNameArtist, 0]]
+        : undefined,
+    album: parsed.album,
+    source: 'qmc',
+  }
   const suggestedName = sanitizeFilename(`${baseName}.${format}`)
 
   onProgress?.(1)
@@ -136,7 +143,7 @@ export async function decryptQmc(
     audio: audioBlob,
     format,
     meta,
-    cover: null,
+    cover: parsed.cover,
     suggestedName,
   }
 }

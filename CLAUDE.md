@@ -160,7 +160,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 ## 待做事项
 
 - [ ] CI/CD：GitHub Actions 自动构建 + rsync 部署到服务器
-- [ ] FLAC 文件 Vorbis Comments + PICTURE block 标签写入
 - [ ] 移动端适配优化
 - [ ] 移动端 .flac >100MB 上传时给软提示（避免 transcodeToMp3 一次性 PCM 解码导致 Safari OOM 闪退）
 - [ ] FLAC 流式转码改造（用 WASM FLAC decoder 取代 AudioContext.decodeAudioData，把内存峰值从 ~1GB 降到 ~50MB）
@@ -179,6 +178,18 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.6.3 · 20260528 待发布
+
+- **转码 / 解密全路径封面与标签补齐**：解决「FLAC/OGG 转 MP3 没封面」「KGM/VPR/QMC 解密 MP3 列表不显示封面」两类问题
+- 新增 [src/lib/metadata/](src/lib/metadata/) 模块（id3 / flac / ogg 子模块 + index 门面），零新依赖；导出 `readMetaFromBlob` / `writeId3ToMp3` / `writeFlacMeta`
+- 三类修复并行：
+  - **FLAC/OGG 直传转 MP3**：[src/App.tsx](src/App.tsx) `processQueue` 上传时先 `readMetaFromBlob` parse 原文件 VORBIS_COMMENT + METADATA_BLOCK_PICTURE → `transcodeFile` 完成后调 `writeId3ToMp3` 把 cover + 标题/艺术家/专辑写到产物 MP3 的 ID3v2 头
+  - **NCM 解 FLAC**：[src/lib/ncm.ts](src/lib/ncm.ts) 第 8 步新增 FLAC 分支，调 `writeFlacMeta` 把 NCM 容器内嵌的 cover + meta 写到产物 FLAC 的 VORBIS_COMMENT + PICTURE block（之前只 MP3 走 ID3 写入，FLAC 无标签）
+  - **KGM/VPR/QMC 解密路径**：[src/lib/kgm.ts](src/lib/kgm.ts) / [src/lib/qmc.ts](src/lib/qmc.ts) 解密结束后 `readMetaFromBlob` 从产物里读 ID3/Vorbis，把 cover + title/artist/album 填到 `result.cover` / `result.meta` 让 UI 列表能预览（文件本身不重写，原标签已完整）
+- FLAC writer 设计要点：扫描原 blocks → 剔除旧 type=4/6 → 注入新 VORBIS_COMMENT (vendor=`musiczh`) + PICTURE (picture_type=3 Cover front，width/height/depth/colors 全填 0，FLAC 规范允许) → 修正 last-flag → 拼回 audio frames；失败静默回退
+- ID3v2 reader 容错：encoding 0/1/2/3 全支持（latin1 / UTF-16 BOM / UTF-16BE / UTF-8），单 frame 出错跳过
+- 埋点新增 `has_cover` (boolean) 字段：`transcode_done` / `decrypt_done` 都带，运营后台事后 SQL 按 source / from_format 分桶看封面覆盖率（NCM-MP3/FLAC 期望接近 100%；KGM/QMC 取决于原文件；FLAC/OGG 直传取决于源标签完整度）；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts)
+
 ### v0.6.2 · 20260527 待发布
 
 - **MP3 转码音质升级**：编码端从 `@breezystack/lamejs`（128 kbps CBR）换成 `wasm-media-encoders`（LAME 3.100 WASM 编译，VBR -V 2 默认）；产物 PEAQ ODG 从 ~-2.0 拉到 ~-0.3（公认透明），平均码率 ~190 kbps，文件比上版大 ~50%
@@ -187,13 +198,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 埋点新增 `encoder` (`'wasm-lame-v2'`) + `output_size` 字段：`transcode_start` / `transcode_done` 都带，运营后台可事后 SQL 算平均码率分布；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts) `ALLOWED_PROPS`
 - 文案微调：FileRow 转 MP3 按钮 tooltip 从「强制转码为 MP3（有损）」改成「转码为 MP3（~190 kbps VBR，接近无损）」，引导用户在 NCM/QMC 已是 320 MP3 时知道按了不会太亏
 - 后端 / 运营后台**本期不动**：新字段对看板透明，下一期评估 `output_size` 分布后再决定加图表
-
-### v0.6.1 / 运营后台 v0.4.7 · 20260526 上线
-
-- **OGG 直传自动转 MP3**：复用 v0.4.0 为原始 .flac 设计的 transcode-only 路径（sniff → processQueue 跳过解密 → AudioContext + lamejs）；准入点补三处：[src/lib/decrypt.ts](src/lib/decrypt.ts) `SUPPORTED_EXT_REGEX` / [src/App.tsx](src/App.tsx) `<input accept>` / [src/components/support-matrix.tsx](src/components/support-matrix.tsx) 表格分组
-- 后端口径天然合并到 `raw_flac_transcode_done`（source 留空），不动 DB / SQL；UI 文案里 `.flac` 字样改成「.flac / .ogg」防误读
-- flac vs ogg 拆分用现成 `transcode_*.from_format` 字段（已在白名单），不新增事件 / 字段
-- 拖拽区文案重排：helper 改固定文案，下方仅保留两个入口链接；DropZone 不再依赖 queueSize prop
 
 # 通用
 - 优先选择编辑而非重写整个文件

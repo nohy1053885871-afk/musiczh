@@ -11,6 +11,7 @@ import {
 import { transcodeToMp3, TRANSCODE_ENCODER } from './lib/transcode'
 import { sniffRealFormat } from './lib/sniff'
 import { stripFileExtensions } from './lib/filename'
+import { readMetaFromBlob, writeId3ToMp3 } from './lib/metadata'
 import { analytics } from './lib/analytics'
 import { useImpression } from './lib/useImpression'
 import {
@@ -915,16 +916,29 @@ function App() {
             from_format: fromFormat,
           })
         })
+        // 把 result.cover + meta（原 FLAC/OGG 元数据）写到产物 MP3 的 ID3v2
+        // 失败时静默回退到无标签 MP3
+        let tagged = mp3Blob
+        try {
+          tagged = await writeId3ToMp3(mp3Blob, result.cover, result.meta)
+        } catch {
+          /* 标签写入失败不影响主流程 */
+        }
         const newName = result.suggestedName.replace(
           /\.(flac|ogg)$/i,
           '.mp3',
         )
+        // coverUrl 派生：cover Blob 优先，让列表预览能看到封面
+        const coverUrl = result.cover
+          ? URL.createObjectURL(result.cover)
+          : result.meta.albumPic || undefined
         updateFile(id, {
           status: 'done',
           progress: 1,
+          coverUrl,
           result: {
             ...result,
-            audio: mp3Blob,
+            audio: tagged,
             format: 'mp3',
             suggestedName: newName,
           },
@@ -937,7 +951,8 @@ function App() {
           source: result.meta?.source,
           from_format: fromFormat,
           encoder: TRANSCODE_ENCODER,
-          output_size: mp3Blob.size,
+          output_size: tagged.size,
+          has_cover: !!result.cover,
         })
         analytics.unregisterInflight(id)
         notify('已转为 MP3')
@@ -986,11 +1001,19 @@ function App() {
 
         // 1) 原始 FLAC / OGG → 自动转码到 MP3
         if (realFormat === 'flac' || realFormat === 'ogg') {
+          // 先 parse 原文件 metadata（VORBIS_COMMENT / METADATA_BLOCK_PICTURE），
+          // 让转码完成后 writeId3ToMp3 能把 cover + 标签搬进新 MP3
+          // readMetaFromBlob 内部已 try/catch 静默失败，直接 await 不再额外 .catch
+          const parsed = await readMetaFromBlob(next.file, realFormat)
           await transcodeFile(next.id, {
             audio: next.file,
             format: realFormat,
-            meta: {},
-            cover: null,
+            meta: {
+              musicName: parsed.title,
+              artist: parsed.artist ? [[parsed.artist, 0]] : undefined,
+              album: parsed.album,
+            },
+            cover: parsed.cover,
             suggestedName: `${cleanBase}.${realFormat}`,
           })
           continue
@@ -1091,6 +1114,7 @@ function App() {
             file_size: next.file.size,
             source: result.meta?.source,
             format: result.format,
+            has_cover: !!result.cover,
           })
           analytics.unregisterInflight(next.id)
         } catch (err) {
