@@ -250,4 +250,90 @@
 
 ---
 
+## 复盘 #3 — v0.6.3 封面与标签补齐（2026-05-28）
+
+> 本节是**小补丁版本**复盘——v0.6.2 → v0.6.3 仅相隔 1 天，无数据窗口可对比；价值主要在工程化教训。下次大版本（v0.7）收官时仍按完整模板写。
+
+### 本期范围
+
+| 路径 | 修复 |
+|---|---|
+| FLAC / OGG 直传转 MP3 | 转码前 `readMetaFromBlob` parse 原文件 VORBIS_COMMENT + METADATA_BLOCK_PICTURE，转码后 `writeId3ToMp3` 写入产物 MP3 的 ID3v2 |
+| NCM → FLAC | 新增 `writeFlacMeta`：剔除原 type=4/6 → 注入新 VORBIS_COMMENT + PICTURE block → 修 last-flag → 拼回 audio frames |
+| KGM / VPR / QMC | 解密产物里 `readMetaFromBlob` 读 ID3 APIC / FLAC PICTURE 填到 `result.cover`，UI 列表能预览；**不重写文件本身**（原标签已完整）|
+| 新增模块 | [src/lib/metadata/](src/lib/metadata/)：id3 / flac / ogg 三个子模块 + index 门面，零新依赖，~680 行 |
+| 埋点 | `transcode_done` / `decrypt_done` 加 `has_cover` 字段（白名单 + ANALYTICS_SPEC.md 同步） |
+
+### 上次 Action 回顾（#2 P0/P1 复查）
+
+不在本期范围，下次大版本（v0.7）收官时统一复查。
+
+### 工程化教训（本期主要产出）
+
+1. **🔴 dev server 端口冲突静默失败，浏览器跑旧代码 20+ 分钟无人察觉**
+   - 现象：用户主仓库已有 vite 跑在 5173；worktree 起 `npm run dev` 时 vite 自动找下一个空闲端口（5174/5175），但 npm 进程在后台没人看输出；用户浏览器访问的还是 `localhost:5173`（主仓 v0.6.2 旧代码），导致连续测试 3 个 mp3 都说"没封面"，Console 永远没新日志
+   - 根因：① 没主动 echo dev server 实际端口；② plan 里说"给本地测试链接"但没强调"确认端口"
+   - 教训：**后台启 dev server 时必须 sleep + 读 output 拿到 vite 报告的 Local 行**，把准确端口告知用户；如果发现自动跳号要主动通知
+
+2. **🟡 feat PR 漏 bump `package.json` 版本号，需要补 chore PR + 重建 tag**
+   - 现象：PR #28 merge 后 main 还是 0.6.2；CLAUDE.md 已经写 v0.6.3；package.json version 不一致；不得不开 PR #29 补 bump；v0.6.3 tag 一度指向漏 bump 的 commit，需要 force-move（还被 auto-classifier 拦了一次）
+   - 教训：**版本号 bump 应在 feat PR 内一并完成**——下次写 commit 流程 checklist 要加进去
+
+3. **🟡 诊断日志用 `console.debug` 被 Chrome devtools 默认级别过滤**
+   - 现象：第一次加 ncm 解密的诊断日志用了 `console.debug`，Chrome devtools 默认级别（Default levels）不含 Verbose，用户截图 Console 完全没看到，浪费一轮排查
+   - 教训：**临时排查诊断日志一律用 `console.log` 或 `console.warn`**；用户能直接看到不需要切级别。`debug` 只适合永驻代码里的细粒度跟踪
+
+4. **🟢 平台数据特性差异未在 plan 阶段预判**
+   - 现象：plan 假设所有解密产物都内嵌封面，但实测 QQ 音乐 .mflac 原文件**普遍无 PICTURE block**（QQ 客户端封面靠在线 API 查 song_id，跟文件无关）；导致用户测 QQ 路径时一度怀疑是 bug
+   - 教训：**新功能涉及多平台时，plan 阶段就要预先字节级抽样**至少 1 个真实文件，预判数据分布；不是开发完才让用户发现"原来 QQ 是这样"。本期实际只花了 5 分钟用 `tail -c 32 + xxd` 就字节级证伪了，应该提前
+
+5. **🟢 worktree merge 流程的 `gh pr merge` 卡 main 占用问题**
+   - 现象：`gh pr merge` 想本地 checkout main 来 sync，但主仓库 worktree 已经占用 main，报 `'main' is already used by worktree`
+   - 解法：改用 `gh api -X PUT /repos/.../pulls/{N}/merge -f merge_method=squash` + `gh api -X DELETE /repos/.../git/refs/heads/{branch}` 远端纯 API 走，无需本地 checkout
+   - 教训：**worktree 模式下 merge 一律走 gh api**，不走 `gh pr merge`；记下这个 pattern 给未来 Claude
+
+### 本次新增 Action Items
+
+#### 🚨 P0 — 流程修正
+
+- [ ] **a. `npm run dev` 后台启动后必须主动拿到准确端口并告知用户**
+  - 当前后台启动后只 `sleep 3` 然后 cat output 一次，如果 vite 因端口冲突跳号要明确读出来
+  - 入口：以后任何 worktree `npm run dev` 后必走 `sleep + cat + grep Local` 提取 URL 再告知用户
+  - 验收：下次起 dev 时给用户的 URL 一定是真实在跑的那个
+
+- [ ] **b. commit 流程 checklist 加 "bump package.json"**
+  - 当前 commit 流程只在 CLAUDE.md「已完成」一节写新版本号；package.json 漏改没人 catch
+  - 入口：CLAUDE.md「给 Claude 的工作指引」加一条 + 本次 retrospective 自我备忘
+  - 验收：v0.6.4 PR 不再出现 bump 漏改
+
+#### 📊 P1 — 下个迭代
+
+- [ ] **新功能涉及多平台时 plan 阶段必须抽样真实文件做字节级预判**
+  - 模板：`tail -c 32 <file> | xxd` + `head -c 1MB <file> | xxd | grep -iE "ID3|TIT2|APIC|JFIF|fLaC|OggS"`
+  - 收益：避免「开发完才发现平台没这数据」的返工
+
+- [ ] **观察 7 天 `has_cover` 字段分布，回填 plan 的期望验证**
+  - NCM-MP3 / NCM-FLAC 期望 ≈ 100%
+  - KGM/VPR/QMC ≥ 70%
+  - FLAC/OGG 直传 ≥ 60%
+  - 若 NCM-FLAC < 100%（writeFlacMeta 失败兜底走了），要 SQL 拉 fail 样本看
+
+- [ ] **FLAC writer 兼容性观察**
+  - 本期 `writeFlacMeta` 是手写的，width/height/depth/colors 全填 0（规范允许）；万一 foobar2000 / iTunes / Apple Music 某个版本不接受要回来收
+  - 评估窗口：用户反馈或自己定期抽样
+
+#### 💡 P2 — 视情况
+
+- [ ] **诊断日志规范**：是否在 `src/lib/analytics.ts` 同款抽一个 `diag(label, data)` helper，统一用 `console.log` 输出 `[label]` 前缀，避免每次手写
+
+### 下次复盘要重新看的指标（累加到 #2 表）
+
+| 指标 | 当前基线 #3 | 期望区间 |
+|---|---|---|
+| `decrypt_done.has_cover` 按 source 分桶（ncm/kgm/vpr/qmc）| 上线初无数据 | 见 P1 上面期望 |
+| `transcode_done.has_cover`（source 为空 = FLAC/OGG 直传）| 上线初无数据 | ≥ 60% |
+| NCM-FLAC writeFlacMeta 兼容率（无外部反馈）| 上线初 100% 假设 | 用户 0 反馈即认为成功 |
+
+---
+
 <!-- 下次复盘从这里追加，模板参考 #1 / #2 -->
