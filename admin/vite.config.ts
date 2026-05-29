@@ -10,7 +10,8 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      '/api': 'http://127.0.0.1:8787',
+      // 端口可由 ADMIN_API_PORT 环境变量覆盖（本地多 worktree 并行开发时避免 8787 端口冲突）
+      '/api': `http://127.0.0.1:${process.env.ADMIN_API_PORT ?? 8787}`,
     },
   },
   build: {

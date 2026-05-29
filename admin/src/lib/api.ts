@@ -108,6 +108,11 @@ export type OverviewResp = {
   upload_uv: number
   download_uv: number
   upload_files: number
+  // v0.4.8 新增：剔除"主动取消"后的真实上传件数
+  // confirmed_upload_files = upload_files - dismissed_files
+  // 主动取消 = 用户在 ≥50 文件警告弹窗里点「重新选择」/ ESC 被丢弃的文件（reject_reason=LARGE_BATCH_DISMISSED）
+  dismissed_files: number
+  confirmed_upload_files: number
   // v0.4.3 临时观察字段：旧口径 SUM(upload_drop/pick.count)，2026-07 评估稳定后移除
   upload_files_legacy: number
   decrypt_done: number
@@ -123,6 +128,7 @@ export type OverviewResp = {
   raw_flac_transcode_done: number
   raw_flac_transcode_fail: number
   // 上传被拒件数（格式不支持 / 超大小 / 队列上限）
+  // v0.4.8 起严格被拒：剔除主动取消（LARGE_BATCH_DISMISSED），后者计入 dismissed_files
   upload_reject: number
   // v0.4.1 新增：上传文件总数卡片拆分小字消费的精细字段
   decrypt_abandon: number
@@ -288,8 +294,9 @@ export type UploadRejectReason =
   | 'LARGE_BATCH_DISMISSED'
 
 // v0.4.1：合并后的「状态」枚举（含被拒细分 + 下游 pipeline_status）
+// v0.4.8 把 rejected_large_batch 抠出来重命名为 user_dismissed（"主动取消"），从"被拒"分类剥离
 export type UploadStatus =
-  | 'rejected_format' | 'rejected_size' | 'rejected_queue' | 'rejected_large_batch'
+  | 'rejected_format' | 'rejected_size' | 'rejected_queue' | 'user_dismissed'
   | 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy'
 
 export type UploadRow = {
@@ -338,11 +345,13 @@ export type UploadDetail = UploadRow & {
 export type UploadsTimeseriesPoint = {
   day: number
   attempt: number
+  // v0.4.8 起 reject_total 是「狭义被拒」（不含主动取消）
   reject_total: number
   reject_format: number
   reject_size: number
   reject_queue: number
-  reject_large_batch: number
+  // v0.4.8：从 reject_large_batch 重命名而来，从"被拒"分组独立
+  user_dismissed: number
 }
 
 export type UploadsTimeseriesResp = {

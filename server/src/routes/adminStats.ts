@@ -51,7 +51,22 @@ adminStats.get('/overview', (c) => {
        FROM events WHERE ts >= ? AND ts <= ? AND event IN ('upload_drop','upload_pick')`,
   )
   // 上传校验拒（格式 / 大小 / 队列上限），每个被拒文件一条
-  const uploadReject = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'")
+  // v0.4.8 起严格被拒：剔除 LARGE_BATCH_DISMISSED（"主动取消"已独立成态，见下方 dismissedFiles）
+  const uploadReject = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'
+         AND COALESCE(json_extract(props,'$.reject_reason'),'') != 'LARGE_BATCH_DISMISSED'`,
+  )
+  // v0.4.8 「主动取消」= 用户在 ≥50 文件警告弹窗里点「重新选择」/ ESC，前端逐文件补发的 upload_reject
+  // 与"被拒"分类语义割裂：主动取消是用户行为（反悔不上传），不是上传校验失败
+  const dismissedFiles = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'
+         AND json_extract(props,'$.reject_reason') = 'LARGE_BATCH_DISMISSED'`,
+  )
+  // 「确认上传数」= 上传总数 − 主动取消（剔除用户反悔后的真实上传件数）
+  // 漏斗 file 维度第二层 / 首页同名卡片消费
+  const confirmedUploadFiles = uploadFiles - dismissedFiles
   const decryptDone = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_done'")
   const decryptFail = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'decrypt_fail'")
   const transcodeDone = cnt("SELECT COUNT(*) AS n FROM events WHERE ts >= ? AND ts <= ? AND event = 'transcode_done'")
@@ -147,6 +162,9 @@ adminStats.get('/overview', (c) => {
     upload_uv: uploadUv,
     download_uv: downloadUv,
     upload_files: uploadFiles,
+    // v0.4.8 新增
+    dismissed_files: dismissedFiles,
+    confirmed_upload_files: confirmedUploadFiles,
     upload_files_legacy: uploadFilesLegacy,
     decrypt_done: decryptDone,
     decrypt_fail: decryptFail,
@@ -207,6 +225,14 @@ adminStats.get('/funnel', (c) => {
     `SELECT COUNT(*) AS n FROM events
        WHERE ts >= ? AND ts <= ? AND event IN ('upload_attempt','upload_reject')`,
   )
+  // v0.4.8 「主动取消」件数：用户在 ≥50 文件警告弹窗里反悔的文件
+  const fileDismissed = cnt(
+    `SELECT COUNT(*) AS n FROM events
+       WHERE ts >= ? AND ts <= ? AND event = 'upload_reject'
+         AND json_extract(props,'$.reject_reason') = 'LARGE_BATCH_DISMISSED'`,
+  )
+  // v0.4.8 「确认上传」= 上传总数 − 主动取消，作为 file 漏斗第二层
+  const fileConfirmed = fileUpload - fileDismissed
   const fileDecrypt = cnt(
     `SELECT COUNT(*) AS n FROM events
        WHERE ts >= ? AND ts <= ?
@@ -245,10 +271,13 @@ adminStats.get('/funnel', (c) => {
       ]),
     },
     file: {
+      // v0.4.8 加层「确认上传」：剔除主动取消后用户真正确认要处理的件数
+      // 上传总数 → 确认上传 → 转换成功 → 下载（user 维度漏斗本期不动）
       steps: buildSteps([
-        { name: '上传', n: fileUpload },
+        { name: '上传总数', n: fileUpload },
+        { name: '确认上传', n: fileConfirmed },
         { name: '转换成功', n: fileDecrypt },
-        { name: '下载', n: fileDownload },
+        { name: '下载',     n: fileDownload },
       ]),
     },
   })

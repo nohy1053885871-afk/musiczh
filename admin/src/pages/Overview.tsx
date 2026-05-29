@@ -157,7 +157,7 @@ export function OverviewPage() {
         <Col xs={12} md={6}><Card><Statistic title="下载过的人 UV" value={overview?.download_uv ?? 0} /></Card></Col>
       </Row>
 
-      {/* 第二组：件维度 - 成功口径（上传 → 转换 → 解密 → 转码） */}
+      {/* 第二组：件维度 - 成功口径（上传 → 确认上传 → 转换 → 解密 → 转码） */}
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}>
           <Card>
@@ -168,12 +168,13 @@ export function OverviewPage() {
                   <AntTooltip
                     title={(
                       <div style={{ fontSize: 12, lineHeight: 1.7 }}>
-                        用户尝试上传的总件数 = upload_attempt（进队列）+ upload_reject（被拒）。
-                        v0.4.1 起 6 段拆解按 file_id 关联下游事件，加和严格等于上方主数字：
+                        用户尝试上传的总件数 = upload_attempt（进队列）+ upload_reject（被拒）+ 主动取消。
+                        v0.4.8 起拆解为 7 段，按 file_id 关联下游事件，加和严格等于上方主数字：
                         <br />· <b>成功</b>：file_id 下游有 decrypt_done / transcode_done
                         <br />· <b>失败</b>：file_id 下游有 decrypt_fail / transcode_fail（无 done）
                         <br />· <b>中止</b>：file_id 下游有 *_abandon（无 done / fail）—— auto-FLAC OOM 主嫌疑
-                        <br />· <b>被拒</b>：upload_reject（上传准入校验失败：格式/大小/队列）
+                        <br />· <b>被拒</b>：upload_reject 中校验失败（格式/大小/队列），<b>不含主动取消</b>
+                        <br />· <b>主动取消</b>：用户在 ≥50 文件警告弹窗里反悔（v0.4.8 起独立）
                         <br />· <b>未完成</b>：upload_attempt 有 file_id 但无任何下游事件（兜底，应趋近 0）
                         <br />· <b>历史</b>：v0.4.1 前埋点无 file_id，无法追溯下游
                       </div>
@@ -186,27 +187,60 @@ export function OverviewPage() {
               value={overview?.upload_files ?? 0}
             />
             {(() => {
-              // 6 段口径：按 file_id 关联 upload_attempt 的下游状态，互斥且穷举
-              // 加和 = upload_attempt + upload_reject = upload_files，与卡片主数字严格自洽
+              // 7 段口径：按 file_id 关联 upload_attempt 的下游状态，互斥且穷举
+              // v0.4.8 把主动取消从「被拒」里抠出来，独立成第 7 段
+              // 加和 = upload_attempt + upload_reject(狭义) + 主动取消 = upload_files，仍与卡片主数字严格自洽
               const success = overview?.success_files ?? 0
               const fail = overview?.failed_files ?? 0
               const abandon = overview?.abandoned_files ?? 0
-              const reject = overview?.upload_reject ?? 0
+              const reject = overview?.upload_reject ?? 0      // 后端已剔除主动取消
+              const dismiss = overview?.dismissed_files ?? 0   // 主动取消
               const pending = overview?.pending_files ?? 0
               const legacy = overview?.legacy_files ?? 0
-              const sum = success + fail + abandon + reject + pending + legacy
+              const sum = success + fail + abandon + reject + dismiss + pending + legacy
               const total = overview?.upload_files ?? 0
-              const detail = `成功 ${success} + 失败 ${fail} + 中止 ${abandon} + 被拒 ${reject} + 未完成 ${pending} + 历史 ${legacy} = ${sum}（应等于上方 ${total}）`
+              const detail = `成功 ${success} + 失败 ${fail} + 中止 ${abandon} + 被拒 ${reject} + 主动取消 ${dismiss} + 未完成 ${pending} + 历史 ${legacy} = ${sum}（应等于上方 ${total}）`
               return (
                 <div style={{ marginTop: 4, fontSize: 12, color: 'rgba(0,0,0,0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   <AntTooltip title={detail}>
                     <span>
-                      成功 {success} · 失败 {fail} · 中止 {abandon} · 被拒 {reject} · 未完成 {pending} · 历史 {legacy}
+                      成功 {success} · 失败 {fail} · 中止 {abandon} · 被拒 {reject} · 主动取消 {dismiss} · 未完成 {pending} · 历史 {legacy}
                     </span>
                   </AntTooltip>
                 </div>
               )
             })()}
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic
+              title={
+                <Space size={6}>
+                  <span>确认上传数（件）</span>
+                  <AntTooltip
+                    title={(
+                      <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                        = 上传文件总数 − 主动取消件数<br />
+                        「主动取消」= 用户在 ≥50 文件警告弹窗里点「重新选择」或按 ESC 被丢弃的文件
+                        （<code>reject_reason=LARGE_BATCH_DISMISSED</code>）<br />
+                        其他被拒原因（格式 / 超大小 / 队列上限）属上传失败，见下方「上传失败（件）」<br />
+                        件维度漏斗的第二层就是它
+                      </div>
+                    )}
+                  >
+                    <InfoCircleOutlined style={{ color: '#999' }} />
+                  </AntTooltip>
+                </Space>
+              }
+              value={overview?.confirmed_upload_files ?? 0}
+              valueStyle={{ color: '#1677FF' }}
+              suffix={
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {`主动取消 ${overview?.dismissed_files ?? 0}`}
+                </Text>
+              }
+            />
           </Card>
         </Col>
         <Col xs={12} md={6}>
@@ -307,7 +341,7 @@ export function OverviewPage() {
               title={
                 <Space size={6}>
                   <span>上传失败（件）</span>
-                  <AntTooltip title="上传校验阶段被拒的文件件数：格式不支持 / 超出 200MB / 超过 50 个队列上限 / 大批量取消（v0.5.2 起，用户在 ≥50 文件警告弹窗选『重新选择』或 ESC 时补发）。明细见「解密分析 → 上传日志」按 reject_reason 筛选。">
+                  <AntTooltip title="上传校验阶段被拒的文件件数：格式不支持 / 超出 200MB / 超过 50 个队列上限。v0.4.8 起已剔除「主动取消」（用户在 ≥50 文件警告弹窗反悔的文件），主动取消件数见上方「确认上传数」卡片副字。明细见「解密分析 → 上传日志」按状态筛选。">
                     <InfoCircleOutlined style={{ color: '#999' }} />
                   </AntTooltip>
                 </Space>
@@ -368,7 +402,7 @@ export function OverviewPage() {
               ]}
             />
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {funnelDim === 'user' ? '访问 → 上传 → 转换 → 下载' : '上传 → 转换 → 下载'}
+              {funnelDim === 'user' ? '访问 → 上传 → 转换 → 下载' : '上传总数 → 确认上传 → 转换成功 → 下载'}
             </Text>
           </Space>
         }

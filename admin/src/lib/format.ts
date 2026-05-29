@@ -103,34 +103,35 @@ export const REJECT_REASON_LABEL: Record<string, string> = {
 }
 
 // v0.4.1 合并后的上传日志「状态」列：Tag 文案 + 颜色
+// v0.4.8 把 rejected_large_batch 抠出来重命名为 user_dismissed（"主动取消"），颜色从 red 改 gold，独立于"被拒"
 export type UploadStatusKey =
-  | 'rejected_format' | 'rejected_size' | 'rejected_queue' | 'rejected_large_batch'
+  | 'rejected_format' | 'rejected_size' | 'rejected_queue' | 'user_dismissed'
   | 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy'
 
 export const UPLOAD_STATUS_LABEL: Record<UploadStatusKey, { label: string; color: string }> = {
-  rejected_format:       { label: '被拒-格式',     color: 'red' },
-  rejected_size:         { label: '被拒-大小',     color: 'red' },
-  rejected_queue:        { label: '被拒-队列',     color: 'red' },
-  rejected_large_batch:  { label: '被拒-大批量取消', color: 'red' },
-  success:               { label: '成功',          color: 'green' },
-  failed:                { label: '失败',          color: 'volcano' },
-  abandoned:             { label: '中止',          color: 'orange' },
-  pending:               { label: '未完成',        color: 'default' },
-  legacy:                { label: '-',             color: 'default' },
+  rejected_format:  { label: '被拒-格式', color: 'red' },
+  rejected_size:    { label: '被拒-大小', color: 'red' },
+  rejected_queue:   { label: '被拒-队列', color: 'red' },
+  user_dismissed:   { label: '主动取消',  color: 'gold' },  // v0.4.8 独立成态，非"被拒"
+  success:          { label: '成功',      color: 'green' },
+  failed:           { label: '失败',      color: 'volcano' },
+  abandoned:        { label: '中止',      color: 'orange' },
+  pending:          { label: '未完成',    color: 'default' },
+  legacy:           { label: '-',         color: 'default' },
 }
 
 // 工具栏下拉
 export const UPLOAD_STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: '', label: '全部状态' },
-  { value: 'rejected_format',      label: '被拒-格式' },
-  { value: 'rejected_size',        label: '被拒-大小' },
-  { value: 'rejected_queue',       label: '被拒-队列' },
-  { value: 'rejected_large_batch', label: '被拒-大批量取消' },
-  { value: 'success',              label: '成功' },
-  { value: 'failed',               label: '失败' },
-  { value: 'abandoned',            label: '中止' },
-  { value: 'pending',              label: '未完成' },
-  { value: 'legacy',               label: '历史数据' },
+  { value: 'rejected_format', label: '被拒-格式' },
+  { value: 'rejected_size',   label: '被拒-大小' },
+  { value: 'rejected_queue',  label: '被拒-队列' },
+  { value: 'user_dismissed',  label: '主动取消' },
+  { value: 'success',         label: '成功' },
+  { value: 'failed',          label: '失败' },
+  { value: 'abandoned',       label: '中止' },
+  { value: 'pending',         label: '未完成' },
+  { value: 'legacy',          label: '历史数据' },
 ]
 
 export const DOWNLOAD_KIND_LABEL: Record<string, string> = {

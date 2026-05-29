@@ -9,11 +9,16 @@ import { formatDay } from '../../../lib/format'
 const { Text } = Typography
 
 // v0.4.1 上传日志页底部 · 单图双 Y 轴折线
-// 数量类（左 Y 轴）：上传成功数 / 上传失败数 / 3 种失败原因数量
-// 占比类（右 Y 轴）：上传成功占比 / 上传失败占比 / 3 种失败原因占比
+// 数量类（左 Y 轴）：上传成功数 / 上传失败数 / 3 种失败原因 / 主动取消数
+// 占比类（右 Y 轴）：上传成功占比 / 上传失败占比 / 3 种失败原因占比 / 主动取消占比
+// v0.4.8：reject_large_batch → user_dismissed，与"被拒"语义割裂、单独成系列
+//   - reject_total 后端已剔除主动取消（狭义被拒）；user_dismissed 单独字段
+//   - success_pct / fail_pct 的 denom 改为 attempt + reject_total + user_dismissed（= upload_files）
+//     这样 success_pct 与改造前完全一致、fail_pct 变小、user_dismissed_pct 补齐到 100%
+//   - user_dismissed_pct 分母用 upload_files（不用 reject_total），更直观反映"50 文件阈值是否合理"
 type MetricKey =
-  | 'attempt' | 'reject_total' | 'reject_format' | 'reject_size' | 'reject_queue' | 'reject_large_batch'
-  | 'success_pct' | 'fail_pct' | 'reject_format_pct' | 'reject_size_pct' | 'reject_queue_pct' | 'reject_large_batch_pct'
+  | 'attempt' | 'reject_total' | 'reject_format' | 'reject_size' | 'reject_queue' | 'user_dismissed'
+  | 'success_pct' | 'fail_pct' | 'reject_format_pct' | 'reject_size_pct' | 'reject_queue_pct' | 'user_dismissed_pct'
 
 type MetricMeta = {
   v: MetricKey
@@ -29,14 +34,14 @@ const METRICS: MetricMeta[] = [
   { v: 'reject_format',    label: '格式不支持数',  color: '#FA8C16', group: 'count' },
   { v: 'reject_size',      label: '超出大小数',    color: '#FAAD14', group: 'count' },
   { v: 'reject_queue',     label: '超出队列数',    color: '#722ED1', group: 'count' },
-  { v: 'reject_large_batch', label: '大批量取消数', color: '#13C2C2', group: 'count' },
+  { v: 'user_dismissed',   label: '主动取消数',    color: '#D48806', group: 'count' },
   // 占比
   { v: 'success_pct',      label: '上传成功占比',  color: '#389E0D', group: 'pct' },
   { v: 'fail_pct',         label: '上传失败占比',  color: '#CF1322', group: 'pct' },
   { v: 'reject_format_pct',label: '格式不支持占比', color: '#D46B08', group: 'pct' },
   { v: 'reject_size_pct',  label: '超出大小占比',  color: '#D48806', group: 'pct' },
   { v: 'reject_queue_pct', label: '超出队列占比',  color: '#531DAB', group: 'pct' },
-  { v: 'reject_large_batch_pct', label: '大批量取消占比', color: '#08979C', group: 'pct' },
+  { v: 'user_dismissed_pct', label: '主动取消占比', color: '#AD6800', group: 'pct' },
 ]
 
 const DEFAULT_SELECTED: MetricKey[] = ['attempt', 'reject_total']
@@ -44,31 +49,31 @@ const DEFAULT_SELECTED: MetricKey[] = ['attempt', 'reject_total']
 type ChartRow = Record<string, number | null> & { day: number }
 
 // 把后端按天点位 + 选中指标合并为 Recharts 单一 data 数组
-// 占比是「该格式原因占总失败的比例」，分母是当日 reject_total（不是 attempt+reject）
+// success_pct / fail_pct / user_dismissed_pct 分母 = upload_files（attempt + reject_total + user_dismissed），三类加起来 = 100%
+// 各 reject_*_pct 分母 = reject_total（狭义被拒，不含主动取消），是"失败原因构成"占比
 function buildSeries(points: UploadsTimeseriesPoint[], selected: MetricKey[]): ChartRow[] {
   return points.map((p) => {
-    const denom = p.attempt + p.reject_total
+    const denomAll = p.attempt + p.reject_total + p.user_dismissed
     const row: ChartRow = { day: p.day }
     for (const m of selected) {
       const meta = METRICS.find((x) => x.v === m)!
       const label = meta.label
       switch (m) {
-        case 'attempt':       row[label] = p.attempt; break
-        case 'reject_total':  row[label] = p.reject_total; break
-        case 'reject_format': row[label] = p.reject_format; break
-        case 'reject_size':   row[label] = p.reject_size; break
-        case 'reject_queue':  row[label] = p.reject_queue; break
-        case 'reject_large_batch': row[label] = p.reject_large_batch; break
-        case 'success_pct':   row[label] = denom > 0 ? +(p.attempt / denom * 100).toFixed(1) : null; break
-        case 'fail_pct':      row[label] = denom > 0 ? +(p.reject_total / denom * 100).toFixed(1) : null; break
+        case 'attempt':        row[label] = p.attempt; break
+        case 'reject_total':   row[label] = p.reject_total; break
+        case 'reject_format':  row[label] = p.reject_format; break
+        case 'reject_size':    row[label] = p.reject_size; break
+        case 'reject_queue':   row[label] = p.reject_queue; break
+        case 'user_dismissed': row[label] = p.user_dismissed; break
+        case 'success_pct':       row[label] = denomAll > 0 ? +(p.attempt / denomAll * 100).toFixed(1) : null; break
+        case 'fail_pct':          row[label] = denomAll > 0 ? +(p.reject_total / denomAll * 100).toFixed(1) : null; break
+        case 'user_dismissed_pct':row[label] = denomAll > 0 ? +(p.user_dismissed / denomAll * 100).toFixed(1) : null; break
         case 'reject_format_pct':
           row[label] = p.reject_total > 0 ? +(p.reject_format / p.reject_total * 100).toFixed(1) : null; break
         case 'reject_size_pct':
           row[label] = p.reject_total > 0 ? +(p.reject_size / p.reject_total * 100).toFixed(1) : null; break
         case 'reject_queue_pct':
           row[label] = p.reject_total > 0 ? +(p.reject_queue / p.reject_total * 100).toFixed(1) : null; break
-        case 'reject_large_batch_pct':
-          row[label] = p.reject_total > 0 ? +(p.reject_large_batch / p.reject_total * 100).toFixed(1) : null; break
       }
     }
     return row

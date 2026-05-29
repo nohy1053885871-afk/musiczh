@@ -178,6 +178,17 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### 运营后台 v0.4.8 · 20260529 待发布
+
+- **「主动取消」独立成态 + 件维度漏斗加层**：把 ≥50 文件警告弹窗反悔补发的 `upload_reject`（`reject_reason=LARGE_BATCH_DISMISSED`）从"被拒/失败"语义里彻底剥离，新增独立状态「主动取消」。改完所有指标会**自动重算历史数据**（events 表只存原始事件，分类全是查询时 SQL 现算），无需迁移。
+- 后端聚合（[server/src/routes/adminStats.ts](server/src/routes/adminStats.ts)）：`/overview` 加 `dismissed_files` / `confirmed_upload_files` 字段；`upload_reject` 改"狭义被拒"（剔除主动取消）；`/funnel` file 维度从 3 层加成 4 层 `上传总数 → 确认上传 → 转换成功 → 下载`（user 维度不动）
+- 上传日志后端（[server/src/routes/adminUploads.ts](server/src/routes/adminUploads.ts)）：status 枚举 `rejected_large_batch` → `user_dismissed`（全栈一致 rename）；`/timeseries` 字段 `reject_large_batch` → `user_dismissed`，同时 `reject_total` 剔除主动取消，与 adminStats 口径自洽
+- 首页（[admin/src/pages/Overview.tsx](admin/src/pages/Overview.tsx)）：第二组卡片插入「确认上传数（件）」（蓝色 `#1677FF`，副字「主动取消 N」）；上传文件总数卡片 6 段拆解扩为 7 段（被拒 / 主动取消 拆开）；上传失败卡片 tooltip 去掉"大批量取消"
+- 上传日志详情页（[admin/src/lib/format.ts](admin/src/lib/format.ts)）：Tag 文案 `'被拒-大批量取消'` (红) → `'主动取消'` (gold)；状态筛选下拉新增"主动取消"作为独立选项；零代码动 [UploadsSection.tsx](admin/src/pages/decrypt-analysis/UploadsSection.tsx)（查表渲染）
+- 上传趋势图（[UploadsTrendChart.tsx](admin/src/pages/decrypt-analysis/uploads/UploadsTrendChart.tsx)）：`reject_large_batch` 系列改名"主动取消数"/"主动取消占比"，颜色橙色与 Tag 一致；占比分母从 `attempt+reject_total` 改 `upload_files`（成功 + 失败 + 主动取消 = 100%），`success_pct` 数值不变、`fail_pct` 变小、新 `user_dismissed_pct` 补齐
+- 埋点 / DB / 主站全部零改动；仅查询层重新归类
+- 上线观测：件维度漏斗「上传总数 → 确认上传」流失率 ≈ 主动取消占比，正常 0–15%；长期 >25% 说明 50 文件阈值或弹窗文案需重设计；剔除主动取消后的「确认上传 → 转换成功」应稳定 >85%。评估窗口 7d / 30d 各一次
+
 ### v0.6.3 · 20260528 待发布
 
 - **转码 / 解密全路径封面与标签补齐**：解决「FLAC/OGG 转 MP3 没封面」「KGM/VPR/QMC 解密 MP3 列表不显示封面」两类问题
@@ -189,15 +200,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - FLAC writer 设计要点：扫描原 blocks → 剔除旧 type=4/6 → 注入新 VORBIS_COMMENT (vendor=`musiczh`) + PICTURE (picture_type=3 Cover front，width/height/depth/colors 全填 0，FLAC 规范允许) → 修正 last-flag → 拼回 audio frames；失败静默回退
 - ID3v2 reader 容错：encoding 0/1/2/3 全支持（latin1 / UTF-16 BOM / UTF-16BE / UTF-8），单 frame 出错跳过
 - 埋点新增 `has_cover` (boolean) 字段：`transcode_done` / `decrypt_done` 都带，运营后台事后 SQL 按 source / from_format 分桶看封面覆盖率（NCM-MP3/FLAC 期望接近 100%；KGM/QMC 取决于原文件；FLAC/OGG 直传取决于源标签完整度）；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts)
-
-### v0.6.2 · 20260527 待发布
-
-- **MP3 转码音质升级**：编码端从 `@breezystack/lamejs`（128 kbps CBR）换成 `wasm-media-encoders`（LAME 3.100 WASM 编译，VBR -V 2 默认）；产物 PEAQ ODG 从 ~-2.0 拉到 ~-0.3（公认透明），平均码率 ~190 kbps，文件比上版大 ~50%
-- 入口仍是 [src/lib/transcode.ts](src/lib/transcode.ts)；解码端 `AudioContext.decodeAudioData` 不动（OOM 问题留给「FLAC 流式转码」独立项目），文件头嗅探 / Hi-Res FLAC 拦截 / 进度上报全保留
-- API 收益：wasm-media-encoders 直接吃 Float32Array，省掉 lamejs 的 floatToInt16 一次拷贝；编码速度大概率比 lamejs 快（WASM 接近原生 C 性能）
-- 埋点新增 `encoder` (`'wasm-lame-v2'`) + `output_size` 字段：`transcode_start` / `transcode_done` 都带，运营后台可事后 SQL 算平均码率分布；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts) `ALLOWED_PROPS`
-- 文案微调：FileRow 转 MP3 按钮 tooltip 从「强制转码为 MP3（有损）」改成「转码为 MP3（~190 kbps VBR，接近无损）」，引导用户在 NCM/QMC 已是 320 MP3 时知道按了不会太亏
-- 后端 / 运营后台**本期不动**：新字段对看板透明，下一期评估 `output_size` 分布后再决定加图表
 
 # 通用
 - 优先选择编辑而非重写整个文件
