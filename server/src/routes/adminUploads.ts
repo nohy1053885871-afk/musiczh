@@ -11,8 +11,9 @@ adminUploads.use('*', requireAdmin)
 // v0.4.1 合并后的状态枚举（运营后台「状态」列）
 // rejected_* 直接来自 upload_reject + reject_reason
 // success/failed/abandoned/pending/legacy 通过 file_id 关联下游事件计算
+// v0.4.8 把 LARGE_BATCH_DISMISSED 从被拒分类抠出来，独立为 user_dismissed（"主动取消"）
 const STATUS_VALUES = [
-  'rejected_format', 'rejected_size', 'rejected_queue', 'rejected_large_batch',
+  'rejected_format', 'rejected_size', 'rejected_queue', 'user_dismissed',
   'success', 'failed', 'abandoned', 'pending', 'legacy',
 ] as const
 type StatusValue = typeof STATUS_VALUES[number]
@@ -54,7 +55,7 @@ function statusToWhere(status: StatusValue): { sql: string; params: any[] } {
       return { sql: "event = 'upload_reject' AND json_extract(props,'$.reject_reason') = ?", params: ['SIZE_EXCEEDED'] }
     case 'rejected_queue':
       return { sql: "event = 'upload_reject' AND json_extract(props,'$.reject_reason') = ?", params: ['QUEUE_FULL'] }
-    case 'rejected_large_batch':
+    case 'user_dismissed':
       return { sql: "event = 'upload_reject' AND json_extract(props,'$.reject_reason') = ?", params: ['LARGE_BATCH_DISMISSED'] }
     case 'success':
       return {
@@ -161,7 +162,7 @@ adminUploads.get('/', (c) => {
       if (r.reject_reason === 'FORMAT_UNSUPPORTED') mergedStatus = 'rejected_format'
       else if (r.reject_reason === 'SIZE_EXCEEDED') mergedStatus = 'rejected_size'
       else if (r.reject_reason === 'QUEUE_FULL')    mergedStatus = 'rejected_queue'
-      else if (r.reject_reason === 'LARGE_BATCH_DISMISSED') mergedStatus = 'rejected_large_batch'
+      else if (r.reject_reason === 'LARGE_BATCH_DISMISSED') mergedStatus = 'user_dismissed'
     } else if (r.pipeline_status) {
       mergedStatus = r.pipeline_status
     }
@@ -208,15 +209,19 @@ adminUploads.get('/timeseries', (c) => {
   const TZ_OFFSET_MS = -new Date().getTimezoneOffset() * 60_000
   const DAY_BUCKET_SQL = `((ts + ${TZ_OFFSET_MS}) / 86400000) * 86400000 - ${TZ_OFFSET_MS}`
 
+  // v0.4.8 起 reject_total 改为「狭义被拒」(剔除 LARGE_BATCH_DISMISSED)；
+  // 主动取消独立成 user_dismissed 字段，前端在 UploadsTrendChart 里单独渲染
   const rows = db
     .prepare(
       `SELECT ${DAY_BUCKET_SQL} AS day,
               SUM(CASE WHEN event = 'upload_attempt' THEN 1 ELSE 0 END) AS attempt,
-              SUM(CASE WHEN event = 'upload_reject' THEN 1 ELSE 0 END) AS reject_total,
+              SUM(CASE WHEN event = 'upload_reject'
+                        AND COALESCE(json_extract(props,'$.reject_reason'),'') != 'LARGE_BATCH_DISMISSED'
+                       THEN 1 ELSE 0 END) AS reject_total,
               SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'FORMAT_UNSUPPORTED' THEN 1 ELSE 0 END) AS reject_format,
               SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'SIZE_EXCEEDED'       THEN 1 ELSE 0 END) AS reject_size,
               SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'QUEUE_FULL'          THEN 1 ELSE 0 END) AS reject_queue,
-              SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'LARGE_BATCH_DISMISSED' THEN 1 ELSE 0 END) AS reject_large_batch
+              SUM(CASE WHEN event = 'upload_reject' AND json_extract(props,'$.reject_reason') = 'LARGE_BATCH_DISMISSED' THEN 1 ELSE 0 END) AS user_dismissed
          FROM events
         WHERE ts >= ? AND ts <= ?
           AND event IN ('upload_attempt','upload_reject')
@@ -224,7 +229,7 @@ adminUploads.get('/timeseries', (c) => {
     )
     .all(from, to) as Array<{
       day: number; attempt: number; reject_total: number
-      reject_format: number; reject_size: number; reject_queue: number; reject_large_batch: number
+      reject_format: number; reject_size: number; reject_queue: number; user_dismissed: number
     }>
 
   return c.json({ range, from, to, points: rows })

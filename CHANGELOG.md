@@ -7,6 +7,15 @@
 
 ---
 
+## v0.6.2 · 20260527 待发布
+
+- **MP3 转码音质升级**：编码端从 `@breezystack/lamejs`（128 kbps CBR）换成 `wasm-media-encoders`（LAME 3.100 WASM 编译，VBR -V 2 默认）；产物 PEAQ ODG 从 ~-2.0 拉到 ~-0.3（公认透明），平均码率 ~190 kbps，文件比上版大 ~50%
+- 入口仍是 [src/lib/transcode.ts](src/lib/transcode.ts)；解码端 `AudioContext.decodeAudioData` 不动（OOM 问题留给「FLAC 流式转码」独立项目），文件头嗅探 / Hi-Res FLAC 拦截 / 进度上报全保留
+- API 收益：wasm-media-encoders 直接吃 Float32Array，省掉 lamejs 的 floatToInt16 一次拷贝；编码速度大概率比 lamejs 快（WASM 接近原生 C 性能）
+- 埋点新增 `encoder` (`'wasm-lame-v2'`) + `output_size` 字段：`transcode_start` / `transcode_done` 都带，运营后台可事后 SQL 算平均码率分布；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts) `ALLOWED_PROPS`
+- 文案微调：FileRow 转 MP3 按钮 tooltip 从「强制转码为 MP3（有损）」改成「转码为 MP3（~190 kbps VBR，接近无损）」，引导用户在 NCM/QMC 已是 320 MP3 时知道按了不会太亏
+- 后端 / 运营后台**本期不动**：新字段对看板透明，下一期评估 `output_size` 分布后再决定加图表
+
 ## v0.6.1 / 运营后台 v0.4.7 · 20260526 上线
 
 - **OGG 直传自动转 MP3**：原始 .ogg 文件接入主站上传，复用 v0.4.0 为原始 .flac 设计的 transcode-only 路径（sniff → processQueue 跳过解密 → AudioContext.decodeAudioData + lamejs）。底层管线在 v0.4.0/v0.6.0 已就绪，只补了三处：
