@@ -380,6 +380,15 @@
    - 本期 `rejected_large_batch` → `user_dismissed` 涉及 7 个文件改动一致；TS 类型系统 + grep 一次确认无残留，merge 后 0 回滚
    - 沉淀：**内部 admin API 的 enum value 不必"保留兼容"**，rename 比贴 label 更能让代码可读
 
+5. **🔴🔴 GitHub Actions 后端永远不自动部署，PR merge 后必须 `gh workflow run --target=server`，否则后端代码躺在仓库里没上线**（本期 2026-05-31 用户发现「确认上传数」一直 0 才暴露）
+   - 现象：PR #31 merge 后我以为"上线完成"，admin/dist 通过 push 自动部署生效；但 server 部分 [deploy.yml:163](.github/workflows/deploy.yml) 条件是 `workflow_dispatch || refs/tags/v*`，**push 触发不会跑 deploy-server**——这是 v0.6.3 加的"防 502 整站挂"硬规则（DEPLOY.md §7.1 明确写过）
+   - 后果：用户上线后 2 天才发现「确认上传数」=0、「主动取消」=0；前端 fallback `?? 0` 把"字段缺失"伪装成了"零数据"，没人意识到 API 还在跑老版本；用户 F12 看 Network 才把这个查出来
+   - 我的失职：上一轮 v0.6.3 主站发布没改 server，我直接套用了"merge 就完事"的肌肉记忆，没意识到这次 server 也改了。打 tag 用的还是 `admin-v0.4.8` 不是 `v*` 格式，也不会触发 server deploy
+   - 教训沉淀：**只要 git diff 命中 `server/**`，merge 完必须立刻 `gh workflow run deploy.yml --ref main -f target=server` 并 `gh run watch` 看 success；"上线完成"的定义是 GitHub Actions runs 里 deploy-server = success，不是 PR merge 状态**
+   - 二次防御：以后给用户的"上线完成"summary 必须附带 GitHub Actions run URL（至少 deploy-admin / deploy-server 各一条），便于用户复核
+   - **复盘 #3 P0-a 说"下发链接前 curl + grep 新字段"，这条规则同样适用于上线后**：用户报告之前我自己也该 `curl https://sleepno.cn/api/admin/stats/overview` 抽样一遍新字段，提前 24 小时就能暴露
+   - 关联补救：本期 server deploy 已于 2026-05-31 11:52 UTC 手动 dispatch 完成（run 26711858028），确诊为后端代码确实没在 PR merge 时上线
+
 ### 本次新增 Action Items
 
 #### 🚨 P0 — 流程修正
@@ -391,6 +400,12 @@
   - 下发链接前 curl + grep 新字段三件套
 
 - [ ] **dev 进程长生存**：`nohup ... & disown` 替代 `run_in_background=true`，否则 turn 切换可能被杀
+
+- [ ] **🚨🚨 发版上线 checklist（防 server 漏部署重演）**：
+  1. PR merge 后立即跑 `gh run list --workflow=deploy.yml --limit 1 --json jobs --jq '.[].jobs[] | {name, conclusion}'` 看哪些 job 跑了，哪些 skipped
+  2. 如果 `git diff main~1 main -- server/` 非空，但上一步显示 `部署后端 API: skipped`，**立刻** `gh workflow run deploy.yml --ref main -f target=server` 并 `gh run watch <id>` 看 success
+  3. 上线"完成"的 summary 必须给用户：① deploy-user / admin / server 各自的 Actions run URL；② 一条线上 API 抽样 curl 输出，证明新字段在 production 返回（例：`curl -s https://sleepno.cn/api/health` 仅证明服务活着；改了 API 形状必须再 curl 一个真业务端点抽样新字段）
+  4. 把这条 checklist 加进 [CLAUDE.md](CLAUDE.md) "给 Claude 的工作指引" 或 [DEPLOY.md](DEPLOY.md) §7.1 顶部
 
 #### 📊 P1 — 下个迭代
 
