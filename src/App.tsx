@@ -904,6 +904,7 @@ function App() {
         file_size: result.audio.size,
         from_format: fromFormat,
       })
+      const transcodeT0 = Date.now()
       try {
         const mp3Blob = await transcodeToMp3(result.audio, (p) => {
           updateFile(id, { progress: p })
@@ -953,6 +954,8 @@ function App() {
           encoder: TRANSCODE_ENCODER,
           output_size: tagged.size,
           has_cover: !!result.cover,
+          // 性能埋点：转码耗时（ms）。file_size=转码输入(解密产物)字节，配合算「每 MB 转码耗时」
+          transcode_ms: Date.now() - transcodeT0,
         })
         analytics.unregisterInflight(id)
         notify('已转为 MP3')
@@ -975,6 +978,7 @@ function App() {
           file_ext: fromFormat,
           file_size: result.audio.size,
           source: result.meta?.source,
+          transcode_ms: Date.now() - transcodeT0,
         })
         analytics.unregisterInflight(id)
         setTextWarning(message)
@@ -1097,6 +1101,7 @@ function App() {
           file_ext: fileExt,
           file_size: next.file.size,
         })
+        const decryptT0 = Date.now()
         try {
           const result = await decryptAudioFile(
             next.file,
@@ -1115,6 +1120,8 @@ function App() {
             source: result.meta?.source,
             format: result.format,
             has_cover: !!result.cover,
+            // 性能埋点：解密耗时（ms）。file_size=原始加密字节，配合算「每 MB 解密耗时」
+            decrypt_ms: Date.now() - decryptT0,
           })
           analytics.unregisterInflight(next.id)
         } catch (err) {
@@ -1136,6 +1143,7 @@ function App() {
             file_ext: fileExt,
             file_size: next.file.size,
             source: realFormat,
+            decrypt_ms: Date.now() - decryptT0,
           })
           analytics.unregisterInflight(next.id)
         }

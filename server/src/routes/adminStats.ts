@@ -471,4 +471,212 @@ adminStats.get('/devices', (c) => {
   })
 })
 
+// 性能分析（v0.6.4）：解密 / 转码耗时聚合，供运营后台「性能分析」tab 消费
+// 口径锁定：
+//  · 只统计成功事件 decrypt_done / transcode_done 的 *_ms 字段（失败事件虽带 *_ms 但不计入）
+//  · 纯 MP3 直传无 done 事件，天然不计入；旧版客户端无 *_ms 字段的行被 IS NOT NULL 过滤
+//  · 均值 / 每 MB 一律 ratio-of-sums（Σ耗时 ÷ Σ次数 或 Σ耗时 ÷ Σ MB）
+//  · file_size 在 decrypt_done = 原始加密字节、在 transcode_done = 转码输入(解密产物)字节，各为本阶段处理量
+//  · #1「转换」均值按处理次数 (Nd+Nt)；其分位数刻意改用「整文件端到端」分布（避免快解密+慢转码双峰混合无意义）
+//  · 分位数为近似 floor-rank：空集 / n=1 时 OFFSET 落 0，子查询无行返回 NULL，不会出现负 OFFSET
+// ⚠️ 前端对缺失字段须显式显示 '-'，不要 ?? 0，避免后端漏部署被伪装成"零耗时"
+adminStats.get('/perf', (c) => {
+  const { from, to, range } = parseTimeRange(c)
+  const MB = 1048576
+  const div = (num: number, den: number) => (den > 0 ? num / den : null)
+
+  const one = (sql: string, ...params: any[]) =>
+    db.prepare(sql).get(from, to, ...params) as any
+
+  // 某成功事件某耗时字段：SUM(ms) / SUM(file_size 字节) / COUNT（仅该字段非空行）
+  const aggOf = (event: string, msField: string) =>
+    one(
+      `SELECT COALESCE(SUM(CAST(json_extract(props,'$.${msField}') AS REAL)),0) AS s_ms,
+              COALESCE(SUM(CAST(json_extract(props,'$.file_size') AS REAL)),0) AS s_bytes,
+              COUNT(*) AS n
+         FROM events
+        WHERE ts >= ? AND ts <= ? AND event = ?
+          AND json_extract(props,'$.${msField}') IS NOT NULL`,
+      event,
+    ) as { s_ms: number; s_bytes: number; n: number }
+
+  // 单事件单字段的近似 P50 / P95（floor-rank）
+  const pctOf = (event: string, msField: string) =>
+    one(
+      `WITH d AS (
+         SELECT CAST(json_extract(props,'$.${msField}') AS REAL) AS v
+           FROM events
+          WHERE ts >= ? AND ts <= ? AND event = ?
+            AND json_extract(props,'$.${msField}') IS NOT NULL)
+       SELECT
+         (SELECT v FROM d ORDER BY v LIMIT 1 OFFSET (SELECT (COUNT(*)-1)/2 FROM d)) AS p50,
+         (SELECT v FROM d ORDER BY v LIMIT 1 OFFSET (SELECT CAST(0.95*(COUNT(*)-1) AS INT) FROM d)) AS p95`,
+      event,
+    ) as { p50: number | null; p95: number | null }
+
+  const d = aggOf('decrypt_done', 'decrypt_ms')
+  const t = aggOf('transcode_done', 'transcode_ms')
+  const dp = pctOf('decrypt_done', 'decrypt_ms')
+  const tp = pctOf('transcode_done', 'transcode_ms')
+
+  // #1 分位：按 file_id 聚合「该文件 解密+转码 总耗时」后再取分位（端到端体验）
+  const e2e = db
+    .prepare(
+      `WITH per_file AS (
+         SELECT SUM(CASE WHEN event='decrypt_done'
+                  THEN CAST(json_extract(props,'$.decrypt_ms') AS REAL)
+                  WHEN event='transcode_done'
+                  THEN CAST(json_extract(props,'$.transcode_ms') AS REAL) END) AS v
+           FROM events
+          WHERE ts >= ? AND ts <= ?
+            AND event IN ('decrypt_done','transcode_done')
+            AND file_id IS NOT NULL
+          GROUP BY file_id),
+       nz AS (SELECT v FROM per_file WHERE v > 0)
+       SELECT
+         (SELECT v FROM nz ORDER BY v LIMIT 1 OFFSET (SELECT (COUNT(*)-1)/2 FROM nz)) AS p50,
+         (SELECT v FROM nz ORDER BY v LIMIT 1 OFFSET (SELECT CAST(0.95*(COUNT(*)-1) AS INT) FROM nz)) AS p95`,
+    )
+    .get(from, to) as { p50: number | null; p95: number | null }
+
+  const per_file = {
+    convert_avg_ms: div(d.s_ms + t.s_ms, d.n + t.n), // 按处理次数
+    convert_e2e_p50_ms: e2e.p50,
+    convert_e2e_p95_ms: e2e.p95,
+    decrypt_avg_ms: div(d.s_ms, d.n),
+    decrypt_p50_ms: dp.p50,
+    decrypt_p95_ms: dp.p95,
+    transcode_avg_ms: div(t.s_ms, t.n),
+    transcode_p50_ms: tp.p50,
+    transcode_p95_ms: tp.p95,
+    decrypt_n: d.n,
+    transcode_n: t.n,
+  }
+
+  const per_mb = {
+    convert_ms_per_mb: div(d.s_ms + t.s_ms, (d.s_bytes + t.s_bytes) / MB),
+    decrypt_ms_per_mb: div(d.s_ms, d.s_bytes / MB),
+    transcode_ms_per_mb: div(t.s_ms, t.s_bytes / MB),
+  }
+
+  // 按来源拆分：decrypt_done.source ∈ ncm/kgm/vpr/qmc；transcode_done.source 为 NULL = 原始 flac/ogg 直传
+  const bySourceRows = (event: string, msField: string) =>
+    db
+      .prepare(
+        `SELECT json_extract(props,'$.source') AS source,
+                COALESCE(SUM(CAST(json_extract(props,'$.${msField}') AS REAL)),0) AS s_ms,
+                COALESCE(SUM(CAST(json_extract(props,'$.file_size') AS REAL)),0) AS s_bytes,
+                COUNT(*) AS n
+           FROM events
+          WHERE ts >= ? AND ts <= ? AND event = ?
+            AND json_extract(props,'$.${msField}') IS NOT NULL
+          GROUP BY source`,
+      )
+      .all(from, to, event) as Array<{ source: string | null; s_ms: number; s_bytes: number; n: number }>
+
+  type SourceSlot = {
+    source: string | null
+    decrypt_ms_per_mb: number | null
+    transcode_ms_per_mb: number | null
+    decrypt_n: number
+    transcode_n: number
+  }
+  const sourceMap = new Map<string, SourceSlot>()
+  const slot = (s: string | null): SourceSlot => {
+    const k = s ?? '__raw__'
+    let v = sourceMap.get(k)
+    if (!v) {
+      v = { source: s, decrypt_ms_per_mb: null, transcode_ms_per_mb: null, decrypt_n: 0, transcode_n: 0 }
+      sourceMap.set(k, v)
+    }
+    return v
+  }
+  for (const r of bySourceRows('decrypt_done', 'decrypt_ms')) {
+    const v = slot(r.source)
+    v.decrypt_ms_per_mb = div(r.s_ms, r.s_bytes / MB)
+    v.decrypt_n = r.n
+  }
+  for (const r of bySourceRows('transcode_done', 'transcode_ms')) {
+    const v = slot(r.source)
+    v.transcode_ms_per_mb = div(r.s_ms, r.s_bytes / MB)
+    v.transcode_n = r.n
+  }
+  const by_source = [...sourceMap.values()].sort(
+    (a, b) => b.decrypt_n + b.transcode_n - (a.decrypt_n + a.transcode_n),
+  )
+
+  return c.json({ range, from, to, per_file, per_mb, by_source })
+})
+
+// 性能分析 - 按来源拆分的「每 MB 耗时」按天趋势（v0.6.4）
+// 折线图消费：x=天（本地时区桶），每条线 = 一个来源；解密 / 转码各一组
+// 每个 (天,来源) 的点 = SUM(ms) / SUM(MB)（ratio-of-sums，与 /perf 口径一致）；该天该来源无样本 → 不出点
+adminStats.get('/perf-timeseries', (c) => {
+  const { from, to, range } = parseTimeRange(c)
+  const MB = 1048576
+
+  const grouped = (event: string, msField: string) =>
+    db
+      .prepare(
+        `SELECT ${DAY_BUCKET_SQL} AS day,
+                json_extract(props,'$.source') AS source,
+                SUM(CAST(json_extract(props,'$.${msField}') AS REAL)) AS s_ms,
+                SUM(CAST(json_extract(props,'$.file_size') AS REAL)) AS s_bytes,
+                COUNT(*) AS n
+           FROM events
+          WHERE ts >= ? AND ts <= ? AND event = ?
+            AND json_extract(props,'$.${msField}') IS NOT NULL
+          GROUP BY day, source
+          ORDER BY day`,
+      )
+      .all(from, to, event) as Array<{ day: number; source: string | null; s_ms: number; s_bytes: number; n: number }>
+
+  // 转换（解密+转码合并）：同一 (天,来源) 把 decrypt_done.decrypt_ms 与 transcode_done.transcode_ms 一并求和，
+  // 字节也合并（解密=原始字节、转码=解密产物字节，各算一份处理量），与 /perf 的「每 MB 转换耗时」同口径
+  const groupedConvert = () =>
+    db
+      .prepare(
+        `SELECT ${DAY_BUCKET_SQL} AS day,
+                json_extract(props,'$.source') AS source,
+                SUM(CASE WHEN event = 'decrypt_done'
+                         THEN CAST(json_extract(props,'$.decrypt_ms') AS REAL)
+                         ELSE CAST(json_extract(props,'$.transcode_ms') AS REAL) END) AS s_ms,
+                SUM(CAST(json_extract(props,'$.file_size') AS REAL)) AS s_bytes,
+                COUNT(*) AS n
+           FROM events
+          WHERE ts >= ? AND ts <= ?
+            AND ( (event = 'decrypt_done'   AND json_extract(props,'$.decrypt_ms')   IS NOT NULL)
+               OR (event = 'transcode_done' AND json_extract(props,'$.transcode_ms') IS NOT NULL) )
+          GROUP BY day, source
+          ORDER BY day`,
+      )
+      .all(from, to) as Array<{ day: number; source: string | null; s_ms: number; s_bytes: number; n: number }>
+
+  const build = (rows: Array<{ day: number; source: string | null; s_ms: number; s_bytes: number; n: number }>) => {
+    const sources = new Set<string>()
+    const byDay = new Map<number, Record<string, number | null>>()
+    for (const r of rows) {
+      const key = r.source ?? '__raw__'
+      sources.add(key)
+      let pt = byDay.get(r.day)
+      if (!pt) {
+        pt = { day: r.day }
+        byDay.set(r.day, pt)
+      }
+      pt[key] = r.s_bytes > 0 ? r.s_ms / (r.s_bytes / MB) : null
+    }
+    const points = [...byDay.values()].sort((a, b) => (a.day as number) - (b.day as number))
+    return { sources: [...sources], points }
+  }
+
+  return c.json({
+    range,
+    from,
+    to,
+    convert: build(groupedConvert()),
+    decrypt: build(grouped('decrypt_done', 'decrypt_ms')),
+    transcode: build(grouped('transcode_done', 'transcode_ms')),
+  })
+})
+
 export default adminStats

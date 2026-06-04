@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { Layout, Menu, Button, Space, Typography } from 'antd'
-import { LineChartOutlined, BarChartOutlined, FileTextOutlined, SettingOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
+import { LineChartOutlined, BarChartOutlined, FileTextOutlined, SettingOutlined, LogoutOutlined, UserOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { AuthProvider, useAuth } from './lib/auth'
 import { LoginPage } from './pages/Login'
 import { OverviewPage } from './pages/Overview'
+import { PerformanceAnalysisPage } from './pages/PerformanceAnalysis'
 import { ButtonsPage } from './pages/Buttons'
 import { DecryptAnalysisPage } from './pages/DecryptAnalysis'
 import { VisitorsPage } from './pages/Visitors'
@@ -15,6 +16,7 @@ const { Text } = Typography
 
 const MENU = [
   { key: '/', label: '概览', icon: <LineChartOutlined /> },
+  { key: '/performance', label: '性能分析', icon: <ThunderboltOutlined /> },
   { key: '/visitors', label: '访客日志', icon: <UserOutlined /> },
   { key: '/buttons', label: '按钮埋点', icon: <BarChartOutlined /> },
   { key: '/decrypt-analysis', label: '解密分析', icon: <FileTextOutlined /> },
@@ -29,6 +31,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
             <Route path="/" element={<OverviewPage />} />
+            <Route path="/performance" element={<PerformanceAnalysisPage />} />
             <Route path="/visitors" element={<VisitorsPage />} />
             <Route path="/buttons" element={<ButtonsPage />} />
             <Route path="/decrypt-analysis" element={<DecryptAnalysisPage />} />

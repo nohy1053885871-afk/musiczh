@@ -21,6 +21,9 @@ const ALLOWED_PROPS = new Set([
   // v0.6.3 新增：转码/解密产物是否含封面（FLAC/OGG 直传转 MP3 是否能从原文件拿到 cover，
   // 以及 KGM/QMC 解密原文件本身有没有内嵌封面）
   'has_cover',
+  // v0.6.4 新增：解密 / 转码耗时（毫秒），运营后台「性能分析」聚合用
+  // decrypt_done/decrypt_fail 带 decrypt_ms；transcode_done/transcode_fail 带 transcode_ms
+  'decrypt_ms', 'transcode_ms',
 ])
 
 const FailureSchema = z.object({
