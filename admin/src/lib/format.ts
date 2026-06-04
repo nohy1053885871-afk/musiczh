@@ -204,6 +204,19 @@ export function formatBytes(n?: number | null): string {
   return `${(n / 1024 / 1024).toFixed(2)} MB`
 }
 
+// 耗时（毫秒）友好展示：null → '-'；<1000ms 显示整数 ms；否则秒（2 位小数）
+export function formatDuration(ms?: number | null): string {
+  if (ms == null) return '-'
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return `${(ms / 1000).toFixed(2)}s`
+}
+
+// 每 MB 耗时：null → '-'；保留 1 位小数 + 单位
+export function formatMsPerMb(v?: number | null): string {
+  if (v == null) return '-'
+  return `${v.toFixed(1)} ms/MB`
+}
+
 export function formatTime(ts: number): string {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, '0')

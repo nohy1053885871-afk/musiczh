@@ -7,6 +7,18 @@
 
 ---
 
+## v0.6.3 · 20260528 上线
+
+- **转码 / 解密全路径封面与标签补齐**：解决「FLAC/OGG 转 MP3 没封面」「KGM/VPR/QMC 解密 MP3 列表不显示封面」两类问题
+- 新增 [src/lib/metadata/](src/lib/metadata/) 模块（id3 / flac / ogg 子模块 + index 门面），零新依赖；导出 `readMetaFromBlob` / `writeId3ToMp3` / `writeFlacMeta`
+- 三类修复并行：
+  - **FLAC/OGG 直传转 MP3**：[src/App.tsx](src/App.tsx) `processQueue` 上传时先 `readMetaFromBlob` parse 原文件 VORBIS_COMMENT + METADATA_BLOCK_PICTURE → `transcodeFile` 完成后调 `writeId3ToMp3` 把 cover + 标题/艺术家/专辑写到产物 MP3 的 ID3v2 头
+  - **NCM 解 FLAC**：[src/lib/ncm.ts](src/lib/ncm.ts) 第 8 步新增 FLAC 分支，调 `writeFlacMeta` 把 NCM 容器内嵌的 cover + meta 写到产物 FLAC 的 VORBIS_COMMENT + PICTURE block（之前只 MP3 走 ID3 写入，FLAC 无标签）
+  - **KGM/VPR/QMC 解密路径**：[src/lib/kgm.ts](src/lib/kgm.ts) / [src/lib/qmc.ts](src/lib/qmc.ts) 解密结束后 `readMetaFromBlob` 从产物里读 ID3/Vorbis，把 cover + title/artist/album 填到 `result.cover` / `result.meta` 让 UI 列表能预览（文件本身不重写，原标签已完整）
+- FLAC writer 设计要点：扫描原 blocks → 剔除旧 type=4/6 → 注入新 VORBIS_COMMENT (vendor=`musiczh`) + PICTURE (picture_type=3 Cover front，width/height/depth/colors 全填 0，FLAC 规范允许) → 修正 last-flag → 拼回 audio frames；失败静默回退
+- ID3v2 reader 容错：encoding 0/1/2/3 全支持（latin1 / UTF-16 BOM / UTF-16BE / UTF-8），单 frame 出错跳过
+- 埋点新增 `has_cover` (boolean) 字段：`transcode_done` / `decrypt_done` 都带，运营后台事后 SQL 按 source / from_format 分桶看封面覆盖率（NCM-MP3/FLAC 期望接近 100%；KGM/QMC 取决于原文件；FLAC/OGG 直传取决于源标签完整度）；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts)
+
 ## v0.6.2 · 20260527 待发布
 
 - **MP3 转码音质升级**：编码端从 `@breezystack/lamejs`（128 kbps CBR）换成 `wasm-media-encoders`（LAME 3.100 WASM 编译，VBR -V 2 默认）；产物 PEAQ ODG 从 ~-2.0 拉到 ~-0.3（公认透明），平均码率 ~190 kbps，文件比上版大 ~50%

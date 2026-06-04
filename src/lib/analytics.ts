@@ -28,6 +28,9 @@ type FailurePayload = {
   file_size?: number
   source?: string
   download_kind?: 'single' | 'all_separate' | 'zip'
+  // 性能埋点：失败时各阶段已耗时（毫秒），仅作诊断（"多久后才失败"），不进性能均值口径
+  decrypt_ms?: number
+  transcode_ms?: number
 }
 
 type EventEnvelope = {
@@ -304,6 +307,8 @@ export const analytics = {
       error_msg: payload.error_msg,
       source: payload.source,
       download_kind: payload.download_kind,
+      decrypt_ms: payload.decrypt_ms,
+      transcode_ms: payload.transcode_ms,
     }
     Object.keys(propsForEvent).forEach((k) => {
       if (propsForEvent[k] === undefined) delete propsForEvent[k]

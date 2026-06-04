@@ -7,7 +7,7 @@ import { api, type UploadRow, type UploadDetail, type UploadStatus } from '../..
 import { DataTableCard } from '../../components/biz/DataTableCard'
 import { DownloadCSVButton } from '../../components/biz/DownloadCSVButton'
 import {
-  formatBytes, formatTime, extLabel,
+  formatBytes, formatTime, formatDuration, extLabel,
   UPLOAD_STATUS_LABEL, UPLOAD_STATUS_FILTER_OPTIONS,
   eventLabel,
 } from '../../lib/format'
@@ -120,6 +120,8 @@ export function UploadsSection({ rq, reloadKey }: { rq: string; reloadKey: numbe
       render: (v) => v ? <Tag color="blue">{extLabel(v)}</Tag> : '-' },
     { title: '大小', dataIndex: 'file_size', key: 'file_size', width: 95, align: 'right',
       render: (v) => formatBytes(v) },
+    { title: '耗时', dataIndex: 'duration_ms', key: 'duration_ms', width: 90, align: 'right',
+      render: (v) => v != null ? formatDuration(v) : '-' },
     { title: '浏览器', dataIndex: 'browser', key: 'browser', width: 90, ellipsis: true },
     { title: '系统', dataIndex: 'os', key: 'os', width: 90, ellipsis: true },
     { title: '设备', dataIndex: 'device_type', key: 'device_type', width: 70, ellipsis: true },
@@ -160,6 +162,7 @@ export function UploadsSection({ rq, reloadKey }: { rq: string; reloadKey: numbe
                 { key: 'file_name', title: '文件名' },
                 { key: 'file_ext', title: '格式' },
                 { key: 'file_size', title: '大小（字节）' },
+                { key: 'duration_ms', title: '耗时（毫秒）' },
                 { key: 'browser', title: '浏览器' },
                 { key: 'os', title: '系统' },
                 { key: 'device_type', title: '设备' },
@@ -251,8 +254,8 @@ export function UploadsSection({ rq, reloadKey }: { rq: string; reloadKey: numbe
                     { title: '关键字段', dataIndex: 'props', key: 'props',
                       render: (p: Record<string, unknown> | null) => {
                         if (!p) return '-'
-                        // 只挑事件诊断时最有用的几个：error_code / progress_bucket / last_progress / reject_reason / source
-                        const keys = ['error_code', 'progress_bucket', 'last_progress', 'reject_reason', 'source', 'from_format']
+                        // 只挑事件诊断时最有用的几个：error_code / progress_bucket / last_progress / reject_reason / source / 耗时
+                        const keys = ['error_code', 'progress_bucket', 'last_progress', 'reject_reason', 'source', 'from_format', 'decrypt_ms', 'transcode_ms']
                         const picked = keys
                           .filter((k) => p[k] !== undefined && p[k] !== null)
                           .map((k) => `${k}=${String(p[k])}`)

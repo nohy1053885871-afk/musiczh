@@ -144,7 +144,15 @@ adminUploads.get('/', (c) => {
          FROM events ${whereSql}
          ORDER BY ts DESC LIMIT ? OFFSET ?
        )
-       SELECT b.*, ${PIPELINE_STATUS_SQL} AS pipeline_status FROM b`,
+       SELECT b.*, ${PIPELINE_STATUS_SQL} AS pipeline_status,
+              (SELECT SUM(CASE WHEN d.event = 'decrypt_done'
+                       THEN CAST(json_extract(d.props,'$.decrypt_ms') AS REAL)
+                       WHEN d.event = 'transcode_done'
+                       THEN CAST(json_extract(d.props,'$.transcode_ms') AS REAL) END)
+                 FROM events d
+                WHERE d.file_id = b.file_id
+                  AND d.event IN ('decrypt_done','transcode_done')) AS duration_ms
+         FROM b`,
     )
     .all(...params, size, offset) as Array<{
       id: number; ts: number; visitor_id: string; event: string
@@ -152,6 +160,7 @@ adminUploads.get('/', (c) => {
       file_name: string | null; file_ext: string | null
       file_size: number | null; reject_reason: string | null
       pipeline_status: 'success' | 'failed' | 'abandoned' | 'pending' | 'legacy' | null
+      duration_ms: number | null
     }>
 
   const rows = rawRows.map((r) => {
@@ -181,6 +190,8 @@ adminUploads.get('/', (c) => {
       file_name: r.file_name,
       file_ext: r.file_ext,
       file_size: r.file_size,
+      // v0.6.4：该文件 解密+转码 总耗时（ms）。被拒/主动取消/无下游 done 事件 → NULL，前端渲染 '-'
+      duration_ms: r.duration_ms,
       app_ver: r.app_ver,
       browser: dev.browser,
       os: dev.os,

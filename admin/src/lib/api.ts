@@ -51,6 +51,8 @@ export const api = {
   logout: () => request<{ ok: true }>('/admin/logout', { method: 'POST' }),
 
   overview: (rangeQuery: string) => request<OverviewResp>(`/admin/stats/overview?${rangeQuery}`),
+  perf: (rangeQuery: string) => request<PerfResp>(`/admin/stats/perf?${rangeQuery}`),
+  perfTimeseries: (rangeQuery: string) => request<PerfTimeseriesResp>(`/admin/stats/perf-timeseries?${rangeQuery}`),
   funnel: (rangeQuery: string) => request<FunnelResp>(`/admin/stats/funnel?${rangeQuery}`),
   buttons: (rangeQuery: string) => request<ButtonsResp>(`/admin/stats/buttons?${rangeQuery}`),
   timeseries: (rangeQuery: string, metric: string) =>
@@ -140,6 +142,58 @@ export type OverviewResp = {
   success_files: number
   failed_files: number
   abandoned_files: number
+}
+
+// 性能分析（v0.6.4）：解密 / 转码耗时聚合
+// 所有数值字段可能为 null（样本数为 0 时），前端须显式显示 '-'，禁止 ?? 0
+export type PerfResp = {
+  range: string
+  from: number
+  to: number
+  per_file: {
+    // #1 转换：均值按处理次数 (Nd+Nt)；分位用整文件端到端分布
+    convert_avg_ms: number | null
+    convert_e2e_p50_ms: number | null
+    convert_e2e_p95_ms: number | null
+    // #2 解密 / #3 转码：均值 + 各自单一分布的 P50/P95
+    decrypt_avg_ms: number | null
+    decrypt_p50_ms: number | null
+    decrypt_p95_ms: number | null
+    transcode_avg_ms: number | null
+    transcode_p50_ms: number | null
+    transcode_p95_ms: number | null
+    decrypt_n: number
+    transcode_n: number
+  }
+  per_mb: {
+    convert_ms_per_mb: number | null
+    decrypt_ms_per_mb: number | null
+    transcode_ms_per_mb: number | null
+  }
+  // 按来源拆分：source=null 表示原始 FLAC/OGG 直传（无解密阶段）
+  by_source: {
+    source: string | null
+    decrypt_ms_per_mb: number | null
+    transcode_ms_per_mb: number | null
+    decrypt_n: number
+    transcode_n: number
+  }[]
+}
+
+// 性能分析 - 按来源拆分的每 MB 耗时按天趋势（v0.6.4）
+// points 每个元素含 { day, [sourceKey]: ms/MB|null }；sourceKey 为 ncm/kgm/vpr/qmc/__raw__
+export type PerfTimeseriesSeries = {
+  sources: string[]
+  points: Array<Record<string, number | null>>
+}
+export type PerfTimeseriesResp = {
+  range: string
+  from: number
+  to: number
+  // convert = 解密+转码合并口径（每 MB）
+  convert: PerfTimeseriesSeries
+  decrypt: PerfTimeseriesSeries
+  transcode: PerfTimeseriesSeries
 }
 
 export type FunnelStep = {
@@ -314,6 +368,8 @@ export type UploadRow = {
   file_name: string | null
   file_ext: string | null
   file_size: number | null
+  // v0.6.4：该文件 解密+转码 总耗时（ms）；被拒/主动取消/无下游 done 事件为 null
+  duration_ms?: number | null
   app_ver: string | null
   browser: string
   os: string

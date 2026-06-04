@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.6.2（运营后台 v0.4.7）
+- 当前版本：v0.6.4（运营后台 v0.4.9）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -179,6 +179,15 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.6.4 / 运营后台 v0.4.9 · 20260605 上线
+
+- **解密/转码性能埋点 + 运营后台「性能分析」tab**：观测整个转换链路耗时、客观衡量性能、发现长尾异常
+- 主站埋点（[src/App.tsx](src/App.tsx) / [src/lib/analytics.ts](src/lib/analytics.ts)）：解密、转码两段各 wall-clock 计时，`decrypt_done`/`transcode_done` 带 `decrypt_ms`/`transcode_ms`（`*_fail` 也带，仅诊断、不进性能均值）；白名单 + [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 同步登记
+- 后端（[server/src/routes/adminStats.ts](server/src/routes/adminStats.ts)）：新增 `GET /perf`（每文件均值 + P50/P95、每 MB、按来源拆分）+ `GET /perf-timeseries`（按天 × 来源的每 MB 趋势，含 转换/解密/转码 三口径）；[adminUploads.ts](server/src/routes/adminUploads.ts) 上传日志加 `duration_ms`（该文件 解密+转码 合计，按 file_id 子查询）
+- 口径锁定：均值 / 每 MB 一律 ratio-of-sums；「转换」均值按处理次数 (Nd+Nt)，其分位用「整文件端到端」分布（避免快解密+慢转码双峰混合无意义）；只统计成功事件；每 MB 两个 size 基准各为本阶段处理量（解密=原始加密字节、转码=解密产物字节）；分位数为近似 floor-rank（SQLite 无 PERCENTILE，OFFSET 定位、空集返回 NULL）
+- 运营后台（导航第二位新增「性能分析」tab，[PerformanceAnalysis.tsx](admin/src/pages/PerformanceAnalysis.tsx)）：每文件耗时卡（均值 + P50/P95）、每 MB 耗时卡、按来源「每 MB 耗时趋势」折线图（[perf/PerfTrendChart.tsx](admin/src/pages/perf/PerfTrendChart.tsx)，转换/解密/转码可切换）+ 区间合计表；「解密分析 → 上传日志」每行加「耗时」列（[UploadsSection.tsx](admin/src/pages/decrypt-analysis/UploadsSection.tsx)）。前端缺字段显式显示 `-`，禁用 `?? 0`（防后端漏部署伪装成零数据）
+- 上线观测：`decrypt_ms`/`transcode_ms` 非空率应快速逼近 100%（旧版客户端无此字段会拉低、随版本铺开回升）；每 MB 转码 > 每 MB 解密；各指标 P95 明显 > P50（右偏）说明数据真实；来源表里 KGM(查表 XOR) 与 NCM/QMC(RC4) 的每 MB 解密耗时应有可解释差异。评估窗口 7d / 30d 各一次
+
 ### 运营后台 v0.4.8 · 20260529 待发布
 
 - **「主动取消」独立成态 + 件维度漏斗加层**：把 ≥50 文件警告弹窗反悔补发的 `upload_reject`（`reject_reason=LARGE_BATCH_DISMISSED`）从"被拒/失败"语义里彻底剥离，新增独立状态「主动取消」。改完所有指标会**自动重算历史数据**（events 表只存原始事件，分类全是查询时 SQL 现算），无需迁移。
@@ -189,18 +198,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 上传趋势图（[UploadsTrendChart.tsx](admin/src/pages/decrypt-analysis/uploads/UploadsTrendChart.tsx)）：`reject_large_batch` 系列改名"主动取消数"/"主动取消占比"，颜色橙色与 Tag 一致；占比分母从 `attempt+reject_total` 改 `upload_files`（成功 + 失败 + 主动取消 = 100%），`success_pct` 数值不变、`fail_pct` 变小、新 `user_dismissed_pct` 补齐
 - 埋点 / DB / 主站全部零改动；仅查询层重新归类
 - 上线观测：件维度漏斗「上传总数 → 确认上传」流失率 ≈ 主动取消占比，正常 0–15%；长期 >25% 说明 50 文件阈值或弹窗文案需重设计；剔除主动取消后的「确认上传 → 转换成功」应稳定 >85%。评估窗口 7d / 30d 各一次
-
-### v0.6.3 · 20260528 待发布
-
-- **转码 / 解密全路径封面与标签补齐**：解决「FLAC/OGG 转 MP3 没封面」「KGM/VPR/QMC 解密 MP3 列表不显示封面」两类问题
-- 新增 [src/lib/metadata/](src/lib/metadata/) 模块（id3 / flac / ogg 子模块 + index 门面），零新依赖；导出 `readMetaFromBlob` / `writeId3ToMp3` / `writeFlacMeta`
-- 三类修复并行：
-  - **FLAC/OGG 直传转 MP3**：[src/App.tsx](src/App.tsx) `processQueue` 上传时先 `readMetaFromBlob` parse 原文件 VORBIS_COMMENT + METADATA_BLOCK_PICTURE → `transcodeFile` 完成后调 `writeId3ToMp3` 把 cover + 标题/艺术家/专辑写到产物 MP3 的 ID3v2 头
-  - **NCM 解 FLAC**：[src/lib/ncm.ts](src/lib/ncm.ts) 第 8 步新增 FLAC 分支，调 `writeFlacMeta` 把 NCM 容器内嵌的 cover + meta 写到产物 FLAC 的 VORBIS_COMMENT + PICTURE block（之前只 MP3 走 ID3 写入，FLAC 无标签）
-  - **KGM/VPR/QMC 解密路径**：[src/lib/kgm.ts](src/lib/kgm.ts) / [src/lib/qmc.ts](src/lib/qmc.ts) 解密结束后 `readMetaFromBlob` 从产物里读 ID3/Vorbis，把 cover + title/artist/album 填到 `result.cover` / `result.meta` 让 UI 列表能预览（文件本身不重写，原标签已完整）
-- FLAC writer 设计要点：扫描原 blocks → 剔除旧 type=4/6 → 注入新 VORBIS_COMMENT (vendor=`musiczh`) + PICTURE (picture_type=3 Cover front，width/height/depth/colors 全填 0，FLAC 规范允许) → 修正 last-flag → 拼回 audio frames；失败静默回退
-- ID3v2 reader 容错：encoding 0/1/2/3 全支持（latin1 / UTF-16 BOM / UTF-16BE / UTF-8），单 frame 出错跳过
-- 埋点新增 `has_cover` (boolean) 字段：`transcode_done` / `decrypt_done` 都带，运营后台事后 SQL 按 source / from_format 分桶看封面覆盖率（NCM-MP3/FLAC 期望接近 100%；KGM/QMC 取决于原文件；FLAC/OGG 直传取决于源标签完整度）；字段白名单同步加进 [server/src/routes/track.ts](server/src/routes/track.ts)
 
 # 通用
 - 优先选择编辑而非重写整个文件
