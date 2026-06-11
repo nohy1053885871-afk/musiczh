@@ -28,12 +28,12 @@
 import {
   DecryptError,
   type AudioMeta,
-  type AudioFormat,
   type DecryptResult,
   type ProgressCallback,
 } from './types'
 import { stripFileExtensions } from './filename'
 import { readMetaFromBlob } from './metadata'
+import { sniffAudioFormat } from './sniff'
 
 // ============== Magic ==============
 
@@ -264,37 +264,6 @@ function bytesEqual(buf: Uint8Array, target: Uint8Array, offset: number): boolea
     if (buf[offset + i] !== target[i]) return false
   }
   return true
-}
-
-function sniffAudioFormat(bytes: Uint8Array): AudioFormat | null {
-  if (bytes.length < 4) return null
-  // FLAC: "fLaC"
-  if (
-    bytes[0] === 0x66 &&
-    bytes[1] === 0x4c &&
-    bytes[2] === 0x61 &&
-    bytes[3] === 0x43
-  ) {
-    return 'flac'
-  }
-  // OGG: "OggS"
-  if (
-    bytes[0] === 0x4f &&
-    bytes[1] === 0x67 &&
-    bytes[2] === 0x67 &&
-    bytes[3] === 0x53
-  ) {
-    return 'ogg'
-  }
-  // MP3: ID3 tag
-  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
-    return 'mp3'
-  }
-  // MP3: MPEG sync (0xFF Ex/Fx)
-  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
-    return 'mp3'
-  }
-  return null
 }
 
 function sanitizeFilename(name: string): string {

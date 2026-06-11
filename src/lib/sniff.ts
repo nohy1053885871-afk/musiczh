@@ -34,6 +34,32 @@ export function toAudioFormat(rf: RealFormat): AudioFormat | null {
   return null
 }
 
+/**
+ * 按头部 magic 判定【已解密音频字节】的真实格式，识别不出返回 null。
+ * 解密器（ncm/kgm/qmc）共用：解密产物必须命中已知 magic，否则视为"解出来不是音频"。
+ * 与 sniffRealFormat 区别：这里入参是裸音频字节、不认 ncm/kgm 等加密容器。
+ */
+export function sniffAudioFormat(bytes: Uint8Array): AudioFormat | null {
+  if (bytes.length < 4) return null
+  // FLAC: "fLaC"
+  if (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43) {
+    return 'flac'
+  }
+  // OGG: "OggS"
+  if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+    return 'ogg'
+  }
+  // MP3: ID3v2 tag
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+    return 'mp3'
+  }
+  // MP3: MPEG audio sync (0xFF 后 3 bit 全 1)
+  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+    return 'mp3'
+  }
+  return null
+}
+
 const NCM_MAGIC = [0x43, 0x54, 0x45, 0x4e, 0x46, 0x44, 0x41, 0x4d] // "CTENFDAM"
 const KGM_MAGIC = [
   0x7c, 0xd5, 0x32, 0xeb, 0x86, 0x02, 0x7f, 0x4b,
