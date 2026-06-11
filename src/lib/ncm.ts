@@ -28,7 +28,7 @@ import {
 } from './types'
 import { stripFileExtensions } from './filename'
 import { writeId3ToMp3, writeFlacMeta } from './metadata'
-import { sniffAudioFormat } from './sniff'
+import { sniffAudioFormat, sniffImageMime } from './sniff'
 
 // 两个固定的 AES 密钥（来自网易云客户端，业内公开）
 const CORE_KEY = new Uint8Array([
@@ -134,9 +134,11 @@ export async function decryptNcm(
   let cover: Blob | null = null
   if (coverLen > 0) {
     const coverBytes = new Uint8Array(buffer.slice(offset, offset + coverLen))
-    // NCM 容器对 cover 字段不带 mime 信息，硬编码 image/jpeg 仅用于 Blob.type，
-    // 浏览器 img 标签宽容能渲染各种格式；下游 browser-id3-writer 会按 magic 二次嗅探
-    cover = new Blob([coverBytes as BlobPart], { type: 'image/jpeg' })
+    // NCM 容器对 cover 字段不带 mime，按真实 magic 定 Blob.type：新版网易云封面是 PNG，
+    // 旧代码一律标 image/jpeg 会让 FLAC PICTURE block 声明 jpeg 却装 PNG，严格播放器据声明
+    // mime 解码失败 → 下载产物丢封面（浏览器 img 按内容嗅探，列表预览不受影响）。
+    const coverMime = sniffImageMime(coverBytes) || 'image/jpeg'
+    cover = new Blob([coverBytes as BlobPart], { type: coverMime })
   }
   onProgress?.(0.2)
 

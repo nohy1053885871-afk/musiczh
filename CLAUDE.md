@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.1（运营后台 v0.4.9）
+- 当前版本：v0.7.2（运营后台 v0.4.9）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -185,7 +185,16 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
-### v0.7.1 · 20260611 待发布
+### v0.7.2 · 20260612 上线
+
+- **NCM 内嵌封面 MIME 修正（PNG 被误标 JPEG → 下载产物丢封面）**：用户反馈"NCM 转 FLAC 后列表有封面、下载没封面"，且 v0.7.1 的封面回填未覆盖此 case
+- 根因（[src/lib/ncm.ts](src/lib/ncm.ts)）：v0.7.1 回填只管「无内嵌封面」的新版 NCM；本 case 是【自带内嵌封面】的 NCM（coverLen>0），走的是更老的"内嵌封面直接写进产物"路径。新版网易云内嵌封面其实是 **PNG**，旧代码却把 cover Blob 硬编码 `image/jpeg`，经 `cover.type` 传到 FLAC `writeFlacMeta` → PICTURE block 声明 jpeg 却装 PNG。浏览器 `<img>` 按内容嗅探照常渲染（**列表有封面**），但播放器按声明 MIME 把 PNG 喂 JPEG 解码器 → 失败 → **下载产物丢封面**（MP3 路径不受影响：browser-id3-writer 自己按字节嗅探）
+- 修复（权威信号=真实字节，优先于元数据，承接 v0.7.1 同一原则）：[src/lib/sniff.ts](src/lib/sniff.ts) 新增共享 `sniffImageMime(bytes)`（按 magic 判 jpeg/png/gif/webp）；ncm 抠封面按真实 magic 定 Blob.type；[src/lib/metadata/index.ts](src/lib/metadata/index.ts) FLAC 写入按封面真实字节定 MIME（兜底防任何上游传错 type）；[src/lib/cover.ts](src/lib/cover.ts) 回填嗅探复用同一函数、去重
+- 兼容性实测（真实源码跑 20 个新旧 NCM + mutagen 校验「声明 MIME==数据真实格式」）：旧 NCM 内嵌 JPEG（FLAC/MP3）、新 NCM 内嵌 PNG（FLAC/MP3）、无内嵌走 CDN 回填（JPEG/PNG）全部一致；旧版本来正确的 JPEG 无回归。已知边界：网易云从未出现过的冷门图片格式（BMP/TIFF）嗅探不出会退标 jpeg
+- 埋点零新增、不动 server（纯 MIME 修正）。macOS 访达不渲染 FLAC 封面缩略图是系统限制（无 FLAC 原生解码器）、与本修复无关，需用真正播放器查看
+- 上线观测：无新埋点，靠用户反馈 + `cover_backfill` 成功率维持 >90%；NCM→FLAC 下载产物在播放器内封面显示率应回升。评估窗口 7d
+
+### v0.7.1 · 20260611 上线
 
 - **NCM imageSpace 解析 bug 修复 + 偏移自愈 + 封面回填 + 三器输出校验/监控**：用户反馈"NCM 转的 FLAC 转码报 INVALID_HEADER / MP3 没封面"，排查发现三个表象同源于一个解析 bug
 - 根因（[src/lib/ncm.ts](src/lib/ncm.ts)）：NCM 封面区 CRC32 后有【两个】u32 长度字段——`imageSpace`（封面预留总空间，音频从这之后开始）和 `coverLen`（实际内嵌字节，≤imageSpace）。旧代码把 imageSpace 当"5 字节间隙"跳过、只按 coverLen 跳封面就解密音频；**新版网易云客户端不再内嵌封面（coverLen=0 但仍预留 ~7.5KB）** → 音频起点早了 imageSpace 字节 → RC4 keystream 错位 → **整段音频乱码**（旧版 imageSpace==coverLen 歪打正着，一直没暴露）。改读两字段、按 imageSpace 对齐
@@ -194,16 +203,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 封面回填（[src/lib/cover.ts](src/lib/cover.ts) + [src/App.tsx](src/App.tsx)）：解密产物无内嵌封面但有 `meta.albumPic` 时，主线程在解密计时窗口外、后台异步抓网易云 CDN 图（实测支持 https + CORS `*`）嵌入下载产物（writeFlacMeta/writeId3ToMp3 幂等重写）；失败静默、不阻塞队列、文件仍可用。只抓公开封面图、绝不上传音频
 - 埋点（纯前端、不动 server）：新增 `cover_backfill_done/fail`、`decrypt_offset_recovered`、`decrypt_format_mismatch`（真实 magic≠声称格式的领先指标），均用已白名单字段；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) + admin `EVENT_LABELS`/`ERROR_CODE_LABEL` 已登记
 - 上线观测：`OUTPUT_NOT_AUDIO`/`decrypt_offset_recovered`/`decrypt_format_mismatch` 常态应趋近 0（冒头=新变体预警）；NCM 旧 `INVALID_HEADER` 失败 + 用户回传 .flac 转码失败应明显下降；`cover_backfill` 成功率 >90%；每 MB 解密耗时不因抓图抬升（已排除在 decrypt_ms 外）。评估窗口 7d / 30d 各一次
-
-### v0.7.0 · 20260611 待发布
-
-- **FLAC/OGG 流式转码 + 解密/转码全量入 Web Worker**：解决两个 P0 性能问题——转码内存峰值 ~1GB 导致的 OOM/abandon（复盘 #5：abandon 16.7% 是最大流失点）、大文件解密时主线程卡死 5-15s
-- 流式转码（[src/lib/transcode.ts](src/lib/transcode.ts) 重写）：`@wasm-audio-decoders/flac` / `ogg-vorbis` 按 2MB 分块解码 → PCM 立刻喂 LAME → 即弃；内存峰值与文件大小解耦；删除 AudioContext 全部代码与 HIRES_NOT_SUPPORTED 拦截（枚举值保留，admin 历史日志仍引用）
-- Hi-Res 解锁：24-bit / ≥96kHz FLAC 从拦截转为支持，>48kHz 显式 `outputSampleRate: 48000` 走 LAME 内部重采样（96k/24bit 实测：时长采样级精确、440Hz 正弦过零率验证音高无偏）
-- Worker 管道（[src/lib/worker/](src/lib/worker/) 三件套）：protocol（DecryptError 跨线程序列化/重建，App 的 `instanceof` 分支零改动）+ audio.worker（串行消化、progress 100ms 节流）+ client（保持原签名、崩溃 reject 在途任务并自动重建）；[App.tsx](src/App.tsx) 仅改 import 区；[vite.config.ts](vite.config.ts) 加 `worker.format: 'es'`（iife 不支持代码分割，会把三个 WASM 库 ~1MB 全塞进 worker 主 chunk；es 格式保持按需加载，worker 主体 78KB）
-- 埋点零新增：`decrypt_ms`/`transcode_ms` 计时仍在 App 层包住 await（含 <10ms 通讯开销，噪声级），性能前后对比靠 app_ver 切分；abandon 机制在主线程不受影响
-- 已知非回归：VBR MP3 不写 Xing 头，播放器按首帧码率估算的「显示时长」可能偏差几个百分点（旧管线同款行为；实际解码时长采样级精确）
-- 上线观测：transcode_abandon 占比 16.7% → <10% 算缓解；HIRES_NOT_SUPPORTED 失败（17 次/7d）→ 0；转码 P50/P95 持平或略降（瓶颈在 LAME 编码）；每 MB 解密耗时不回升 >10%；transcode_fail 率 8.5% 不回升、盯 .ogg 失败占比异动。评估窗口 7d / 30d 各一次
 
 # 通用
 - 优先选择编辑而非重写整个文件
