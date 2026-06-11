@@ -1,13 +1,17 @@
 /**
- * 「强制转 MP3」模块
+ * 「强制转 MP3」模块（v0.7.0 流式版）
  *
  * 流程：
- *   1. AudioContext.decodeAudioData() 把任意浏览器原生支持的格式（MP3/FLAC/OGG/WAV）解码成 PCM
- *   2. 拿 Float32 声道数据（编码器直接吃 Float32，不用先转 Int16）
+ *   1. 按 2MB 分块读入源字节，喂给 WASM 流式解码器
+ *      （@wasm-audio-decoders/flac / ogg-vorbis，libFLAC / libvorbis 编译版，动态导入）
+ *   2. 每块解出的 Float32 PCM 立刻喂给 LAME 编码、随即丢弃——内存峰值与文件大小解耦
  *   3. wasm-media-encoders（动态导入）按 LAME -V 2 编码，平均 ~190 kbps VBR
  *
- * 注意：转码仍是有损的，但 -V 2 接近无损（普通耳几乎 ABX 失败）；
- * 文件比 v0.6.1 的 128 CBR 大约 +50%。
+ * v0.6.x 用 AudioContext.decodeAudioData 一次性整段解码（200MB FLAC → ~1GB PCM 峰值），
+ * 本版换流式后峰值降到几十 MB；Hi-Res（24-bit / ≥96kHz）从拦截转为支持，
+ * >48kHz 输入显式钉 48kHz 输出、走 LAME 内部重采样。
+ *
+ * 注意：转码仍是有损的，但 -V 2 接近无损（普通耳几乎 ABX 失败）。
  */
 
 import {
@@ -16,20 +20,88 @@ import {
 } from './types'
 
 const VBR_QUALITY = 2 // LAME -V 2，平均 ~190 kbps
-const FRAME_SAMPLES = 1152 // MP3 帧样本数；用于节流 + 进度，编码器内部对齐由库处理
+const DECODE_CHUNK_BYTES = 2 * 1024 * 1024 // 压缩域切块；解出的 PCM 瞬时占用 ~10MB 级，即用即弃
 const ENCODER_TAG = 'wasm-lame-v2'
 
 export const TRANSCODE_ENCODER = ENCODER_TAG
+
+/** 两个 decoder 包（FLACDecoder / OggVorbisDecoder）API 同构，取最小公共面 */
+interface DecodedChunk {
+  channelData: Float32Array[]
+  samplesDecoded: number
+  sampleRate: number
+}
+
+interface StreamDecoder {
+  ready: Promise<void>
+  free: () => void
+  decode: (data: Uint8Array) => Promise<DecodedChunk>
+  flush: () => Promise<DecodedChunk>
+}
+
+async function createDecoder(isFlac: boolean): Promise<StreamDecoder> {
+  if (isFlac) {
+    const { FLACDecoder } = await import('@wasm-audio-decoders/flac')
+    const decoder = new FLACDecoder()
+    await decoder.ready
+    return decoder
+  }
+  const { OggVorbisDecoder } = await import('@wasm-audio-decoders/ogg-vorbis')
+  const decoder = new OggVorbisDecoder()
+  await decoder.ready
+  return decoder
+}
+
+type Mp3Encoder = Awaited<
+  ReturnType<typeof import('wasm-media-encoders').createMp3Encoder>
+>
+
+/** 收 PCM、喂 LAME、攒 MP3 字节；configure 延迟到第一个有 PCM 的块（才拿得到真实采样率/声道数） */
+class Mp3Sink {
+  private encoder: Mp3Encoder
+  private buffers: Uint8Array[] = []
+  private configured = false
+  private channels: 1 | 2 = 2
+  totalSamples = 0
+
+  constructor(encoder: Mp3Encoder) {
+    this.encoder = encoder
+  }
+
+  feed(decoded: DecodedChunk) {
+    if (decoded.samplesDecoded === 0) return // 首块可能只含 metadata，无 PCM
+    if (!this.configured) {
+      this.channels = Math.min(decoded.channelData.length, 2) as 1 | 2
+      this.encoder.configure({
+        channels: this.channels,
+        sampleRate: decoded.sampleRate,
+        vbrQuality: VBR_QUALITY,
+        // MP3 输出采样率上限 48k：Hi-Res 输入显式钉死，不赌 LAME 缺省启发式选率
+        ...(decoded.sampleRate > 48000 ? { outputSampleRate: 48000 as const } : {}),
+      })
+      this.configured = true
+    }
+    // 多声道源只取前两声道（FL/FR），与旧 getChannelData(0/1) 行为一致
+    const view = this.encoder.encode(decoded.channelData.slice(0, this.channels))
+    // encode()/finalize() 返回的 Uint8Array 指向 wasm 内部内存，下次调用会被覆盖，必须立即拷出
+    if (view.length > 0) this.buffers.push(new Uint8Array(view))
+    this.totalSamples += decoded.samplesDecoded
+  }
+
+  finalize(): Blob {
+    const tail = this.encoder.finalize()
+    if (tail.length > 0) this.buffers.push(new Uint8Array(tail))
+    return new Blob(this.buffers as BlobPart[], { type: 'audio/mpeg' })
+  }
+}
 
 export async function transcodeToMp3(
   source: Blob,
   onProgress?: ProgressCallback,
 ): Promise<Blob> {
-  const arrayBuffer = await source.arrayBuffer()
-
-  // ========== 0. 文件头嗅探：把「假 FLAC」与「真 FLAC 但浏览器解不了」分开报错 ==========
-  // FLAC: 66 4c 61 43 ("fLaC")  /  Ogg: 4f 67 67 53 ("OggS"，可能是 Ogg-Vorbis 或 Ogg-FLAC)
-  const head = new Uint8Array(arrayBuffer, 0, Math.min(4, arrayBuffer.byteLength))
+  // ========== 0. 文件头嗅探（只读前 4 字节，不整读文件） ==========
+  // FLAC: 66 4c 61 43 ("fLaC")  /  Ogg: 4f 67 67 53 ("OggS")
+  const head = new Uint8Array(await source.slice(0, 4).arrayBuffer())
   const isFlac =
     head.length >= 4 &&
     head[0] === 0x66 && head[1] === 0x4c && head[2] === 0x61 && head[3] === 0x43
@@ -43,78 +115,32 @@ export async function transcodeToMp3(
     )
   }
 
-  // ========== 1. 解码到 PCM ==========
-  let audioBuffer: AudioBuffer
+  // ========== 1. 流式解码 + 编码 ==========
+  const decoder = await createDecoder(isFlac)
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-    try {
-      audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-    } finally {
-      if (typeof ctx.close === 'function') {
-        ctx.close().catch(() => {})
-      }
+    const { createMp3Encoder } = await import('wasm-media-encoders')
+    const sink = new Mp3Sink(await createMp3Encoder())
+
+    const total = source.size
+    for (let offset = 0; offset < total; offset += DECODE_CHUNK_BYTES) {
+      const end = Math.min(offset + DECODE_CHUNK_BYTES, total)
+      const bytes = new Uint8Array(await source.slice(offset, end).arrayBuffer())
+      // decoder 内部自动组帧，任意切块边界安全
+      sink.feed(await decoder.decode(bytes))
+      onProgress?.((end / total) * 0.98)
     }
-  } catch (e) {
-    if (isFlac) {
+    sink.feed(await decoder.flush())
+
+    if (sink.totalSamples === 0) {
       throw new DecryptError(
-        'HIRES_NOT_SUPPORTED',
-        '这个 FLAC 可能是 Hi-Res（24-bit 或 ≥96kHz），当前浏览器内置解码器不支持。建议在桌面版 Chrome / Edge 重试',
-        e,
+        'DECRYPT_FAILED',
+        '无法从这个文件解出有效的音频数据，文件可能已损坏，请确认它能正常播放',
       )
     }
-    throw new DecryptError(
-      'DECRYPT_FAILED',
-      '转码失败：当前浏览器无法解码这个音频，请尝试用 Chrome / Edge 打开',
-      e,
-    )
+    const mp3 = sink.finalize()
+    onProgress?.(1)
+    return mp3
+  } finally {
+    decoder.free()
   }
-  onProgress?.(0.1)
-
-  // ========== 2. 拿 Float32 声道数据 ==========
-  const numChannels = Math.min(audioBuffer.numberOfChannels, 2) as 1 | 2
-  const sampleRate = audioBuffer.sampleRate
-  const totalSamples = audioBuffer.length
-
-  const left = audioBuffer.getChannelData(0)
-  const right = numChannels === 2 ? audioBuffer.getChannelData(1) : null
-  onProgress?.(0.2)
-
-  // ========== 3. 动态加载 wasm-media-encoders（LAME WASM 编译） ==========
-  const { createMp3Encoder } = await import('wasm-media-encoders')
-  const encoder = await createMp3Encoder()
-  encoder.configure({
-    channels: numChannels,
-    sampleRate,
-    vbrQuality: VBR_QUALITY,
-  })
-  onProgress?.(0.25)
-
-  // ========== 4. 分帧编码 ==========
-  // 关键：encoder.encode() / finalize() 返回的 Uint8Array 指向 wasm 内部内存，
-  // 下次调用会被覆盖；必须立即用 new Uint8Array(view) 拷出来再 push
-  const buffers: Uint8Array[] = []
-  let processed = 0
-  for (let i = 0; i < totalSamples; i += FRAME_SAMPLES) {
-    const leftChunk = left.subarray(i, i + FRAME_SAMPLES)
-    const view = right
-      ? encoder.encode([leftChunk, right.subarray(i, i + FRAME_SAMPLES)])
-      : encoder.encode([leftChunk])
-    if (view.length > 0) buffers.push(new Uint8Array(view))
-
-    processed += FRAME_SAMPLES
-    // 每 200 帧（~5s 音频）让一下事件循环并报进度
-    if ((processed / FRAME_SAMPLES) % 200 === 0) {
-      onProgress?.(0.25 + Math.min(processed / totalSamples, 1) * 0.7)
-      await yieldToEventLoop()
-    }
-  }
-  const tail = encoder.finalize()
-  if (tail.length > 0) buffers.push(new Uint8Array(tail))
-  onProgress?.(1)
-
-  return new Blob(buffers as BlobPart[], { type: 'audio/mpeg' })
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
 }
