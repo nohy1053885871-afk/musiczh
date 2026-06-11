@@ -2,13 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import JSZip from 'jszip'
 import {
-  decryptAudioFile,
   DecryptError,
   SUPPORTED_EXT_REGEX,
   type DecryptResult,
   type DecryptErrorCode,
 } from './lib/decrypt'
-import { transcodeToMp3, TRANSCODE_ENCODER } from './lib/transcode'
+// 解密/转码计算跑在 Worker 里（v0.7.0），client 保持原函数签名
+import {
+  decryptAudioFile,
+  transcodeToMp3,
+  TRANSCODE_ENCODER,
+} from './lib/worker/client'
 import { sniffRealFormat } from './lib/sniff'
 import { stripFileExtensions } from './lib/filename'
 import { readMetaFromBlob, writeId3ToMp3 } from './lib/metadata'

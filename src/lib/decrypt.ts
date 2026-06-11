@@ -13,7 +13,7 @@ import { DecryptError, type DecryptResult, type ProgressCallback } from './types
 export const SUPPORTED_EXTS = ['ncm', 'kgm', 'vpr', ...QMC_EXTS] as const
 export type SupportedExt = (typeof SUPPORTED_EXTS)[number]
 // 上传准入 regex：含 .flac / .ogg / .kgg / 全部 QMC 扩展名。
-// flac / ogg 在 App.tsx processQueue 走 transcode-only 路径（跳过解密，AudioContext 直解后 lamejs 编码）。
+// flac / ogg 在 App.tsx processQueue 走 transcode-only 路径（跳过解密，WASM 流式解码后 LAME 编码）。
 // kgg 进队列后 sniff 出 kgg_or_kgmv4 给精准错误（而不是上传被拒），便于诊断与统计。
 // QMC 系列进队列后走 decryptQmc；新版 STag 文件会在解密阶段抛 QMC_NEW_VERSION_UNSUPPORTED 引导用户。
 export const SUPPORTED_EXT_REGEX =

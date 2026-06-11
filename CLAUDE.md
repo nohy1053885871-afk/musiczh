@@ -3,12 +3,12 @@
 加密音乐文件 → MP3/FLAC/OGG 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
 
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导）；以及原始 .flac（自动转 MP3）。
-解密后可一键二次转码为 MP3（基于浏览器原生 AudioContext + LAME WASM VBR -V 2，平均 ~190 kbps，接近无损）；原始 .flac / .ogg 上传走同一管线，无需点击按钮。
+解密后可一键二次转码为 MP3（WASM 流式解码 libFLAC/libvorbis + LAME WASM VBR -V 2，平均 ~190 kbps，接近无损；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）；原始 .flac / .ogg 上传走同一管线，无需点击按钮。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.6.4（运营后台 v0.4.9）
+- 当前版本：v0.7.0（运营后台 v0.4.9）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -20,7 +20,8 @@
 - Vite 8
 - JSZip（打包下载）
 - aes-js + browser-id3-writer（NCM 解密 + ID3 标签）
-- wasm-media-encoders（LAME 3.100 的 WebAssembly 编译版，强制转 MP3 时动态加载；本期 v0.6.2 起从 lamejs 换过来，拿到 LAME VBR 模式，输出 -V 2 ~190 kbps）
+- wasm-media-encoders（LAME 3.100 的 WebAssembly 编译版，强制转 MP3 时动态加载；v0.6.2 起从 lamejs 换过来，拿到 LAME VBR 模式，输出 -V 2 ~190 kbps）
+- @wasm-audio-decoders/flac + ogg-vorbis（libFLAC / libvorbis 的 WASM 流式解码器，v0.7.0 起取代 AudioContext.decodeAudioData：2MB 分块解码、PCM 即用即弃，内存峰值与文件大小解耦，并解锁 Hi-Res FLAC）
 
 ## 项目结构
 
@@ -41,9 +42,13 @@ src/                     # 用户端（拾音主站）
       key.ts             #   TEA-CBC key 派生（base64 + 双层 mix key + 自定义包裹）
       tea.ts             #   TEA cipher（Tiny Encryption Algorithm）
       handler-map.ts     #   扩展名 → 目标格式映射 + QMC_EXT_REGEX
-    transcode.ts         # FLAC/OGG → MP3：AudioContext 解码 + lamejs 编码
+    transcode.ts         # FLAC/OGG → MP3：WASM 流式解码（2MB 分块）+ LAME 流式编码
     sniff.ts             # 文件头 magic 识别 + 扩展名兜底，输出 RealFormat
     analytics.ts         # 数据埋点 SDK（详见 docs/ANALYTICS_SPEC.md）
+    worker/              # Web Worker 管道（v0.7.0 新增）：解密/转码计算全部出主线程
+      protocol.ts        #   消息协议 + DecryptError 跨线程序列化/重建（唯一真源）
+      audio.worker.ts    #   Worker 入口：串行消化请求，progress 100ms 节流回报
+      client.ts          #   主线程代理：保持 decryptAudioFile/transcodeToMp3 原签名，崩溃自愈
   components/
     v050.tsx             # v0.5.0 弹窗 / 横条组件
     qq-guide.tsx         # v0.6.0 QQ 音乐使用说明弹窗 + 拖拽区下方入口
@@ -162,15 +167,14 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 - [ ] CI/CD：GitHub Actions 自动构建 + rsync 部署到服务器
 - [ ] 移动端适配优化
-- [ ] 移动端 .flac >100MB 上传时给软提示（避免 transcodeToMp3 一次性 PCM 解码导致 Safari OOM 闪退）
-- [ ] FLAC 流式转码改造（用 WASM FLAC decoder 取代 AudioContext.decodeAudioData，把内存峰值从 ~1GB 降到 ~50MB）
+- [ ] KGM mask 资产扩容 1.1MB → 2.2MB，让 100-200MB 的 KGM/VPR 不再抛 FILE_TOO_LARGE（脚本 scripts/build-kgm-mask.ts 现成；下期候选）
+- [ ] ZIP 打包流式化：JSZip generateAsync 整包驻留内存，批量下载大文件时是下一个内存峰值点（复盘 #5 ZIP_FAILED 37 次 / 18 UV；下期候选）
 - [ ] QQ 音乐 macOS / 移动端方案（v0.6.0 Windows 版已完成 + 旧版安装包托管引导，但 macOS 用户尚无路径）
 - [ ] 酷我音乐 .kwm 格式支持
 - [ ] 酷狗 v4 / KGG 格式支持（联网密钥协议，需后端代理）
 - [ ] QMC 新版 STag 文件长期方案：v0.6.0 仅引导用旧版重下；未来若有官方/社区的离线 ekey 获取通道可考虑接入
 - [ ] QQ 旧版安装包定期复查 sha256（docs/QQ_INSTALLER_SHA256.md，物理目录 `/www/wwwroot/musiczh-downloads/`），确保服务器 /downloads/ 未被替换；建议每月外网 curl 一次
-- [ ] 评估 RC4 大文件性能：观察 v0.6.0 上线后 QMC 文件 ≥100MB 的占比 + abandon 率，必要时给 3 个解密器统一接入 Web Worker
-- [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts
+- [ ] 运营后台：admin/dist 主 chunk 618KB，按页面 lazy load Recharts（下期候选）
 - [ ] 运营后台：本期只做数据看板，下一期接「功能开关 / 配置中心」（DDL 已留 `feature_flags` 空表）
 - [ ] 后端：失败堆积告警邮件（达到阈值通知项目主）
 - [ ] 2026-07 评估：若 1-2 月内「上传文件总数（旧口径）」与新口径偏差稳定收敛，移除观察卡片 + 后端 upload_files_legacy 字段（v0.4.3 引入）
@@ -178,6 +182,16 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 ## 已完成（最近 2 个版本）
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
+
+### v0.7.0 · 20260611 待发布
+
+- **FLAC/OGG 流式转码 + 解密/转码全量入 Web Worker**：解决两个 P0 性能问题——转码内存峰值 ~1GB 导致的 OOM/abandon（复盘 #5：abandon 16.7% 是最大流失点）、大文件解密时主线程卡死 5-15s
+- 流式转码（[src/lib/transcode.ts](src/lib/transcode.ts) 重写）：`@wasm-audio-decoders/flac` / `ogg-vorbis` 按 2MB 分块解码 → PCM 立刻喂 LAME → 即弃；内存峰值与文件大小解耦；删除 AudioContext 全部代码与 HIRES_NOT_SUPPORTED 拦截（枚举值保留，admin 历史日志仍引用）
+- Hi-Res 解锁：24-bit / ≥96kHz FLAC 从拦截转为支持，>48kHz 显式 `outputSampleRate: 48000` 走 LAME 内部重采样（96k/24bit 实测：时长采样级精确、440Hz 正弦过零率验证音高无偏）
+- Worker 管道（[src/lib/worker/](src/lib/worker/) 三件套）：protocol（DecryptError 跨线程序列化/重建，App 的 `instanceof` 分支零改动）+ audio.worker（串行消化、progress 100ms 节流）+ client（保持原签名、崩溃 reject 在途任务并自动重建）；[App.tsx](src/App.tsx) 仅改 import 区；[vite.config.ts](vite.config.ts) 加 `worker.format: 'es'`（iife 不支持代码分割，会把三个 WASM 库 ~1MB 全塞进 worker 主 chunk；es 格式保持按需加载，worker 主体 78KB）
+- 埋点零新增：`decrypt_ms`/`transcode_ms` 计时仍在 App 层包住 await（含 <10ms 通讯开销，噪声级），性能前后对比靠 app_ver 切分；abandon 机制在主线程不受影响
+- 已知非回归：VBR MP3 不写 Xing 头，播放器按首帧码率估算的「显示时长」可能偏差几个百分点（旧管线同款行为；实际解码时长采样级精确）
+- 上线观测：transcode_abandon 占比 16.7% → <10% 算缓解；HIRES_NOT_SUPPORTED 失败（17 次/7d）→ 0；转码 P50/P95 持平或略降（瓶颈在 LAME 编码）；每 MB 解密耗时不回升 >10%；transcode_fail 率 8.5% 不回升、盯 .ogg 失败占比异动。评估窗口 7d / 30d 各一次
 
 ### v0.6.4 / 运营后台 v0.4.9 · 20260605 上线
 
@@ -187,17 +201,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 口径锁定：均值 / 每 MB 一律 ratio-of-sums；「转换」均值按处理次数 (Nd+Nt)，其分位用「整文件端到端」分布（避免快解密+慢转码双峰混合无意义）；只统计成功事件；每 MB 两个 size 基准各为本阶段处理量（解密=原始加密字节、转码=解密产物字节）；分位数为近似 floor-rank（SQLite 无 PERCENTILE，OFFSET 定位、空集返回 NULL）
 - 运营后台（导航第二位新增「性能分析」tab，[PerformanceAnalysis.tsx](admin/src/pages/PerformanceAnalysis.tsx)）：每文件耗时卡（均值 + P50/P95）、每 MB 耗时卡、按来源「每 MB 耗时趋势」折线图（[perf/PerfTrendChart.tsx](admin/src/pages/perf/PerfTrendChart.tsx)，转换/解密/转码可切换）+ 区间合计表；「解密分析 → 上传日志」每行加「耗时」列（[UploadsSection.tsx](admin/src/pages/decrypt-analysis/UploadsSection.tsx)）。前端缺字段显式显示 `-`，禁用 `?? 0`（防后端漏部署伪装成零数据）
 - 上线观测：`decrypt_ms`/`transcode_ms` 非空率应快速逼近 100%（旧版客户端无此字段会拉低、随版本铺开回升）；每 MB 转码 > 每 MB 解密；各指标 P95 明显 > P50（右偏）说明数据真实；来源表里 KGM(查表 XOR) 与 NCM/QMC(RC4) 的每 MB 解密耗时应有可解释差异。评估窗口 7d / 30d 各一次
-
-### 运营后台 v0.4.8 · 20260529 待发布
-
-- **「主动取消」独立成态 + 件维度漏斗加层**：把 ≥50 文件警告弹窗反悔补发的 `upload_reject`（`reject_reason=LARGE_BATCH_DISMISSED`）从"被拒/失败"语义里彻底剥离，新增独立状态「主动取消」。改完所有指标会**自动重算历史数据**（events 表只存原始事件，分类全是查询时 SQL 现算），无需迁移。
-- 后端聚合（[server/src/routes/adminStats.ts](server/src/routes/adminStats.ts)）：`/overview` 加 `dismissed_files` / `confirmed_upload_files` 字段；`upload_reject` 改"狭义被拒"（剔除主动取消）；`/funnel` file 维度从 3 层加成 4 层 `上传总数 → 确认上传 → 转换成功 → 下载`（user 维度不动）
-- 上传日志后端（[server/src/routes/adminUploads.ts](server/src/routes/adminUploads.ts)）：status 枚举 `rejected_large_batch` → `user_dismissed`（全栈一致 rename）；`/timeseries` 字段 `reject_large_batch` → `user_dismissed`，同时 `reject_total` 剔除主动取消，与 adminStats 口径自洽
-- 首页（[admin/src/pages/Overview.tsx](admin/src/pages/Overview.tsx)）：第二组卡片插入「确认上传数（件）」（蓝色 `#1677FF`，副字「主动取消 N」）；上传文件总数卡片 6 段拆解扩为 7 段（被拒 / 主动取消 拆开）；上传失败卡片 tooltip 去掉"大批量取消"
-- 上传日志详情页（[admin/src/lib/format.ts](admin/src/lib/format.ts)）：Tag 文案 `'被拒-大批量取消'` (红) → `'主动取消'` (gold)；状态筛选下拉新增"主动取消"作为独立选项；零代码动 [UploadsSection.tsx](admin/src/pages/decrypt-analysis/UploadsSection.tsx)（查表渲染）
-- 上传趋势图（[UploadsTrendChart.tsx](admin/src/pages/decrypt-analysis/uploads/UploadsTrendChart.tsx)）：`reject_large_batch` 系列改名"主动取消数"/"主动取消占比"，颜色橙色与 Tag 一致；占比分母从 `attempt+reject_total` 改 `upload_files`（成功 + 失败 + 主动取消 = 100%），`success_pct` 数值不变、`fail_pct` 变小、新 `user_dismissed_pct` 补齐
-- 埋点 / DB / 主站全部零改动；仅查询层重新归类
-- 上线观测：件维度漏斗「上传总数 → 确认上传」流失率 ≈ 主动取消占比，正常 0–15%；长期 >25% 说明 50 文件阈值或弹窗文案需重设计；剔除主动取消后的「确认上传 → 转换成功」应稳定 >85%。评估窗口 7d / 30d 各一次
 
 # 通用
 - 优先选择编辑而非重写整个文件
