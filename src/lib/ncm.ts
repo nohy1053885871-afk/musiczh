@@ -28,6 +28,7 @@ import {
 } from './types'
 import { stripFileExtensions } from './filename'
 import { writeId3ToMp3, writeFlacMeta } from './metadata'
+import { sniffAudioFormat } from './sniff'
 
 // 两个固定的 AES 密钥（来自网易云客户端，业内公开）
 const CORE_KEY = new Uint8Array([
@@ -114,12 +115,22 @@ export async function decryptNcm(
   }
   onProgress?.(0.15)
 
-  // ========== 4. 跳过 CRC32 + 5 字节填充 ==========
-  offset += 9
+  // ========== 4. 跳过 CRC32(4) + 1 字节间隙 ==========
+  offset += 5
 
   // ========== 5. 提取封面图 ==========
+  // 封面区有【两个】u32 长度字段：
+  //   imageSpace —— 为封面预留的总空间，音频紧跟在这段之后开始
+  //   coverLen   —— 实际内嵌的封面字节数（≤ imageSpace），其余为 padding
+  // 新版网易云客户端下载的文件常不再内嵌封面（coverLen=0）但仍预留空间
+  // （imageSpace 数 KB），封面只留 meta.albumPic URL。必须按 imageSpace 跳过
+  // 整段预留空间才能对齐音频起点——只按 coverLen 跳会让 RC4 keystream 错位、
+  // 整段音频变乱码（旧版 imageSpace==coverLen 时歪打正着，才一直没暴露）。
+  const imageSpace = view.getUint32(offset, true)
+  offset += 4
   const coverLen = view.getUint32(offset, true)
   offset += 4
+  const imageRegionStart = offset // 封面 + padding 区起点（= metaEnd+13）
   let cover: Blob | null = null
   if (coverLen > 0) {
     const coverBytes = new Uint8Array(buffer.slice(offset, offset + coverLen))
@@ -127,50 +138,45 @@ export async function decryptNcm(
     // 浏览器 img 标签宽容能渲染各种格式；下游 browser-id3-writer 会按 magic 二次嗅探
     cover = new Blob([coverBytes as BlobPart], { type: 'image/jpeg' })
   }
-  offset += coverLen
   onProgress?.(0.2)
 
-  // ========== 6. 解密音频数据（RC4 流密码，分块以汇报进度） ==========
-  const audioData = new Uint8Array(buffer.slice(offset))
+  // ========== 6. 定位音频起点（魔数锚定，可自愈未知偏移变体） ==========
   let keyBox: Uint8Array
   try {
     keyBox = buildKeyBox(rc4Key)
   } catch (e) {
     throw new DecryptError('DECRYPT_FAILED', '生成解密密钥失败', e)
   }
+  const allBytes = new Uint8Array(buffer)
+  // 主偏移 = imageRegionStart + imageSpace（按规范）。若该处解出的头部不是合法音频，
+  // 说明遇到未知偏移变体，在有界窗口内用 magic 锚定扫描找回真正起点（详见 resolveAudioStart）。
+  const { start: audioStart, recovered: offsetRecovered } = resolveAudioStart(
+    allBytes,
+    keyBox,
+    imageRegionStart + imageSpace,
+    imageRegionStart,
+  )
 
-  // 切块大小：256KB。每块结束后让出主线程并汇报进度。
-  const CHUNK = 256 * 1024
+  // ========== 7. 解密音频数据（RC4 流密码，分块以汇报进度） ==========
+  const audioData = allBytes.slice(audioStart)
+  const CHUNK = 256 * 1024 // 每块结束后让出主线程并汇报进度
   const total = audioData.length
   for (let start = 0; start < total; start += CHUNK) {
     const end = Math.min(start + CHUNK, total)
     for (let i = start; i < end; i++) {
-      const j = (i + 1) & 0xff
-      audioData[i] ^=
-        keyBox[(keyBox[j] + keyBox[(keyBox[j] + j) & 0xff]) & 0xff]
+      audioData[i] ^= ncmKeystreamByte(keyBox, i)
     }
     // RC4 解密占总进度 20% → 90%，按数据比例线性分配
-    const decryptProgress = end / total
-    onProgress?.(0.2 + decryptProgress * 0.7)
-    // 让出事件循环，让 UI 能更新
+    onProgress?.(0.2 + (end / total) * 0.7)
     if (end < total) await yieldToEventLoop()
   }
 
-  // ========== 7. 识别格式 ==========
-  let format: 'mp3' | 'flac' = 'mp3'
-  if (
-    audioData[0] === 0x66 &&
-    audioData[1] === 0x4c &&
-    audioData[2] === 0x61 &&
-    audioData[3] === 0x43
-  ) {
-    format = 'flac'
-  } else if (meta.format?.toLowerCase() === 'flac') {
-    format = 'flac'
-  }
+  // ========== 8. 识别格式 ==========
+  // resolveAudioStart 已保证头部是合法音频 magic；按真实 magic 定格式（不再信 meta.format）。
+  const format: 'mp3' | 'flac' = sniffAudioFormat(audioData) === 'flac' ? 'flac' : 'mp3'
 
-  // ========== 8. 写入标签（MP3 用 ID3v2 / FLAC 用 VORBIS_COMMENT + PICTURE） ==========
-  let audio: Blob = new Blob([audioData], {
+  // ========== 9. 写入标签（MP3 用 ID3v2 / FLAC 用 VORBIS_COMMENT + PICTURE） ==========
+  let audio: Blob = new Blob([audioData as BlobPart], {
     type: format === 'flac' ? 'audio/flac' : 'audio/mpeg',
   })
   try {
@@ -184,14 +190,101 @@ export async function decryptNcm(
   }
   onProgress?.(1)
 
-  // ========== 9. 推荐文件名 ==========
+  // ========== 10. 推荐文件名 ==========
   const title = meta.musicName || stripFileExtensions(file.name)
   const artists = meta.artist?.map((a) => a[0]).join(', ') || ''
   const suggestedName = artists
     ? sanitizeFilename(`${artists} - ${title}.${format}`)
     : sanitizeFilename(`${title}.${format}`)
 
-  return { audio, format, meta, cover, suggestedName }
+  return { audio, format, meta, cover, suggestedName, offsetRecovered }
+}
+
+// ========== 音频起点定位（魔数锚定自愈） ==========
+
+const NCM_SCAN_WINDOW = 4 * 1024 * 1024 // 自愈扫描窗口上限：足够覆盖 imageSpace 类偏移错位
+
+/** NCM RC4-like 流密码在「距音频起点第 i 字节」处的 keystream 字节 */
+function ncmKeystreamByte(keyBox: Uint8Array, i: number): number {
+  const j = (i + 1) & 0xff
+  return keyBox[(keyBox[j] + keyBox[(keyBox[j] + j) & 0xff]) & 0xff]
+}
+
+/** 把 fileOffset 当作音频起点，解出前 count 字节（keystream 下标 0..count-1） */
+function decryptHeadAt(
+  bytes: Uint8Array,
+  keyBox: Uint8Array,
+  fileOffset: number,
+  count: number,
+): Uint8Array {
+  const n = Math.max(0, Math.min(count, bytes.length - fileOffset))
+  const out = new Uint8Array(n)
+  for (let i = 0; i < n; i++) {
+    out[i] = bytes[fileOffset + i] ^ ncmKeystreamByte(keyBox, i)
+  }
+  return out
+}
+
+/**
+ * 校验解出的头部是否真是音频。
+ * strict=true（扫描兜底用）额外验一项结构字段，挡住随机字节凑出的假 magic：
+ *   FLAC → 紧跟的 STREAMINFO block（type=0、size=34）
+ *   MP3  → ID3 的 syncsafe tagSize 四字节各 < 0x80
+ * 扫描阶段只认 fLaC / ID3（裸 MPEG sync 太弱、易误判；NCM 的 MP3 必带 ID3）。
+ */
+function isValidAudioHead(head: Uint8Array, strict: boolean): boolean {
+  const fmt = sniffAudioFormat(head)
+  if (!fmt) return false
+  if (!strict) return true
+  if (fmt === 'flac') {
+    if (head.length < 8) return false
+    const type = head[4] & 0x7f
+    const size = (head[5] << 16) | (head[6] << 8) | head[7]
+    return type === 0 && size === 34
+  }
+  if (head[0] === 0x49) {
+    // ID3：syncsafe tagSize 各字节高位必为 0
+    return (
+      head.length >= 10 &&
+      head[6] < 0x80 && head[7] < 0x80 && head[8] < 0x80 && head[9] < 0x80
+    )
+  }
+  return false // strict 模式不接受裸 MPEG sync / OggS
+}
+
+/**
+ * 定位音频真实起点：先试规范主偏移；解出的不是合法音频则在
+ * [imageRegionStart, +窗口] 内逐偏移「解 4 字节探 magic、命中再验结构」扫描找回。
+ * 全找不到 → 抛 OUTPUT_NOT_AUDIO（绝不把乱码当成功放出）。
+ * 成立依据：RC4 keystream 只依赖「距起点下标」，试对起点首字节即解出真 magic。
+ */
+function resolveAudioStart(
+  bytes: Uint8Array,
+  keyBox: Uint8Array,
+  primaryStart: number,
+  imageRegionStart: number,
+): { start: number; recovered: boolean } {
+  if (
+    primaryStart + 4 <= bytes.length &&
+    isValidAudioHead(decryptHeadAt(bytes, keyBox, primaryStart, 16), false)
+  ) {
+    return { start: primaryStart, recovered: false }
+  }
+  // 自愈扫描：只在主偏移失败时走，常态零开销
+  const ks0 = ncmKeystreamByte(keyBox, 0)
+  const end = Math.min(imageRegionStart + NCM_SCAN_WINDOW, bytes.length - 4)
+  for (let s = imageRegionStart; s <= end; s++) {
+    // 廉价预筛：只有 'f'(fLaC) / 'I'(ID3) 才值得整段验，跳过 99% 候选
+    const first = bytes[s] ^ ks0
+    if (first !== 0x66 && first !== 0x49) continue
+    if (isValidAudioHead(decryptHeadAt(bytes, keyBox, s, 16), true)) {
+      return { start: s, recovered: true }
+    }
+  }
+  throw new DecryptError(
+    'OUTPUT_NOT_AUDIO',
+    '解密结果不是有效音频，文件可能已损坏或为暂不支持的加密变体',
+  )
 }
 
 // ========== 工具函数 ==========

@@ -15,7 +15,8 @@ import {
 } from './lib/worker/client'
 import { sniffRealFormat } from './lib/sniff'
 import { stripFileExtensions } from './lib/filename'
-import { readMetaFromBlob, writeId3ToMp3 } from './lib/metadata'
+import { readMetaFromBlob, writeId3ToMp3, writeFlacMeta } from './lib/metadata'
+import { fetchRemoteCover, upgradeToHttps } from './lib/cover'
 import { analytics } from './lib/analytics'
 import { useImpression } from './lib/useImpression'
 import {
@@ -1112,9 +1113,14 @@ function App() {
             (p) => updateFile(next.id, { progress: p }),
             realFormat,
           )
+          const decryptMs = Date.now() - decryptT0 // 先截取：封面回填的联网耗时不计入解密性能埋点
+          // 列表即时显示（内嵌封面优先，否则用 albumPic URL 兜底），状态立刻 done；
+          // 封面回填在后台异步进行，不阻塞这里也不阻塞解密队列
           const coverUrl = result.cover
             ? URL.createObjectURL(result.cover)
-            : result.meta.albumPic || undefined
+            : result.meta.albumPic
+              ? upgradeToHttps(result.meta.albumPic)
+              : undefined
           updateFile(next.id, { status: 'done', result, coverUrl, progress: 1 })
           analytics.track('decrypt_done', {
             file_id: next.id,
@@ -1123,11 +1129,81 @@ function App() {
             file_size: next.file.size,
             source: result.meta?.source,
             format: result.format,
-            has_cover: !!result.cover,
+            has_cover: !!result.cover, // 内嵌口径（回填前），保持历史一致
             // 性能埋点：解密耗时（ms）。file_size=原始加密字节，配合算「每 MB 解密耗时」
-            decrypt_ms: Date.now() - decryptT0,
+            decrypt_ms: decryptMs,
           })
           analytics.unregisterInflight(next.id)
+
+          // 诊断信号（防呆可观测化，纯计算无网络）
+          if (result.offsetRecovered) {
+            // 主偏移解出非音频、靠 magic 锚定扫描找回了起点 → 预警"出现新偏移变体、该补 parser"
+            analytics.track('decrypt_offset_recovered', {
+              file_id: next.id,
+              file_name: next.file.name,
+              file_ext: fileExt,
+              file_size: next.file.size,
+              source: result.meta?.source,
+            })
+          }
+          const declaredFmt =
+            result.meta.format?.toLowerCase() === 'flac'
+              ? 'flac'
+              : result.meta.format?.toLowerCase() === 'mp3'
+                ? 'mp3'
+                : null
+          if (declaredFmt && declaredFmt !== result.format) {
+            // 真实 magic 与元数据声称格式冲突 → 某类文件解析/元数据有系统性问题的早期信号
+            analytics.track('decrypt_format_mismatch', {
+              file_id: next.id,
+              file_name: next.file.name,
+              file_ext: fileExt,
+              file_size: next.file.size,
+              source: result.meta?.source,
+              format: result.format,
+            })
+          }
+
+          // 封面回填：无内嵌封面但有 albumPic → 抓网易云 CDN 图嵌入下载产物。
+          // 后台异步（不 await），既不阻塞 UI 也不阻塞串行解密队列；失败静默、文件仍可用。
+          if (
+            !result.cover &&
+            result.meta.albumPic &&
+            (result.format === 'flac' || result.format === 'mp3')
+          ) {
+            const backfillResult = result
+            const albumPic = result.meta.albumPic
+            const fileId = next.id
+            const fileName = next.file.name
+            const fileSize = next.file.size
+            const src = result.meta?.source
+            void (async () => {
+              const remote = await fetchRemoteCover(albumPic)
+              if (!remote) {
+                analytics.track('cover_backfill_fail', {
+                  file_id: fileId, file_name: fileName, file_size: fileSize, source: src,
+                })
+                return
+              }
+              try {
+                const retagged =
+                  backfillResult.format === 'flac'
+                    ? await writeFlacMeta(backfillResult.audio, remote, backfillResult.meta)
+                    : await writeId3ToMp3(backfillResult.audio, remote, backfillResult.meta)
+                // 只换 result（下载产物带封面）；列表 coverUrl 仍是同一张图，无需动
+                updateFile(fileId, {
+                  result: { ...backfillResult, audio: retagged, cover: remote },
+                })
+                analytics.track('cover_backfill_done', {
+                  file_id: fileId, file_name: fileName, file_size: fileSize, source: src,
+                })
+              } catch {
+                analytics.track('cover_backfill_fail', {
+                  file_id: fileId, file_name: fileName, file_size: fileSize, source: src,
+                })
+              }
+            })()
+          }
         } catch (err) {
           let code: DecryptErrorCode = 'UNKNOWN'
           let message = '未知错误'

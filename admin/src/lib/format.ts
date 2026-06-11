@@ -72,6 +72,12 @@ export const EVENT_LABELS: Record<string, string> = {
   support_matrix_entry_click:    '主站 - 拖拽区下方「查看全部格式」入口 - 点击',
   support_matrix_view:           '主站 - 平台/格式总览弹窗 - 曝光',
   support_matrix_dismiss:        '主站 - 平台/格式总览弹窗 - 关闭',
+
+  // v0.7.1 新增：封面回填 + 解密健壮性诊断
+  cover_backfill_done:      '主站 - 业务 - 封面回填成功（抓 albumPic 嵌入）',
+  cover_backfill_fail:      '主站 - 业务 - 封面回填失败（抓图/写标签失败，文件仍可用）',
+  decrypt_offset_recovered: '主站 - 诊断 - NCM 偏移自愈（出现新变体、已兜住）',
+  decrypt_format_mismatch:  '主站 - 诊断 - 解密格式不符（真实 magic ≠ 元数据声称）',
 }
 
 export function eventLabel(name: string): string {
@@ -185,6 +191,7 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   FILE_TOO_SMALL:              '文件过小',
   FILE_TOO_LARGE:              '文件过大',
   DECRYPT_FAILED:              '解密失败',
+  OUTPUT_NOT_AUDIO:            '解密产物非音频（乱码/未知变体）',
   KGM_V4_UNSUPPORTED:          '酷狗 KGM v4（联网密钥）',
   QMC_NEW_VERSION_UNSUPPORTED: 'QQ 新版（密钥在云端）',
   UNSUPPORTED_FORMAT:          '不支持的格式',

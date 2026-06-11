@@ -9,6 +9,9 @@ export type DecryptErrorCode =
   | 'FILE_TOO_SMALL'
   | 'FILE_TOO_LARGE'
   | 'DECRYPT_FAILED'
+  // 解密流程跑完了，但产物头部不是任何已知音频 magic（fLaC/ID3/MPEG/OggS）。
+  // 说明解密对齐出错或文件损坏——绝不把乱码当"成功"放出，单独成码便于失败看板精确计数。
+  | 'OUTPUT_NOT_AUDIO'
   | 'KGM_V4_UNSUPPORTED'
   // QQ 音乐新版（v20+）：密钥已迁移到云端，文件尾部仅有 'STag' 标记，无法纯前端解密。
   // 引导用户下载旧版（v19.51 Windows）重新生成可解密文件。
@@ -53,6 +56,9 @@ export interface DecryptResult {
   meta: AudioMeta
   cover: Blob | null
   suggestedName: string
+  /** 主偏移解出的不是合法音频、靠 magic 锚定扫描找回了音频起点时为 true（仅 NCM）。
+   *  正常路径不带此字段；App 见 true 时埋 decrypt_offset_recovered 预警"出现新偏移变体"。 */
+  offsetRecovered?: boolean
 }
 
 export type ProgressCallback = (progress: number) => void

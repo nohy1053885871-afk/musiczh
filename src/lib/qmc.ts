@@ -32,6 +32,7 @@ import {
 } from './qmc/cipher'
 import { deriveQmcKey } from './qmc/key'
 import { readMetaFromBlob } from './metadata'
+import { sniffAudioFormat } from './sniff'
 
 const BYTE_COMMA = 0x2c // ','
 
@@ -246,27 +247,6 @@ function bytesToString(bytes: Uint8Array): string {
 function indexOfByte(buf: Uint8Array, b: number): number {
   for (let i = 0; i < buf.length; i++) if (buf[i] === b) return i
   return -1
-}
-
-function sniffAudioFormat(bytes: Uint8Array): AudioFormat | null {
-  if (bytes.length < 4) return null
-  // FLAC: "fLaC"
-  if (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43) {
-    return 'flac'
-  }
-  // OGG: "OggS"
-  if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
-    return 'ogg'
-  }
-  // MP3: ID3 tag
-  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
-    return 'mp3'
-  }
-  // MP3: MPEG sync (0xFF Ex/Fx)
-  if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
-    return 'mp3'
-  }
-  return null
 }
 
 function sanitizeFilename(name: string): string {
