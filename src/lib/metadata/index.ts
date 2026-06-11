@@ -13,6 +13,7 @@ import type { AudioMeta } from '../types'
 import { readId3v2, writeId3ToMp3 } from './id3'
 import { readFlacMeta, writeFlacMeta as writeFlacMetaCore } from './flac'
 import { readOggVorbisMeta } from './ogg'
+import { sniffImageMime } from '../sniff'
 
 export type ParsedAudioMeta = {
   cover: Blob | null
@@ -91,7 +92,9 @@ export async function writeFlacMeta(
   let coverMime = 'image/jpeg'
   if (cover) {
     coverBytes = new Uint8Array(await cover.arrayBuffer())
-    if (cover.type) coverMime = cover.type
+    // 权威 mime 取自封面真实字节（magic），优先于 Blob.type——上游可能传来错误 type，
+    // FLAC PICTURE block 声明的 mime 必须与数据一致，否则严格播放器解码失败丢封面。
+    coverMime = sniffImageMime(coverBytes) || cover.type || 'image/jpeg'
   }
   const out = writeFlacMetaCore(buf, cover, title, artist, album, coverBytes, coverMime)
   return new Blob([out as BlobPart], { type: 'audio/flac' })

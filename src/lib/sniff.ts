@@ -60,6 +60,31 @@ export function sniffAudioFormat(bytes: Uint8Array): AudioFormat | null {
   return null
 }
 
+/**
+ * 按头部 magic 判定【图片字节】的 MIME，识别不出返回 null。
+ * 覆盖 browser-id3-writer 白名单与我们 FLAC PICTURE 写入都支持的常见格式。
+ *
+ * 权威信号：图片真实字节，优先于任何外部声称的 Blob.type / 扩展名 / 容器硬编码——
+ * NCM 容器不带 cover mime（旧代码一律标 image/jpeg），但新版网易云封面其实是 PNG；
+ * FLAC PICTURE block 必须声明真实格式，否则严格播放器按声明 MIME 解码失败 → 丢封面。
+ * 用途：NCM 抠出的封面定 MIME / 远程回填封面归一化 MIME / FLAC PICTURE 写入校正。
+ */
+export function sniffImageMime(bytes: Uint8Array): string | null {
+  if (bytes.length < 12) return null
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return 'image/png'
+  }
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'image/gif'
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+  return null
+}
+
 const NCM_MAGIC = [0x43, 0x54, 0x45, 0x4e, 0x46, 0x44, 0x41, 0x4d] // "CTENFDAM"
 const KGM_MAGIC = [
   0x7c, 0xd5, 0x32, 0xeb, 0x86, 0x02, 0x7f, 0x4b,

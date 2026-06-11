@@ -9,6 +9,8 @@
  * 任何失败（超时 / 网络 / CORS / 非图片 / 过大）都返回 null：封面是锦上添花，绝不影响主流程。
  */
 
+import { sniffImageMime } from './sniff'
+
 const DEFAULT_TIMEOUT_MS = 8000
 const MAX_COVER_BYTES = 8 * 1024 * 1024 // 封面图体积上限（实测 albumPic ~350KB）
 
@@ -38,8 +40,9 @@ export async function fetchRemoteCover(
     if (ct && !ct.startsWith('image/')) return null
     const blob = await resp.blob()
     if (blob.size === 0 || blob.size > MAX_COVER_BYTES) return null
-    // 嗅探图片 magic 确认确是图片（兼容 browser-id3-writer 白名单）并归一化 mime
-    const mime = await sniffImageMime(blob)
+    // 按 magic 确认确是图片（兼容 browser-id3-writer 白名单）并归一化 mime
+    const head = new Uint8Array(await blob.slice(0, 12).arrayBuffer())
+    const mime = sniffImageMime(head)
     if (!mime) return null
     return blob.type === mime ? blob : blob.slice(0, blob.size, mime)
   } catch {
@@ -47,20 +50,4 @@ export async function fetchRemoteCover(
   } finally {
     clearTimeout(timer)
   }
-}
-
-/** 按头部 magic 判定图片类型，非已知图片返回 null（覆盖 browser-id3-writer 认的格式） */
-async function sniffImageMime(blob: Blob): Promise<string | null> {
-  const h = new Uint8Array(await blob.slice(0, 12).arrayBuffer())
-  if (h.length < 12) return null
-  if (h[0] === 0xff && h[1] === 0xd8 && h[2] === 0xff) return 'image/jpeg'
-  if (h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4e && h[3] === 0x47) return 'image/png'
-  if (h[0] === 0x47 && h[1] === 0x49 && h[2] === 0x46) return 'image/gif'
-  if (
-    h[0] === 0x52 && h[1] === 0x49 && h[2] === 0x46 && h[3] === 0x46 &&
-    h[8] === 0x57 && h[9] === 0x45 && h[10] === 0x42 && h[11] === 0x50
-  ) {
-    return 'image/webp'
-  }
-  return null
 }
