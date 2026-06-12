@@ -22,6 +22,10 @@ import {
 const VBR_QUALITY = 2 // LAME -V 2，平均 ~190 kbps
 const DECODE_CHUNK_BYTES = 2 * 1024 * 1024 // 压缩域切块；解出的 PCM 瞬时占用 ~10MB 级，即用即弃
 const ENCODER_TAG = 'wasm-lame-v2'
+// WASM decoder 堆上 _decode() 的输入 buffer 有泄漏（allocateTypedArray setPointer=false 且无手动 free），
+// 堆固定 16MB 不可增长。每处理 DECODER_RESET_BYTES 重建 WASM 实例回收堆。
+const DECODER_RESET_BYTES = 12 * 1024 * 1024
+const COALESCE_THRESHOLD = 500 // Mp3Sink 缓冲碎片合并阈值
 
 export const TRANSCODE_ENCODER = ENCODER_TAG
 
@@ -86,6 +90,16 @@ class Mp3Sink {
     // encode()/finalize() 返回的 Uint8Array 指向 wasm 内部内存，下次调用会被覆盖，必须立即拷出
     if (view.length > 0) this.buffers.push(new Uint8Array(view))
     this.totalSamples += decoded.samplesDecoded
+    if (this.buffers.length >= COALESCE_THRESHOLD) this.coalesce()
+  }
+
+  /** 把碎片 Uint8Array 合并成一块，减少 GC 压力 */
+  private coalesce() {
+    const total = this.buffers.reduce((s, b) => s + b.length, 0)
+    const merged = new Uint8Array(total)
+    let pos = 0
+    for (const buf of this.buffers) { merged.set(buf, pos); pos += buf.length }
+    this.buffers = [merged]
   }
 
   finalize(): Blob {
@@ -123,9 +137,12 @@ export async function transcodeToMp3(
 
     const total = source.size
     for (let offset = 0; offset < total; offset += DECODE_CHUNK_BYTES) {
+      // WASM decoder 堆泄漏回收：每 12MB 重建 WASM 实例（codec-parser 不受影响，帧解码无跨帧状态）
+      if (offset > 0 && offset % DECODER_RESET_BYTES < DECODE_CHUNK_BYTES) {
+        await (decoder as any)._decoder.reset()
+      }
       const end = Math.min(offset + DECODE_CHUNK_BYTES, total)
       const bytes = new Uint8Array(await source.slice(offset, end).arrayBuffer())
-      // decoder 内部自动组帧，任意切块边界安全
       sink.feed(await decoder.decode(bytes))
       onProgress?.((end / total) * 0.98)
     }

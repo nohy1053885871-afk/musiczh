@@ -196,6 +196,7 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   QMC_NEW_VERSION_UNSUPPORTED: 'QQ 新版（密钥在云端）',
   UNSUPPORTED_FORMAT:          '不支持的格式',
   HIRES_NOT_SUPPORTED:         'Hi-Res FLAC 浏览器解不了',
+  TRANSCODE_OOM:               '转码进程内存溢出/崩溃',
   UNKNOWN:                     '未知错误',
 }
 

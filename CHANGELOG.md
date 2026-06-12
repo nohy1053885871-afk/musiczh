@@ -7,6 +7,16 @@
 
 ---
 
+## v0.7.1 · 20260611 上线
+
+- **NCM imageSpace 解析 bug 修复 + 偏移自愈 + 封面回填 + 三器输出校验/监控**：用户反馈"NCM 转的 FLAC 转码报 INVALID_HEADER / MP3 没封面"，排查发现三个表象同源于一个解析 bug
+- 根因（[src/lib/ncm.ts](src/lib/ncm.ts)）：NCM 封面区 CRC32 后有【两个】u32 长度字段——`imageSpace`（封面预留总空间，音频从这之后开始）和 `coverLen`（实际内嵌字节，≤imageSpace）。旧代码把 imageSpace 当"5 字节间隙"跳过、只按 coverLen 跳封面就解密音频；**新版网易云客户端不再内嵌封面（coverLen=0 但仍预留 ~7.5KB）** → 音频起点早了 imageSpace 字节 → RC4 keystream 错位 → **整段音频乱码**（旧版 imageSpace==coverLen 歪打正着，一直没暴露）。改读两字段、按 imageSpace 对齐
+- 偏移自愈（[src/lib/ncm.ts](src/lib/ncm.ts) `resolveAudioStart`）：主偏移解出的不是合法 magic 时，在有界窗口内"解 4 字节探 magic + 验结构"扫描找回真起点（RC4 keystream 只依赖距起点下标）；命中即自愈并埋 `decrypt_offset_recovered` 预警新变体
+- 输出健全性校验（三器统一）：`sniffAudioFormat` 提取到 [src/lib/sniff.ts](src/lib/sniff.ts) 共用，ncm/kgm/qmc 解密产物非已知 magic 一律报错不放乱码；NCM 新增 `OUTPUT_NOT_AUDIO` 错误码（kgm/qmc 早有各自更具体的码）。NCM 不再信 `meta.format`、改按真实 magic 定格式
+- 封面回填（[src/lib/cover.ts](src/lib/cover.ts) + [src/App.tsx](src/App.tsx)）：解密产物无内嵌封面但有 `meta.albumPic` 时，主线程在解密计时窗口外、后台异步抓网易云 CDN 图（实测支持 https + CORS `*`）嵌入下载产物（writeFlacMeta/writeId3ToMp3 幂等重写）；失败静默、不阻塞队列、文件仍可用。只抓公开封面图、绝不上传音频
+- 埋点（纯前端、不动 server）：新增 `cover_backfill_done/fail`、`decrypt_offset_recovered`、`decrypt_format_mismatch`（真实 magic≠声称格式的领先指标），均用已白名单字段；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) + admin `EVENT_LABELS`/`ERROR_CODE_LABEL` 已登记
+- 上线观测：`OUTPUT_NOT_AUDIO`/`decrypt_offset_recovered`/`decrypt_format_mismatch` 常态应趋近 0（冒头=新变体预警）；NCM 旧 `INVALID_HEADER` 失败 + 用户回传 .flac 转码失败应明显下降；`cover_backfill` 成功率 >90%；每 MB 解密耗时不因抓图抬升（已排除在 decrypt_ms 外）。评估窗口 7d / 30d 各一次
+
 ## v0.7.0 · 20260611 上线
 
 - **FLAC/OGG 流式转码 + 解密/转码全量入 Web Worker**：解决两个 P0 性能问题——转码内存峰值 ~1GB 导致的 OOM/abandon（复盘 #5：abandon 16.7% 是最大流失点）、大文件解密时主线程卡死 5-15s

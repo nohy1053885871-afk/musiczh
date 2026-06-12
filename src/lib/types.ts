@@ -19,6 +19,8 @@ export type DecryptErrorCode =
   | 'UNSUPPORTED_FORMAT'
   // 真 FLAC 头但浏览器内置 codec 解不了（高概率是 24-bit / 96kHz+ Hi-Res FLAC）
   | 'HIRES_NOT_SUPPORTED'
+  // 转码过程中 Worker 崩溃（WASM 堆溢出等不可恢复错误）
+  | 'TRANSCODE_OOM'
   | 'UNKNOWN'
 
 export class DecryptError extends Error {

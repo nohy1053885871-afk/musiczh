@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.2（运营后台 v0.4.9）
+- 当前版本：v0.7.3（运营后台 v0.4.9）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -185,6 +185,16 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.7.3 · 20260612 上线
+
+- **FLAC/OGG 大文件转 MP3 时 Worker 崩溃修复**：用户反馈上传 64MB 原始 .flac 转码报"处理进程异常退出，请重试"（error_code: UNKNOWN）。失败看板 id 7994 等转码崩溃同源
+- 根因（已实验验证）：转码用的 `@wasm-audio-decoders/flac@0.2.10` WASM 堆**固定 16.1MB 且不可增长**（`_emscripten_resize_heap` 返回 false）。内部 `_decode()` 每次把输入 buffer 分配到 WASM 堆却**从未释放**（`allocateTypedArray(len, Uint8Array, false)` setPointer=false，不进 tracked set 也无手动 free）。实测：100×8KB 分配泄漏 790KB，处理到 ~16MB 压缩数据堆耗尽 → C 侧 malloc 返 NULL → 段错误 → Worker 进程被杀（绕过 worker 内 try/catch，触发 `worker.onerror`）。**旧边界：原始 FLAC/OGG 转 MP3 约 16-20MB 即崩**
+- 核心修复（[src/lib/transcode.ts](src/lib/transcode.ts)）：2MB 分块循环中每处理 12MB 调 `decoder._decoder.reset()` 重建 WASM 实例回收堆。实测堆从 8.14MB 恢复到 15.9MB（完全回收）；mid-stream reset 后继续解码 441000 样本 0 丢失——FLAC 帧自包含、无跨帧状态，codec-parser 独立于 WASM decoder 不受影响。任意大小文件（含 200MB）现在都能转
+- 兜底（[src/lib/worker/client.ts](src/lib/worker/client.ts) + [src/lib/types.ts](src/lib/types.ts)）：万一极端 case（单帧 >16MB 的损坏 FLAC）仍崩，`worker.onerror` 按在途请求类型区分——transcode 崩溃给新错误码 `TRANSCODE_OOM` + "文件可能已损坏或格式异常"提示，不再笼统报 UNKNOWN
+- 次要（[src/lib/transcode.ts](src/lib/transcode.ts) Mp3Sink）：每 500 个 MP3 碎片合并一次，降 64MB 文件产生的 3000+ 个小 Uint8Array 的 GC 压力
+- 埋点零新增（复用 `transcode_fail` + error_code 字段，admin `ERROR_CODE_LABEL` 已可加 `TRANSCODE_OOM` 中文映射）、不动 server、不动 admin
+- 上线观测：失败看板 transcode 阶段 `UNKNOWN`「处理进程异常退出」应趋近 0；新 `TRANSCODE_OOM` 常态也应近 0（冒头=损坏文件，非内存泄漏）。评估窗口 7d
+
 ### v0.7.2 · 20260612 上线
 
 - **NCM 内嵌封面 MIME 修正（PNG 被误标 JPEG → 下载产物丢封面）**：用户反馈"NCM 转 FLAC 后列表有封面、下载没封面"，且 v0.7.1 的封面回填未覆盖此 case
@@ -193,16 +203,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 兼容性实测（真实源码跑 20 个新旧 NCM + mutagen 校验「声明 MIME==数据真实格式」）：旧 NCM 内嵌 JPEG（FLAC/MP3）、新 NCM 内嵌 PNG（FLAC/MP3）、无内嵌走 CDN 回填（JPEG/PNG）全部一致；旧版本来正确的 JPEG 无回归。已知边界：网易云从未出现过的冷门图片格式（BMP/TIFF）嗅探不出会退标 jpeg
 - 埋点零新增、不动 server（纯 MIME 修正）。macOS 访达不渲染 FLAC 封面缩略图是系统限制（无 FLAC 原生解码器）、与本修复无关，需用真正播放器查看
 - 上线观测：无新埋点，靠用户反馈 + `cover_backfill` 成功率维持 >90%；NCM→FLAC 下载产物在播放器内封面显示率应回升。评估窗口 7d
-
-### v0.7.1 · 20260611 上线
-
-- **NCM imageSpace 解析 bug 修复 + 偏移自愈 + 封面回填 + 三器输出校验/监控**：用户反馈"NCM 转的 FLAC 转码报 INVALID_HEADER / MP3 没封面"，排查发现三个表象同源于一个解析 bug
-- 根因（[src/lib/ncm.ts](src/lib/ncm.ts)）：NCM 封面区 CRC32 后有【两个】u32 长度字段——`imageSpace`（封面预留总空间，音频从这之后开始）和 `coverLen`（实际内嵌字节，≤imageSpace）。旧代码把 imageSpace 当"5 字节间隙"跳过、只按 coverLen 跳封面就解密音频；**新版网易云客户端不再内嵌封面（coverLen=0 但仍预留 ~7.5KB）** → 音频起点早了 imageSpace 字节 → RC4 keystream 错位 → **整段音频乱码**（旧版 imageSpace==coverLen 歪打正着，一直没暴露）。改读两字段、按 imageSpace 对齐
-- 偏移自愈（[src/lib/ncm.ts](src/lib/ncm.ts) `resolveAudioStart`）：主偏移解出的不是合法 magic 时，在有界窗口内"解 4 字节探 magic + 验结构"扫描找回真起点（RC4 keystream 只依赖距起点下标）；命中即自愈并埋 `decrypt_offset_recovered` 预警新变体
-- 输出健全性校验（三器统一）：`sniffAudioFormat` 提取到 [src/lib/sniff.ts](src/lib/sniff.ts) 共用，ncm/kgm/qmc 解密产物非已知 magic 一律报错不放乱码；NCM 新增 `OUTPUT_NOT_AUDIO` 错误码（kgm/qmc 早有各自更具体的码）。NCM 不再信 `meta.format`、改按真实 magic 定格式
-- 封面回填（[src/lib/cover.ts](src/lib/cover.ts) + [src/App.tsx](src/App.tsx)）：解密产物无内嵌封面但有 `meta.albumPic` 时，主线程在解密计时窗口外、后台异步抓网易云 CDN 图（实测支持 https + CORS `*`）嵌入下载产物（writeFlacMeta/writeId3ToMp3 幂等重写）；失败静默、不阻塞队列、文件仍可用。只抓公开封面图、绝不上传音频
-- 埋点（纯前端、不动 server）：新增 `cover_backfill_done/fail`、`decrypt_offset_recovered`、`decrypt_format_mismatch`（真实 magic≠声称格式的领先指标），均用已白名单字段；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) + admin `EVENT_LABELS`/`ERROR_CODE_LABEL` 已登记
-- 上线观测：`OUTPUT_NOT_AUDIO`/`decrypt_offset_recovered`/`decrypt_format_mismatch` 常态应趋近 0（冒头=新变体预警）；NCM 旧 `INVALID_HEADER` 失败 + 用户回传 .flac 转码失败应明显下降；`cover_backfill` 成功率 >90%；每 MB 解密耗时不因抓图抬升（已排除在 decrypt_ms 外）。评估窗口 7d / 30d 各一次
 
 # 通用
 - 优先选择编辑而非重写整个文件
