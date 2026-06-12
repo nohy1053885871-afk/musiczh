@@ -25,6 +25,7 @@ type DoneMessage = Extract<
 >
 
 interface Pending {
+  kind: WorkerRequest['kind']
   onProgress?: ProgressCallback
   resolve: (msg: DoneMessage) => void
   reject: (err: Error) => void
@@ -34,8 +35,16 @@ let worker: Worker | null = null
 let nextId = 1
 const pending = new Map<number, Pending>()
 
-function rejectAll(err: Error) {
-  for (const entry of pending.values()) entry.reject(err)
+function rejectAll() {
+  for (const entry of pending.values()) {
+    const isTranscode = entry.kind === 'transcode'
+    entry.reject(new DecryptError(
+      isTranscode ? 'TRANSCODE_OOM' : 'UNKNOWN',
+      isTranscode
+        ? '转码失败，文件可能已损坏或格式异常，请确认文件能正常播放后重试'
+        : '处理进程异常退出，请重试',
+    ))
+  }
   pending.clear()
 }
 
@@ -61,7 +70,7 @@ function getWorker(): Worker {
   }
   // 未捕获异常（脚本加载失败 / WASM OOM 杀进程）：在途任务全部失败，销毁实例下次重建
   worker.onerror = () => {
-    rejectAll(new DecryptError('UNKNOWN', '处理进程异常退出，请重试'))
+    rejectAll()
     worker?.terminate()
     worker = null
   }
@@ -73,7 +82,7 @@ function dispatch(
   onProgress?: ProgressCallback,
 ): Promise<DoneMessage> {
   return new Promise<DoneMessage>((resolve, reject) => {
-    pending.set(req.id, { onProgress, resolve, reject })
+    pending.set(req.id, { kind: req.kind, onProgress, resolve, reject })
     getWorker().postMessage(req)
   })
 }
