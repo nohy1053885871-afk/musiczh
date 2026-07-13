@@ -7,6 +7,15 @@
 
 ---
 
+## v0.7.2 · 20260612 上线
+
+- **NCM 内嵌封面 MIME 修正（PNG 被误标 JPEG → 下载产物丢封面）**：用户反馈"NCM 转 FLAC 后列表有封面、下载没封面"，且 v0.7.1 的封面回填未覆盖此 case
+- 根因（[src/lib/ncm.ts](src/lib/ncm.ts)）：v0.7.1 回填只管「无内嵌封面」的新版 NCM；本 case 是【自带内嵌封面】的 NCM（coverLen>0），走的是更老的"内嵌封面直接写进产物"路径。新版网易云内嵌封面其实是 **PNG**，旧代码却把 cover Blob 硬编码 `image/jpeg`，经 `cover.type` 传到 FLAC `writeFlacMeta` → PICTURE block 声明 jpeg 却装 PNG。浏览器 `<img>` 按内容嗅探照常渲染（**列表有封面**），但播放器按声明 MIME 把 PNG 喂 JPEG 解码器 → 失败 → **下载产物丢封面**（MP3 路径不受影响：browser-id3-writer 自己按字节嗅探）
+- 修复（权威信号=真实字节，优先于元数据，承接 v0.7.1 同一原则）：[src/lib/sniff.ts](src/lib/sniff.ts) 新增共享 `sniffImageMime(bytes)`（按 magic 判 jpeg/png/gif/webp）；ncm 抠封面按真实 magic 定 Blob.type；[src/lib/metadata/index.ts](src/lib/metadata/index.ts) FLAC 写入按封面真实字节定 MIME（兜底防任何上游传错 type）；[src/lib/cover.ts](src/lib/cover.ts) 回填嗅探复用同一函数、去重
+- 兼容性实测（真实源码跑 20 个新旧 NCM + mutagen 校验「声明 MIME==数据真实格式」）：旧 NCM 内嵌 JPEG（FLAC/MP3）、新 NCM 内嵌 PNG（FLAC/MP3）、无内嵌走 CDN 回填（JPEG/PNG）全部一致；旧版本来正确的 JPEG 无回归。已知边界：网易云从未出现过的冷门图片格式（BMP/TIFF）嗅探不出会退标 jpeg
+- 埋点零新增、不动 server（纯 MIME 修正）。macOS 访达不渲染 FLAC 封面缩略图是系统限制（无 FLAC 原生解码器）、与本修复无关，需用真正播放器查看
+- 上线观测：无新埋点，靠用户反馈 + `cover_backfill` 成功率维持 >90%；NCM→FLAC 下载产物在播放器内封面显示率应回升。评估窗口 7d
+
 ## v0.7.1 · 20260611 上线
 
 - **NCM imageSpace 解析 bug 修复 + 偏移自愈 + 封面回填 + 三器输出校验/监控**：用户反馈"NCM 转的 FLAC 转码报 INVALID_HEADER / MP3 没封面"，排查发现三个表象同源于一个解析 bug

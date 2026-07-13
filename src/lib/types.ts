@@ -21,6 +21,10 @@ export type DecryptErrorCode =
   | 'HIRES_NOT_SUPPORTED'
   // 转码过程中 Worker 崩溃（WASM 堆溢出等不可恢复错误）
   | 'TRANSCODE_OOM'
+  // 读 File 时底层文件已被移动/删除/系统回收（DOMException NotFoundError/NotReadableError）。
+  // 流式分块 lazy 读把暴露窗口拉长到整个处理时长；移动端从网盘/聊天应用临时目录
+  // 选取的文件（临时副本被清理）最易触发。环境性失败，引导用户存到本机后重传。
+  | 'FILE_UNREADABLE'
   | 'UNKNOWN'
 
 export class DecryptError extends Error {

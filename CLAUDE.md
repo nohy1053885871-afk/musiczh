@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.3（运营后台 v0.4.9）
+- 当前版本：v0.7.4（运营后台 v0.4.10）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -83,7 +83,9 @@ public/
 | 埋点（新事件 / 新接入点 / 字段白名单） | **跨子项目** | `src/lib/analytics.ts` + `src/App.tsx` 调用点 + `server/src/routes/track.ts` + `docs/ANALYTICS_SPEC.md`（必登记） |
 | 部署 / 打包 / nginx / pm2 / `.env` / 备份 | **不改代码** | [DEPLOY.md](DEPLOY.md) |
 
-## 给 Claude 的工作指引
+## 给 Agent 的工作指引
+
+> 本文件由 Claude Code（`CLAUDE.md`）与 Codex（`AGENTS.md` 软链接指向本文件）**共读一份**。改说明只改 `CLAUDE.md` 本体，别动 `AGENTS.md` 软链接。两个工具之间没有共享记忆，唯一协同介质是 git + 本文档：分工按子项目/目录物理隔离，同一文件（尤其 `src/App.tsx`）一次只让一个工具改，勤 commit 小粒度。
 
 - 用户描述需求时通常会点出"主站"/"运营后台"/"后端"/"埋点"——先据此锁定子项目，再 Read 相关文件，**不要全量探索**
 - 三个子项目互相**解耦**：改任一不重新构建另两个；跨端改动需明确列出每端的改动清单
@@ -92,6 +94,20 @@ public/
 - 新增异步流程 → 同时埋 `*_start` 与 `*_done` / `*_fail`，失败必走 `analytics.trackFailure`
 - 任何新增事件，先在 [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 事件全表登记一行（含中文描述），再在 `admin/src/lib/format.ts` 的 `EVENT_LABELS` 加映射
 - 🚨 **改了 `server/**` 的 PR 合到 main 后，必须额外手动 dispatch 后端部署**：GitHub Actions 的 deploy-server job **故意不在 push 时触发**（防坏版本 502 整站挂），条件是 `workflow_dispatch || refs/tags/v*`。merge 完跑 `gh workflow run deploy.yml --ref main -f target=server` + `gh run watch` 看 success 才算上线完成；前端 `?? 0` fallback 会把"字段缺失"伪装成"零数据"，光看 UI 不报错 ≠ 后端真的上了
+
+## 项目主的隐性约定（代码/git 里看不出，两个工具都要遵守）
+
+这些是项目主口头给过、但代码和提交历史里推不出来的规则，写在这里让任何 Agent 都能读到：
+
+- **交互语言**：所有回复用中文。
+- **UI 文案通用化**：面向用户的提示语说"音频文件"，**不要枚举具体扩展名**（.ncm/.kgm/...），格式列表只在文档和说明弹窗里出现。
+- **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
+- **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
+- **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（现为运营后台 v0.4.10，与主站 v0.7.4 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
+- **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
+- **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
 
 ## 核心数据结构
 
@@ -185,6 +201,16 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.7.4 · 20260713 上线
+
+- **FILE_UNREADABLE 错误码：源文件中途失效的失败归类 + 中文文案**：失败日志 #21545（安卓 + 夸克浏览器，30MB .flac 转码报裸英文 NotFoundError、error_code=null）排查
+- 根因：File 经 postMessage 按引用进 Worker（不拷字节），v0.7.0 流式转码按 2MB 分块 lazy 读——30MB ≈ 15 次 `slice().arrayBuffer()` 分散在整个转码时长内；移动端从网盘/聊天应用选取的文件是临时物化副本，中途被系统回收/清理 → 靠后的分块读抛 `DOMException NotFoundError` → 非 DecryptError 无 code，用户看裸英文。环境性失败，字节已丢，代码层无法恢复
+- 修复（[src/lib/worker/protocol.ts](src/lib/worker/protocol.ts) `serializeWorkerError` 咽喉点）：DOMException `NotFoundError`/`NotReadableError` → 新错误码 `FILE_UNREADABLE`（[src/lib/types.ts](src/lib/types.ts)）+ 中文引导文案（"请把文件先保存到本机存储，再重新上传"），解密/转码两条路径一处覆盖；App.tsx 零改动
+- 不做整读预载兜底：手机端多吃一个文件体积的内存正是 v0.7.3 刚修完的 Worker OOM 敏感区，拿一种失败换另一种不划算；若上线后占比高再评估小文件折中方案
+- 验证：puppeteer-core + CDP 磁盘背书上传真实复现（50MB FLAC 转码中途 mv 走源文件 → 友好文案展示 + `error_code=FILE_UNREADABLE`）；NCM 解密 + FLAC 转码回归零失败
+- admin（[admin/src/lib/format.ts](admin/src/lib/format.ts)）`ERROR_CODE_LABEL` 加映射；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 已登记；不动 server
+- 上线观测：失败日志 `FILE_UNREADABLE` 出现、裸英文 NotFoundError 的 error_code=null 记录归零；失败总量不应下降（环境性失败只是完成归类）；若占 transcode_fail 比例 >10%，下期考虑上传区引导文案。评估窗口 7d
+
 ### v0.7.3 · 20260612 上线
 
 - **FLAC/OGG 大文件转 MP3 时 Worker 崩溃修复**：用户反馈上传 64MB 原始 .flac 转码报"处理进程异常退出，请重试"（error_code: UNKNOWN）。失败看板 id 7994 等转码崩溃同源
@@ -194,15 +220,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 次要（[src/lib/transcode.ts](src/lib/transcode.ts) Mp3Sink）：每 500 个 MP3 碎片合并一次，降 64MB 文件产生的 3000+ 个小 Uint8Array 的 GC 压力
 - 埋点零新增（复用 `transcode_fail` + error_code 字段，admin `ERROR_CODE_LABEL` 已可加 `TRANSCODE_OOM` 中文映射）、不动 server、不动 admin
 - 上线观测：失败看板 transcode 阶段 `UNKNOWN`「处理进程异常退出」应趋近 0；新 `TRANSCODE_OOM` 常态也应近 0（冒头=损坏文件，非内存泄漏）。评估窗口 7d
-
-### v0.7.2 · 20260612 上线
-
-- **NCM 内嵌封面 MIME 修正（PNG 被误标 JPEG → 下载产物丢封面）**：用户反馈"NCM 转 FLAC 后列表有封面、下载没封面"，且 v0.7.1 的封面回填未覆盖此 case
-- 根因（[src/lib/ncm.ts](src/lib/ncm.ts)）：v0.7.1 回填只管「无内嵌封面」的新版 NCM；本 case 是【自带内嵌封面】的 NCM（coverLen>0），走的是更老的"内嵌封面直接写进产物"路径。新版网易云内嵌封面其实是 **PNG**，旧代码却把 cover Blob 硬编码 `image/jpeg`，经 `cover.type` 传到 FLAC `writeFlacMeta` → PICTURE block 声明 jpeg 却装 PNG。浏览器 `<img>` 按内容嗅探照常渲染（**列表有封面**），但播放器按声明 MIME 把 PNG 喂 JPEG 解码器 → 失败 → **下载产物丢封面**（MP3 路径不受影响：browser-id3-writer 自己按字节嗅探）
-- 修复（权威信号=真实字节，优先于元数据，承接 v0.7.1 同一原则）：[src/lib/sniff.ts](src/lib/sniff.ts) 新增共享 `sniffImageMime(bytes)`（按 magic 判 jpeg/png/gif/webp）；ncm 抠封面按真实 magic 定 Blob.type；[src/lib/metadata/index.ts](src/lib/metadata/index.ts) FLAC 写入按封面真实字节定 MIME（兜底防任何上游传错 type）；[src/lib/cover.ts](src/lib/cover.ts) 回填嗅探复用同一函数、去重
-- 兼容性实测（真实源码跑 20 个新旧 NCM + mutagen 校验「声明 MIME==数据真实格式」）：旧 NCM 内嵌 JPEG（FLAC/MP3）、新 NCM 内嵌 PNG（FLAC/MP3）、无内嵌走 CDN 回填（JPEG/PNG）全部一致；旧版本来正确的 JPEG 无回归。已知边界：网易云从未出现过的冷门图片格式（BMP/TIFF）嗅探不出会退标 jpeg
-- 埋点零新增、不动 server（纯 MIME 修正）。macOS 访达不渲染 FLAC 封面缩略图是系统限制（无 FLAC 原生解码器）、与本修复无关，需用真正播放器查看
-- 上线观测：无新埋点，靠用户反馈 + `cover_backfill` 成功率维持 >90%；NCM→FLAC 下载产物在播放器内封面显示率应回升。评估窗口 7d
 
 # 通用
 - 优先选择编辑而非重写整个文件
