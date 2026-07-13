@@ -38,6 +38,20 @@ export function serializeWorkerError(err: unknown): SerializedWorkerError {
   if (err instanceof DecryptError) {
     return { decryptCode: err.code, message: err.message, stack: err.stack }
   }
+  // File 底层文件在处理途中失效（NotFoundError）或被修改（NotReadableError）
+  // —— 流式分块 lazy 读把暴露窗口拉长到整个转码时长，移动端临时文件被回收时在此现形。
+  // 在序列化咽喉点统一映射，解密/转码两条路径同时覆盖。
+  if (
+    err instanceof DOMException &&
+    (err.name === 'NotFoundError' || err.name === 'NotReadableError')
+  ) {
+    return {
+      decryptCode: 'FILE_UNREADABLE',
+      message:
+        '读取音频文件失败：文件在处理过程中被移动、删除或被系统清理。请把文件先保存到本机存储，再重新上传',
+      stack: err.stack,
+    }
+  }
   if (err instanceof Error) {
     return { message: err.message, stack: err.stack }
   }

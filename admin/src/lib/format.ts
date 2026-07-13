@@ -197,6 +197,7 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   UNSUPPORTED_FORMAT:          '不支持的格式',
   HIRES_NOT_SUPPORTED:         'Hi-Res FLAC 浏览器解不了',
   TRANSCODE_OOM:               '转码进程内存溢出/崩溃',
+  FILE_UNREADABLE:             '源文件已失效（被移动/删除/系统回收）',
   UNKNOWN:                     '未知错误',
 }
 
