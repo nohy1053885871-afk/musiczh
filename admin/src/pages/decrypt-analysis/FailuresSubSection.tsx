@@ -5,7 +5,8 @@ import { CopyOutlined } from '@ant-design/icons'
 import { api, type FailureRow, type FailureDetail } from '../../lib/api'
 import { DataTableCard } from '../../components/biz/DataTableCard'
 import { DownloadCSVButton } from '../../components/biz/DownloadCSVButton'
-import { formatBytes, formatTime, STAGE_LABEL } from '../../lib/format'
+import { formatBytes, formatTime, STAGE_LABEL, ERROR_CODE_LABEL } from '../../lib/format'
+import { ErrorCodeCell } from '../../components/biz/ErrorCodeCell'
 
 const { Text, Paragraph } = Typography
 
@@ -71,10 +72,14 @@ export function FailuresSubSection({ rq, reloadKey }: { rq: string; reloadKey: n
   const codeOptions = useMemo(
     () => [
       { value: '', label: '全部错误码' },
-      ...codeAgg.map((c) => ({
-        value: c.error_code ?? '',
-        label: `${c.error_code ?? '(无)'} (${c.n})`,
-      })),
+      // error_code 为 null 的聚合组不进下拉：其 value('')与「全部错误码」冲突会劫持默认显示，
+      // 且 code='' 查询参数会被丢弃、本就筛不了
+      ...codeAgg
+        .filter((c) => c.error_code)
+        .map((c) => ({
+          value: c.error_code as string,
+          label: `${ERROR_CODE_LABEL[c.error_code as string] ?? c.error_code} (${c.n})`,
+        })),
     ],
     [codeAgg],
   )
@@ -87,8 +92,8 @@ export function FailuresSubSection({ rq, reloadKey }: { rq: string; reloadKey: n
         const color = v === 'decrypt' ? 'blue' : v === 'transcode' ? 'purple' : 'orange'
         return <Tag color={color}>{STAGE_LABEL[v] ?? v}</Tag>
       } },
-    { title: '错误码', dataIndex: 'error_code', key: 'error_code', width: 160,
-      render: (v) => v ? <code style={{ fontSize: 12 }}>{v}</code> : '-' },
+    { title: '错误码', dataIndex: 'error_code', key: 'error_code', width: 190,
+      render: (v) => <ErrorCodeCell code={v} /> },
     { title: '文件名', dataIndex: 'file_name', key: 'file_name', ellipsis: true,
       render: (v) => v ?? '-' },
     { title: '大小', dataIndex: 'file_size', key: 'file_size', width: 90, align: 'right',
@@ -175,7 +180,7 @@ export function FailuresSubSection({ rq, reloadKey }: { rq: string; reloadKey: n
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="时间">{formatTime(detail.ts)}</Descriptions.Item>
               <Descriptions.Item label="阶段">{STAGE_LABEL[detail.stage] ?? detail.stage}</Descriptions.Item>
-              <Descriptions.Item label="错误码"><code>{detail.error_code ?? '-'}</code></Descriptions.Item>
+              <Descriptions.Item label="错误码"><ErrorCodeCell code={detail.error_code} /></Descriptions.Item>
               <Descriptions.Item label="格式">{detail.source ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="文件名" span={2}>{detail.file_name ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="文件大小">{formatBytes(detail.file_size)}</Descriptions.Item>
