@@ -7,6 +7,16 @@
 
 ---
 
+## v0.7.4 · 20260713 上线
+
+- **FILE_UNREADABLE 错误码：源文件中途失效的失败归类 + 中文文案**：失败日志 #21545（安卓 + 夸克浏览器，30MB .flac 转码报裸英文 NotFoundError、error_code=null）排查
+- 根因：File 经 postMessage 按引用进 Worker（不拷字节），v0.7.0 流式转码按 2MB 分块 lazy 读——30MB ≈ 15 次 `slice().arrayBuffer()` 分散在整个转码时长内；移动端从网盘/聊天应用选取的文件是临时物化副本，中途被系统回收/清理 → 靠后的分块读抛 `DOMException NotFoundError` → 非 DecryptError 无 code，用户看裸英文。环境性失败，字节已丢，代码层无法恢复
+- 修复（[src/lib/worker/protocol.ts](src/lib/worker/protocol.ts) `serializeWorkerError` 咽喉点）：DOMException `NotFoundError`/`NotReadableError` → 新错误码 `FILE_UNREADABLE`（[src/lib/types.ts](src/lib/types.ts)）+ 中文引导文案（"请把文件先保存到本机存储，再重新上传"），解密/转码两条路径一处覆盖；App.tsx 零改动
+- 不做整读预载兜底：手机端多吃一个文件体积的内存正是 v0.7.3 刚修完的 Worker OOM 敏感区，拿一种失败换另一种不划算；若上线后占比高再评估小文件折中方案
+- 验证：puppeteer-core + CDP 磁盘背书上传真实复现（50MB FLAC 转码中途 mv 走源文件 → 友好文案展示 + `error_code=FILE_UNREADABLE`）；NCM 解密 + FLAC 转码回归零失败
+- admin（[admin/src/lib/format.ts](admin/src/lib/format.ts)）`ERROR_CODE_LABEL` 加映射；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 已登记；不动 server
+- 上线观测：失败日志 `FILE_UNREADABLE` 出现、裸英文 NotFoundError 的 error_code=null 记录归零；失败总量不应下降（环境性失败只是完成归类）；若占 transcode_fail 比例 >10%，下期考虑上传区引导文案。评估窗口 7d
+
 ## v0.7.3 · 20260612 上线
 
 - **FLAC/OGG 大文件转 MP3 时 Worker 崩溃修复**：用户反馈上传 64MB 原始 .flac 转码报"处理进程异常退出，请重试"（error_code: UNKNOWN）。失败看板 id 7994 等转码崩溃同源

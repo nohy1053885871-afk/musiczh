@@ -80,6 +80,16 @@ function AppLayout() {
           style={{ flex: 1, minWidth: 0, background: 'transparent' }}
         />
         <Space size="middle">
+          <Text
+            style={{
+              color: 'rgba(255,255,255,0.45)',
+              fontFamily: 'monospace',
+              fontSize: 11,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            v{import.meta.env.VITE_APP_VERSION ?? 'dev'}
+          </Text>
           <Text style={{ color: 'rgba(255,255,255,0.65)' }}>{user?.username}</Text>
           <Button size="small" icon={<LogoutOutlined />} onClick={() => logout()}>
             退出
