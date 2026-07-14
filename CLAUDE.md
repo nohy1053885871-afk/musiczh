@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.4（运营后台 v0.4.11）
+- 当前版本：v0.7.4（运营后台 v0.4.12）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -104,7 +104,7 @@ public/
 - **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
 - **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
 - **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
-- **运营后台（`admin/`）与主站解耦**：版本号独立编号（现为运营后台 v0.4.11，与主站 v0.7.4 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（现为运营后台 v0.4.12，与主站 v0.7.4 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
 - **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
 - **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
 - **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
@@ -201,6 +201,14 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### 运营后台 v0.4.12 · 20260714 上线
+
+- **导航栏右上角显示运营后台版本号**：右侧固定排列为 `版本号 → 用户名 → 退出`，版本信息在登录后的全部后台页面持续可见
+- 版本号不写死：在 [admin/vite.config.ts](admin/vite.config.ts) 构建时读取 `admin/package.json` 并注入 `VITE_APP_VERSION`；后续发版只需正常 bump 包版本
+- [admin/src/App.tsx](admin/src/App.tsx) 使用 11px 低对比度等宽文本展示，保持单行；[admin/tsconfig.json](admin/tsconfig.json) 加载 `vite/client` 类型
+- 验证：后台独立构建通过；生产产物包含 `0.4.12`；本地实际登录后在 1280px / 1024px 宽度检查无重叠、无横向溢出，滚动后导航栏吸顶正常
+- 埋点 / 主站 / server 零改动
+
 ### 运营后台 v0.4.11 · 20260714 上线
 
 - **错误码中文标签真正接入失败/下载日志页**：v0.7.4 上线 smoke 时发现 `ERROR_CODE_LABEL` 从未被任何页面 import、构建时被 tree-shake（v0.7.3 的 TRANSCODE_OOM、v0.7.4 的 FILE_UNREADABLE 标签实际都没生效，失败日志一直显示错误码原文）
@@ -209,16 +217,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 顺手修预存在 bug：`error_code=null` 的聚合组曾以 value='' 进筛选下拉，与「全部错误码」冲突并劫持默认显示（线上有 null 码记录时下拉默认显示「(无) (N)」）；null 组本就筛不了，已从下拉剔除
 - 验收判据（上次的教训）：构建产物 grep 得到 `FILE_UNREADABLE`/`INVALID_HEADER` 等 key（注意中文在产物里是 \uXXXX 转义，用 ASCII key 搜）；本地 seed 7 条数据覆盖 有映射/未映射/null 三分支 UI 实测
 - 埋点/主站/server 零改动
-
-### v0.7.4 · 20260713 上线
-
-- **FILE_UNREADABLE 错误码：源文件中途失效的失败归类 + 中文文案**：失败日志 #21545（安卓 + 夸克浏览器，30MB .flac 转码报裸英文 NotFoundError、error_code=null）排查
-- 根因：File 经 postMessage 按引用进 Worker（不拷字节），v0.7.0 流式转码按 2MB 分块 lazy 读——30MB ≈ 15 次 `slice().arrayBuffer()` 分散在整个转码时长内；移动端从网盘/聊天应用选取的文件是临时物化副本，中途被系统回收/清理 → 靠后的分块读抛 `DOMException NotFoundError` → 非 DecryptError 无 code，用户看裸英文。环境性失败，字节已丢，代码层无法恢复
-- 修复（[src/lib/worker/protocol.ts](src/lib/worker/protocol.ts) `serializeWorkerError` 咽喉点）：DOMException `NotFoundError`/`NotReadableError` → 新错误码 `FILE_UNREADABLE`（[src/lib/types.ts](src/lib/types.ts)）+ 中文引导文案（"请把文件先保存到本机存储，再重新上传"），解密/转码两条路径一处覆盖；App.tsx 零改动
-- 不做整读预载兜底：手机端多吃一个文件体积的内存正是 v0.7.3 刚修完的 Worker OOM 敏感区，拿一种失败换另一种不划算；若上线后占比高再评估小文件折中方案
-- 验证：puppeteer-core + CDP 磁盘背书上传真实复现（50MB FLAC 转码中途 mv 走源文件 → 友好文案展示 + `error_code=FILE_UNREADABLE`）；NCM 解密 + FLAC 转码回归零失败
-- admin（[admin/src/lib/format.ts](admin/src/lib/format.ts)）`ERROR_CODE_LABEL` 加映射；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 已登记；不动 server
-- 上线观测：失败日志 `FILE_UNREADABLE` 出现、裸英文 NotFoundError 的 error_code=null 记录归零；失败总量不应下降（环境性失败只是完成归类）；若占 transcode_fail 比例 >10%，下期考虑上传区引导文案。评估窗口 7d
 
 # 通用
 - 优先选择编辑而非重写整个文件
