@@ -9,6 +9,7 @@ import { DownloadCSVButton } from '../../components/biz/DownloadCSVButton'
 import {
   formatBytes, formatTime, extLabel, DOWNLOAD_KIND_LABEL,
 } from '../../lib/format'
+import { ErrorCodeCell } from '../../components/biz/ErrorCodeCell'
 
 const { Text, Paragraph } = Typography
 
@@ -99,8 +100,8 @@ export function DownloadsSection({ rq, reloadKey }: { rq: string; reloadKey: num
       render: (v) => v ? <Tag color="blue">{extLabel(v)}</Tag> : '-' },
     { title: '大小', dataIndex: 'file_size', key: 'file_size', width: 95, align: 'right',
       render: (v) => formatBytes(v) },
-    { title: '错误码', dataIndex: 'error_code', key: 'error_code', width: 140,
-      render: (v) => v ? <code style={{ fontSize: 12 }}>{v}</code> : '-' },
+    { title: '错误码', dataIndex: 'error_code', key: 'error_code', width: 190,
+      render: (v) => <ErrorCodeCell code={v} /> },
     { title: '错误信息', dataIndex: 'error_msg', key: 'error_msg', ellipsis: true,
       render: (v) => v ?? '-' },
     { title: '浏览器', dataIndex: 'browser', key: 'browser', width: 90, ellipsis: true },
@@ -188,7 +189,7 @@ export function DownloadsSection({ rq, reloadKey }: { rq: string; reloadKey: num
               <Descriptions.Item label="文件名" span={2}>{detail.file_name ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="文件大小">{formatBytes(detail.file_size)}</Descriptions.Item>
               <Descriptions.Item label="App 版本">{detail.app_ver ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="错误码"><code>{detail.error_code ?? '-'}</code></Descriptions.Item>
+              <Descriptions.Item label="错误码"><ErrorCodeCell code={detail.error_code} /></Descriptions.Item>
               <Descriptions.Item label="浏览器">{detail.browser}</Descriptions.Item>
               <Descriptions.Item label="操作系统">{detail.os}</Descriptions.Item>
               <Descriptions.Item label="设备" span={2}>{detail.device_type}</Descriptions.Item>

@@ -7,6 +7,16 @@
 
 ---
 
+## v0.7.3 · 20260612 上线
+
+- **FLAC/OGG 大文件转 MP3 时 Worker 崩溃修复**：用户反馈上传 64MB 原始 .flac 转码报"处理进程异常退出，请重试"（error_code: UNKNOWN）。失败看板 id 7994 等转码崩溃同源
+- 根因（已实验验证）：转码用的 `@wasm-audio-decoders/flac@0.2.10` WASM 堆**固定 16.1MB 且不可增长**（`_emscripten_resize_heap` 返回 false）。内部 `_decode()` 每次把输入 buffer 分配到 WASM 堆却**从未释放**（`allocateTypedArray(len, Uint8Array, false)` setPointer=false，不进 tracked set 也无手动 free）。实测：100×8KB 分配泄漏 790KB，处理到 ~16MB 压缩数据堆耗尽 → C 侧 malloc 返 NULL → 段错误 → Worker 进程被杀（绕过 worker 内 try/catch，触发 `worker.onerror`）。**旧边界：原始 FLAC/OGG 转 MP3 约 16-20MB 即崩**
+- 核心修复（[src/lib/transcode.ts](src/lib/transcode.ts)）：2MB 分块循环中每处理 12MB 调 `decoder._decoder.reset()` 重建 WASM 实例回收堆。实测堆从 8.14MB 恢复到 15.9MB（完全回收）；mid-stream reset 后继续解码 441000 样本 0 丢失——FLAC 帧自包含、无跨帧状态，codec-parser 独立于 WASM decoder 不受影响。任意大小文件（含 200MB）现在都能转
+- 兜底（[src/lib/worker/client.ts](src/lib/worker/client.ts) + [src/lib/types.ts](src/lib/types.ts)）：万一极端 case（单帧 >16MB 的损坏 FLAC）仍崩，`worker.onerror` 按在途请求类型区分——transcode 崩溃给新错误码 `TRANSCODE_OOM` + "文件可能已损坏或格式异常"提示，不再笼统报 UNKNOWN
+- 次要（[src/lib/transcode.ts](src/lib/transcode.ts) Mp3Sink）：每 500 个 MP3 碎片合并一次，降 64MB 文件产生的 3000+ 个小 Uint8Array 的 GC 压力
+- 埋点零新增（复用 `transcode_fail` + error_code 字段，admin `ERROR_CODE_LABEL` 已可加 `TRANSCODE_OOM` 中文映射）、不动 server、不动 admin
+- 上线观测：失败看板 transcode 阶段 `UNKNOWN`「处理进程异常退出」应趋近 0；新 `TRANSCODE_OOM` 常态也应近 0（冒头=损坏文件，非内存泄漏）。评估窗口 7d
+
 ## v0.7.2 · 20260612 上线
 
 - **NCM 内嵌封面 MIME 修正（PNG 被误标 JPEG → 下载产物丢封面）**：用户反馈"NCM 转 FLAC 后列表有封面、下载没封面"，且 v0.7.1 的封面回填未覆盖此 case

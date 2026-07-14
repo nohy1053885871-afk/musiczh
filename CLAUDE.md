@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.4（运营后台 v0.4.10）
+- 当前版本：v0.7.4（运营后台 v0.4.11）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -104,7 +104,7 @@ public/
 - **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
 - **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
 - **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
-- **运营后台（`admin/`）与主站解耦**：版本号独立编号（现为运营后台 v0.4.10，与主站 v0.7.4 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（现为运营后台 v0.4.11，与主站 v0.7.4 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
 - **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
 - **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
 - **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
@@ -201,6 +201,15 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### 运营后台 v0.4.11 · 20260714 上线
+
+- **错误码中文标签真正接入失败/下载日志页**：v0.7.4 上线 smoke 时发现 `ERROR_CODE_LABEL` 从未被任何页面 import、构建时被 tree-shake（v0.7.3 的 TRANSCODE_OOM、v0.7.4 的 FILE_UNREADABLE 标签实际都没生效，失败日志一直显示错误码原文）
+- 新增 [admin/src/components/biz/ErrorCodeCell.tsx](admin/src/components/biz/ErrorCodeCell.tsx) 共享组件：有映射时中文主显 + 原文 code 小字（排查复制用）；无映射自动回退原文，永不空白
+- 接入点：[FailuresSubSection.tsx](admin/src/pages/decrypt-analysis/FailuresSubSection.tsx)（表格列 + 筛选下拉 label + 详情抽屉）、[DownloadsSection.tsx](admin/src/pages/decrypt-analysis/DownloadsSection.tsx)（表格列 + 详情抽屉）；CSV 导出保持原文 code
+- 顺手修预存在 bug：`error_code=null` 的聚合组曾以 value='' 进筛选下拉，与「全部错误码」冲突并劫持默认显示（线上有 null 码记录时下拉默认显示「(无) (N)」）；null 组本就筛不了，已从下拉剔除
+- 验收判据（上次的教训）：构建产物 grep 得到 `FILE_UNREADABLE`/`INVALID_HEADER` 等 key（注意中文在产物里是 \uXXXX 转义，用 ASCII key 搜）；本地 seed 7 条数据覆盖 有映射/未映射/null 三分支 UI 实测
+- 埋点/主站/server 零改动
+
 ### v0.7.4 · 20260713 上线
 
 - **FILE_UNREADABLE 错误码：源文件中途失效的失败归类 + 中文文案**：失败日志 #21545（安卓 + 夸克浏览器，30MB .flac 转码报裸英文 NotFoundError、error_code=null）排查
@@ -210,16 +219,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - 验证：puppeteer-core + CDP 磁盘背书上传真实复现（50MB FLAC 转码中途 mv 走源文件 → 友好文案展示 + `error_code=FILE_UNREADABLE`）；NCM 解密 + FLAC 转码回归零失败
 - admin（[admin/src/lib/format.ts](admin/src/lib/format.ts)）`ERROR_CODE_LABEL` 加映射；[docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 已登记；不动 server
 - 上线观测：失败日志 `FILE_UNREADABLE` 出现、裸英文 NotFoundError 的 error_code=null 记录归零；失败总量不应下降（环境性失败只是完成归类）；若占 transcode_fail 比例 >10%，下期考虑上传区引导文案。评估窗口 7d
-
-### v0.7.3 · 20260612 上线
-
-- **FLAC/OGG 大文件转 MP3 时 Worker 崩溃修复**：用户反馈上传 64MB 原始 .flac 转码报"处理进程异常退出，请重试"（error_code: UNKNOWN）。失败看板 id 7994 等转码崩溃同源
-- 根因（已实验验证）：转码用的 `@wasm-audio-decoders/flac@0.2.10` WASM 堆**固定 16.1MB 且不可增长**（`_emscripten_resize_heap` 返回 false）。内部 `_decode()` 每次把输入 buffer 分配到 WASM 堆却**从未释放**（`allocateTypedArray(len, Uint8Array, false)` setPointer=false，不进 tracked set 也无手动 free）。实测：100×8KB 分配泄漏 790KB，处理到 ~16MB 压缩数据堆耗尽 → C 侧 malloc 返 NULL → 段错误 → Worker 进程被杀（绕过 worker 内 try/catch，触发 `worker.onerror`）。**旧边界：原始 FLAC/OGG 转 MP3 约 16-20MB 即崩**
-- 核心修复（[src/lib/transcode.ts](src/lib/transcode.ts)）：2MB 分块循环中每处理 12MB 调 `decoder._decoder.reset()` 重建 WASM 实例回收堆。实测堆从 8.14MB 恢复到 15.9MB（完全回收）；mid-stream reset 后继续解码 441000 样本 0 丢失——FLAC 帧自包含、无跨帧状态，codec-parser 独立于 WASM decoder 不受影响。任意大小文件（含 200MB）现在都能转
-- 兜底（[src/lib/worker/client.ts](src/lib/worker/client.ts) + [src/lib/types.ts](src/lib/types.ts)）：万一极端 case（单帧 >16MB 的损坏 FLAC）仍崩，`worker.onerror` 按在途请求类型区分——transcode 崩溃给新错误码 `TRANSCODE_OOM` + "文件可能已损坏或格式异常"提示，不再笼统报 UNKNOWN
-- 次要（[src/lib/transcode.ts](src/lib/transcode.ts) Mp3Sink）：每 500 个 MP3 碎片合并一次，降 64MB 文件产生的 3000+ 个小 Uint8Array 的 GC 压力
-- 埋点零新增（复用 `transcode_fail` + error_code 字段，admin `ERROR_CODE_LABEL` 已可加 `TRANSCODE_OOM` 中文映射）、不动 server、不动 admin
-- 上线观测：失败看板 transcode 阶段 `UNKNOWN`「处理进程异常退出」应趋近 0；新 `TRANSCODE_OOM` 常态也应近 0（冒头=损坏文件，非内存泄漏）。评估窗口 7d
 
 # 通用
 - 优先选择编辑而非重写整个文件
