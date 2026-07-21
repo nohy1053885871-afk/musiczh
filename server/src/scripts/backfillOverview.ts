@@ -5,6 +5,7 @@ import { compareOverviewBundles } from '../lib/overview/parity.js'
 import { computeRollupBundle } from '../lib/overview/rollupReader.js'
 import {
   getMaxEventId, getRollupState, processRollupBatch, setRollupStatus,
+  resetOverviewRollup,
 } from '../lib/overview/rollupWriter.js'
 import { dayBucket, DAY_MS } from '../lib/overview/shared.js'
 
@@ -56,10 +57,15 @@ function verify(targetEventId: number): string[] {
   return errors
 }
 
-const state = getRollupState(db)
-setRollupStatus(db, 'building')
+if (process.argv.includes('--reset')) {
+  console.log('[overview-backfill] resetting derived rollup tables')
+  resetOverviewRollup(db)
+} else {
+  setRollupStatus(db, 'building')
+}
 let targetEventId = getMaxEventId(db)
-console.log(`[overview-backfill] starting cursor=${state.last_event_id} target=${targetEventId}`)
+const activeState = getRollupState(db)
+console.log(`[overview-backfill] starting cursor=${activeState.last_event_id} target=${targetEventId}`)
 
 while (true) {
   backfill(targetEventId)

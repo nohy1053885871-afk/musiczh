@@ -47,6 +47,7 @@ export type DailyVisitor = {
 }
 
 type FileUpdate = { file_id: string; upload_ts: number | null; status: string; updated_at: number }
+type FileUpload = { upload_event_id: number; file_id: string; upload_ts: number }
 
 const METRIC_COLUMNS = [
   'pv', 'upload_files', 'upload_files_legacy', 'upload_reject', 'dismissed_files',
@@ -96,6 +97,7 @@ export function aggregateRollupRows(rows: RollupEventRow[]) {
   const metrics = new Map<number, DailyMetrics>()
   const visitors = new Map<string, DailyVisitor>()
   const files = new Map<string, FileUpdate>()
+  const uploads: FileUpload[] = []
 
   for (const row of rows) {
     const day = dayBucket(row.ts)
@@ -153,6 +155,9 @@ export function aggregateRollupRows(rows: RollupEventRow[]) {
 
     const incomingStatus = statusFor(row.event)
     if (row.file_id && incomingStatus) {
+      if (row.event === 'upload_attempt') {
+        uploads.push({ upload_event_id: row.id, file_id: row.file_id, upload_ts: row.ts })
+      }
       const existing = files.get(row.file_id)
       const uploadTs = row.event === 'upload_attempt' ? row.ts : null
       if (existing) {
@@ -166,7 +171,10 @@ export function aggregateRollupRows(rows: RollupEventRow[]) {
       }
     }
   }
-  return { metrics: [...metrics.values()], visitors: [...visitors.values()], files: [...files.values()] }
+  return {
+    metrics: [...metrics.values()], visitors: [...visitors.values()],
+    files: [...files.values()], uploads,
+  }
 }
 
 export function getRollupState(db: Database.Database): RollupState {
@@ -243,11 +251,26 @@ export function processRollupBatch(
          ELSE 'pending' END,
        updated_at = MAX(updated_at, excluded.updated_at)`,
   )
+  const upsertUpload = db.prepare(
+    `INSERT INTO overview_file_upload_state
+       (upload_event_id, file_id, upload_ts, status, updated_at)
+     SELECT @upload_event_id, @file_id, @upload_ts, status, updated_at
+       FROM overview_file_state WHERE file_id = @file_id
+     ON CONFLICT(upload_event_id) DO NOTHING`,
+  )
+  const syncUploadStatus = db.prepare(
+    `UPDATE overview_file_upload_state
+        SET status = (SELECT status FROM overview_file_state WHERE file_id = @file_id),
+            updated_at = MAX(updated_at, @updated_at)
+      WHERE file_id = @file_id`,
+  )
   const lastEventId = rows[rows.length - 1].id
   const commit = db.transaction(() => {
     for (const metric of aggregated.metrics) upsertMetric.run(metric)
     for (const visitor of aggregated.visitors) upsertVisitor.run(visitor)
     for (const file of aggregated.files) upsertFile.run(file)
+    for (const upload of aggregated.uploads) upsertUpload.run(upload)
+    for (const file of aggregated.files) syncUploadStatus.run(file)
     db.prepare(
       `UPDATE overview_rollup_state
           SET last_event_id = ?, last_run_at = ?, last_error = NULL
@@ -264,6 +287,20 @@ export function processRollupBatch(
     throw error
   }
   return { processed: rows.length, lastEventId }
+}
+
+export function resetOverviewRollup(db: Database.Database): void {
+  db.transaction(() => {
+    db.prepare('DELETE FROM overview_daily_metrics').run()
+    db.prepare('DELETE FROM overview_daily_visitors').run()
+    db.prepare('DELETE FROM overview_file_upload_state').run()
+    db.prepare('DELETE FROM overview_file_state').run()
+    db.prepare(
+      `UPDATE overview_rollup_state
+          SET last_event_id = 0, status = 'building', last_run_at = NULL, last_error = NULL
+        WHERE singleton = 1`,
+    ).run()
+  })()
 }
 
 export function setRollupStatus(
