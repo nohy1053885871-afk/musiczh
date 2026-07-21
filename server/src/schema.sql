@@ -41,6 +41,68 @@ CREATE INDEX IF NOT EXISTS idx_failures_ts ON failures(ts);
 CREATE INDEX IF NOT EXISTS idx_failures_code_ts ON failures(error_code, ts);
 CREATE INDEX IF NOT EXISTS idx_failures_stage_ts ON failures(stage, ts);
 
+-- 运营后台首页日汇总。只保存首页所需的稳定统计口径；原始 events 仍是唯一事实源。
+CREATE TABLE IF NOT EXISTS overview_daily_metrics (
+  day                       INTEGER PRIMARY KEY,
+  pv                        INTEGER NOT NULL DEFAULT 0,
+  upload_files              INTEGER NOT NULL DEFAULT 0,
+  upload_files_legacy       INTEGER NOT NULL DEFAULT 0,
+  upload_reject             INTEGER NOT NULL DEFAULT 0,
+  dismissed_files           INTEGER NOT NULL DEFAULT 0,
+  decrypt_done              INTEGER NOT NULL DEFAULT 0,
+  decrypt_fail              INTEGER NOT NULL DEFAULT 0,
+  transcode_done            INTEGER NOT NULL DEFAULT 0,
+  transcode_fail            INTEGER NOT NULL DEFAULT 0,
+  raw_transcode_done        INTEGER NOT NULL DEFAULT 0,
+  raw_transcode_fail        INTEGER NOT NULL DEFAULT 0,
+  decrypt_abandon           INTEGER NOT NULL DEFAULT 0,
+  transcode_abandon         INTEGER NOT NULL DEFAULT 0,
+  legacy_files              INTEGER NOT NULL DEFAULT 0,
+  download_done             INTEGER NOT NULL DEFAULT 0
+);
+
+-- 精确跨日 UV + 区间内最后设备。每个 visitor 每天至多一行。
+CREATE TABLE IF NOT EXISTS overview_daily_visitors (
+  day          INTEGER NOT NULL,
+  visitor_id   TEXT    NOT NULL,
+  last_ts      INTEGER NOT NULL,
+  browser      TEXT    NOT NULL,
+  os           TEXT    NOT NULL,
+  device_type  TEXT    NOT NULL,
+  has_ua       INTEGER NOT NULL DEFAULT 0,
+  has_pageview INTEGER NOT NULL DEFAULT 0,
+  has_upload   INTEGER NOT NULL DEFAULT 0,
+  has_convert  INTEGER NOT NULL DEFAULT 0,
+  has_download INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, visitor_id)
+);
+CREATE INDEX IF NOT EXISTS idx_overview_daily_visitors_day
+  ON overview_daily_visitors(day);
+
+-- upload_attempt 的当前终态；upload_ts 口径与旧 overview 的外层时间范围一致。
+CREATE TABLE IF NOT EXISTS overview_file_state (
+  file_id     TEXT PRIMARY KEY,
+  upload_ts   INTEGER,
+  status      TEXT NOT NULL DEFAULT 'pending'
+              CHECK (status IN ('success','failed','abandoned','pending')),
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_overview_file_state_upload_status
+  ON overview_file_state(upload_ts, status);
+
+-- 单行游标。building/disabled 时首页读取原始表；ready 时优先读取汇总。
+CREATE TABLE IF NOT EXISTS overview_rollup_state (
+  singleton    INTEGER PRIMARY KEY CHECK (singleton = 1),
+  last_event_id INTEGER NOT NULL DEFAULT 0,
+  status       TEXT NOT NULL DEFAULT 'building'
+               CHECK (status IN ('building','ready','disabled')),
+  last_run_at  INTEGER,
+  last_error   TEXT
+);
+INSERT OR IGNORE INTO overview_rollup_state
+  (singleton, last_event_id, status, last_run_at, last_error)
+VALUES (1, 0, 'building', NULL, NULL);
+
 -- 单管理员账号
 CREATE TABLE IF NOT EXISTS admins (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,

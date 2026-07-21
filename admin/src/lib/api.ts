@@ -51,6 +51,11 @@ export const api = {
   logout: () => request<{ ok: true }>('/admin/logout', { method: 'POST' }),
 
   overview: (rangeQuery: string) => request<OverviewResp>(`/admin/stats/overview?${rangeQuery}`),
+  overviewBundle: (rangeQuery: string, refresh = false, signal?: AbortSignal) =>
+    request<OverviewBundleResp>(
+      `/admin/stats/overview-bundle?${rangeQuery}${refresh ? '&refresh=1' : ''}`,
+      { signal },
+    ),
   perf: (rangeQuery: string) => request<PerfResp>(`/admin/stats/perf?${rangeQuery}`),
   perfTimeseries: (rangeQuery: string) => request<PerfTimeseriesResp>(`/admin/stats/perf-timeseries?${rangeQuery}`),
   funnel: (rangeQuery: string) => request<FunnelResp>(`/admin/stats/funnel?${rangeQuery}`),
@@ -239,6 +244,30 @@ export type DevicesResp = {
   os: { name: string; n: number }[]
   device_types: { name: string; n: number }[]
   visitors: { browser: string; os: string; device_type: string }[]
+}
+
+export type OverviewMetricKey =
+  | 'pv' | 'uv' | 'upload_uv' | 'download_uv'
+  | 'upload_files' | 'decrypt_done' | 'decrypt_fail' | 'transcode_fail'
+
+export type DeviceCombination = {
+  browser: string
+  os: string
+  device_type: string
+  n: number
+}
+
+export type OverviewBundleResp = {
+  range: string
+  from: number
+  to: number
+  generated_at: number
+  data_source: 'raw' | 'rollup' | 'raw_fallback'
+  rollup_lag_ms: number | null
+  overview: OverviewResp
+  funnel: FunnelResp
+  timeseries: Record<OverviewMetricKey, Array<{ day: number; v: number }>>
+  devices: { combinations: DeviceCombination[] }
 }
 
 export type FailureRow = {
