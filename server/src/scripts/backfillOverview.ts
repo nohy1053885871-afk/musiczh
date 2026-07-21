@@ -66,6 +66,7 @@ if (process.argv.includes('--reset')) {
 let targetEventId = getMaxEventId(db)
 const activeState = getRollupState(db)
 console.log(`[overview-backfill] starting cursor=${activeState.last_event_id} target=${targetEventId}`)
+let tailPass = false
 
 while (true) {
   backfill(targetEventId)
@@ -79,12 +80,16 @@ while (true) {
   }
 
   const newestEventId = getMaxEventId(db)
-  if (newestEventId > targetEventId) {
+  if (newestEventId > targetEventId && !tailPass) {
     console.log(`[overview-backfill] parity passed at ${targetEventId}; catching tail to ${newestEventId}`)
     targetEventId = newestEventId
+    tailPass = true
     continue
   }
   setRollupStatus(db, 'ready')
+  if (newestEventId > targetEventId) {
+    console.log(`[overview-backfill] ${newestEventId - targetEventId} new tail events left for incremental catchup`)
+  }
   console.log(`[overview-backfill] parity passed; rollup is ready at event ${targetEventId}`)
   break
 }
