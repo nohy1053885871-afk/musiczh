@@ -202,7 +202,7 @@ export function computeRollupBundle(
   const totals = emptyMetrics(0)
   for (const row of dayMetrics.values()) mergeMetrics(totals, row)
   const states = Object.fromEntries((db.prepare(
-    `SELECT status, COUNT(*) AS n FROM overview_file_state
+    `SELECT status, COUNT(*) AS n FROM overview_file_upload_state
       WHERE upload_ts >= ? AND upload_ts <= ? GROUP BY status`,
   ).all(request.from, request.to) as Array<{ status: string; n: number }>).map((row) => [row.status, row.n]))
   const queryMs = performance.now() - queryStarted

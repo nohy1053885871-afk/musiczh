@@ -7,7 +7,7 @@ import Database from 'better-sqlite3'
 import { compareOverviewBundles } from './parity.js'
 import { computeRawBundle } from './raw.js'
 import { computeRollupBundle } from './rollupReader.js'
-import { getMaxEventId, processRollupBatch } from './rollupWriter.js'
+import { getMaxEventId, processRollupBatch, resetOverviewRollup } from './rollupWriter.js'
 import { DAY_MS, dayBucket } from './shared.js'
 
 const UA_DESKTOP = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/125.0 Safari/537.36'
@@ -46,6 +46,7 @@ function seed(db: Database.Database) {
   add(1, 4_000, 'upload_attempt', 'visitor-b', { file_id: 'file-abandon', file_ext: 'flac' }, UA_MOBILE)
   add(1, 5_000, 'transcode_abandon', 'visitor-b', { file_id: 'file-abandon' }, UA_MOBILE)
   add(2, 1_000, 'upload_attempt', 'visitor-b', { file_id: 'file-pending', file_ext: 'ogg' })
+  add(2, 1_500, 'upload_attempt', 'visitor-a', { file_id: 'file-success', file_ext: 'ncm' })
   add(2, 2_000, 'upload_reject', 'visitor-c', { reject_reason: 'FORMAT_UNSUPPORTED' })
   add(2, 3_000, 'upload_reject', 'visitor-c', { reject_reason: 'LARGE_BATCH_DISMISSED' })
   add(2, 4_000, 'upload_pick', 'visitor-c', { count: 2 })
@@ -66,7 +67,7 @@ test('rollup preserves raw overview, funnel, timeseries and device results', () 
   const raw = computeRawBundle(db, request)
   const rollup = computeRollupBundle(db, request, 0)
   assert.deepEqual(compareOverviewBundles(raw, rollup), [])
-  assert.equal(rollup.overview.success_files, 1)
+  assert.equal(rollup.overview.success_files, 2)
   assert.equal(rollup.overview.abandoned_files, 1)
   assert.equal(rollup.overview.pending_files, 1)
   assert.equal(rollup.overview.dismissed_files, 1)
@@ -84,6 +85,12 @@ test('rollup preserves raw overview, funnel, timeseries and device results', () 
     ),
     [],
   )
+  resetOverviewRollup(db)
+  assert.deepEqual(
+    db.prepare('SELECT last_event_id, status FROM overview_rollup_state').get(),
+    { last_event_id: 0, status: 'building' },
+  )
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM overview_file_upload_state').get() as { n: number }).n, 0)
   db.close()
 })
 

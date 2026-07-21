@@ -90,6 +90,21 @@ CREATE TABLE IF NOT EXISTS overview_file_state (
 CREATE INDEX IF NOT EXISTS idx_overview_file_state_upload_status
   ON overview_file_state(upload_ts, status);
 
+-- 每条 upload_attempt 一行；同一 file_id 因重试/历史重复上报出现多次时仍保持旧口径精确计数。
+-- 最终状态来自 overview_file_state，并在下游事件到达时同步更新该 file_id 的全部上传记录。
+CREATE TABLE IF NOT EXISTS overview_file_upload_state (
+  upload_event_id INTEGER PRIMARY KEY,
+  file_id         TEXT    NOT NULL,
+  upload_ts       INTEGER NOT NULL,
+  status          TEXT    NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('success','failed','abandoned','pending')),
+  updated_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_overview_file_upload_ts_status
+  ON overview_file_upload_state(upload_ts, status);
+CREATE INDEX IF NOT EXISTS idx_overview_file_upload_file
+  ON overview_file_upload_state(file_id);
+
 -- 单行游标。building/disabled 时首页读取原始表；ready 时优先读取汇总。
 CREATE TABLE IF NOT EXISTS overview_rollup_state (
   singleton    INTEGER PRIMARY KEY CHECK (singleton = 1),
