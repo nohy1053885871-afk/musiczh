@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.4（运营后台 v0.4.12）
+- 当前版本：v0.7.4（运营后台 v0.4.13，API v0.4.8）
 - 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
@@ -201,6 +201,15 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### 运营后台 v0.4.13 / API v0.4.8 · 20260721 上线
+
+- **首页查询性能重构**：新增单接口 `GET /api/admin/stats/overview-bundle`，一次返回概览、漏斗、全部日趋势和设备组合；首页从至少 7 个并发请求改成 1 个请求，指标切换只在前端重绘
+- **止血层**：原始事件统计合并为条件聚合，60 秒成功结果缓存，相同范围并发请求合并；重 SQL 全部隔离到独立 Worker Thread，主线程继续处理 `/api/track`
+- **日汇总层**：新增日指标、精确日访客、文件终态和游标四张表；按 `events.id` 每 30 秒增量处理，精确跨日 UV，首尾不完整日期回读原始事件
+- **安全迁移**：独立可恢复回填 CLI 每批 10,000 行，追平尾部后对今日、7/30/90/365 天和两个自定义区间自动对账；全部一致才切 `ready`，异常或落后自动 `raw_fallback`，可用一条状态命令回滚
+- **前端体验**：切换范围会取消过期请求并保留旧数据；统一 loading，显示数据更新时间；汇总降级时展示低干扰提示；设备数据改为组合计数并保留交叉筛选
+- 验证：后端首页专项测试 3/3、server/admin 独立构建、本地 Worker/缓存/回退/回填端到端、1280px 浏览器验收全部通过；生产观测见 [复盘 #6](docs/retrospectives/06-admin-v0.4.13-20260721.md)
+
 ### 运营后台 v0.4.12 · 20260714 上线
 
 - **导航栏右上角显示运营后台版本号**：右侧固定排列为 `版本号 → 用户名 → 退出`，版本信息在登录后的全部后台页面持续可见
@@ -208,15 +217,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - [admin/src/App.tsx](admin/src/App.tsx) 使用 11px 低对比度等宽文本展示，保持单行；[admin/tsconfig.json](admin/tsconfig.json) 加载 `vite/client` 类型
 - 验证：后台独立构建通过；生产产物包含 `0.4.12`；本地实际登录后在 1280px / 1024px 宽度检查无重叠、无横向溢出，滚动后导航栏吸顶正常
 - 埋点 / 主站 / server 零改动
-
-### 运营后台 v0.4.11 · 20260714 上线
-
-- **错误码中文标签真正接入失败/下载日志页**：v0.7.4 上线 smoke 时发现 `ERROR_CODE_LABEL` 从未被任何页面 import、构建时被 tree-shake（v0.7.3 的 TRANSCODE_OOM、v0.7.4 的 FILE_UNREADABLE 标签实际都没生效，失败日志一直显示错误码原文）
-- 新增 [admin/src/components/biz/ErrorCodeCell.tsx](admin/src/components/biz/ErrorCodeCell.tsx) 共享组件：有映射时中文主显 + 原文 code 小字（排查复制用）；无映射自动回退原文，永不空白
-- 接入点：[FailuresSubSection.tsx](admin/src/pages/decrypt-analysis/FailuresSubSection.tsx)（表格列 + 筛选下拉 label + 详情抽屉）、[DownloadsSection.tsx](admin/src/pages/decrypt-analysis/DownloadsSection.tsx)（表格列 + 详情抽屉）；CSV 导出保持原文 code
-- 顺手修预存在 bug：`error_code=null` 的聚合组曾以 value='' 进筛选下拉，与「全部错误码」冲突并劫持默认显示（线上有 null 码记录时下拉默认显示「(无) (N)」）；null 组本就筛不了，已从下拉剔除
-- 验收判据（上次的教训）：构建产物 grep 得到 `FILE_UNREADABLE`/`INVALID_HEADER` 等 key（注意中文在产物里是 \uXXXX 转义，用 ASCII key 搜）；本地 seed 7 条数据覆盖 有映射/未映射/null 三分支 UI 实测
-- 埋点/主站/server 零改动
 
 # 通用
 - 优先选择编辑而非重写整个文件

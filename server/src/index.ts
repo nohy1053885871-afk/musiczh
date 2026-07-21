@@ -12,6 +12,8 @@ import adminSuccesses from './routes/adminSuccesses.js'
 import adminVisitors from './routes/adminVisitors.js'
 import adminUploads from './routes/adminUploads.js'
 import adminDownloads from './routes/adminDownloads.js'
+import adminOverview from './routes/adminOverview.js'
+import { startOverviewRollupTimer } from './lib/overview/client.js'
 import { rateLimit } from './middleware/ratelimit.js'
 import { seedAdmin } from './seed/admin.js'
 import { startRetentionCron, runRetention } from './lib/retention.js'
@@ -48,6 +50,7 @@ app.route('/api/track', trackRouter)
 
 // 管理后台 API
 app.route('/api/admin', adminAuth)
+app.route('/api/admin/stats', adminOverview)
 app.route('/api/admin/stats', adminStats)
 app.route('/api/admin/failures', adminFailures)
 app.route('/api/admin/successes', adminSuccesses)
@@ -58,6 +61,7 @@ app.route('/api/admin/downloads', adminDownloads)
 // 启动时执行一次保留策略 + 安排每日 cron
 runRetention()
 startRetentionCron()
+startOverviewRollupTimer()
 
 const port = Number(process.env.PORT ?? 8787)
 serve({ fetch: app.fetch, port }, (info) => {
