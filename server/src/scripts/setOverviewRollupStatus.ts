@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import db from '../db.js'
 import { getRollupState, setRollupStatus } from '../lib/overview/rollupWriter.js'
 

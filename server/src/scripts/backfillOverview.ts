@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import db from '../db.js'
 import { computeRawBundle } from '../lib/overview/raw.js'
 import { compareOverviewBundles } from '../lib/overview/parity.js'
