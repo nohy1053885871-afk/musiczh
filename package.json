@@ -1,12 +1,15 @@
 {
   "name": "musiczh",
   "private": true,
-  "version": "0.7.4",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:xm": "tsx --test src/lib/xm.test.ts",
+    "test:m4a": "tsx --test src/lib/metadata/m4a.test.ts",
+    "test:cover": "tsx --test src/lib/metadata/cover-normalize.test.ts",
     "preview": "vite preview",
     "dev:server": "npm --prefix server run dev",
     "build:server": "npm --prefix server run build",
@@ -20,6 +23,7 @@
     "aes-js": "^3.1.2",
     "browser-id3-writer": "^6.3.1",
     "jszip": "^3.10.1",
+    "mediabunny": "1.51.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "tailwindcss": "^4.2.4",
@@ -36,6 +40,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "tsx": "^4.19.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10"

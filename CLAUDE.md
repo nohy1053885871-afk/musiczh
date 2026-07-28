@@ -1,15 +1,16 @@
 # 拾音 · 项目说明
 
-加密音乐文件 → MP3/FLAC/OGG 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
+加密音乐文件 → MP3/FLAC/OGG/M4A 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
 
-支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导）；以及原始 .flac（自动转 MP3）。
-解密后可一键二次转码为 MP3（WASM 流式解码 libFLAC/libvorbis + LAME WASM VBR -V 2，平均 ~190 kbps，接近无损；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）；原始 .flac / .ogg 上传走同一管线，无需点击按钮。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
+支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
+解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前版本：v0.7.4（运营后台 v0.4.13，API v0.4.8）
-- 上线状态：用户端 ✅ · 运营后台 ✅ · 后端 API ✅（pm2 守护）
+- 当前开发版本：v0.8.0（运营后台 v0.4.14，API v0.4.8）
+- 当前生产版本：主站 v0.7.4 · 运营后台 v0.4.13 · API v0.4.8
+- 上线状态：v0.8.0 / v0.4.14 待本地验收，尚未发布；现网三端正常
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 
@@ -22,6 +23,8 @@
 - aes-js + browser-id3-writer（NCM 解密 + ID3 标签）
 - wasm-media-encoders（LAME 3.100 的 WebAssembly 编译版，强制转 MP3 时动态加载；v0.6.2 起从 lamejs 换过来，拿到 LAME VBR 模式，输出 -V 2 ~190 kbps）
 - @wasm-audio-decoders/flac + ogg-vorbis（libFLAC / libvorbis 的 WASM 流式解码器，v0.7.0 起取代 AudioContext.decodeAudioData：2MB 分块解码、PCM 即用即弃，内存峰值与文件大小解耦，并解锁 Hi-Res FLAC）
+- Mediabunny（M4A/MP4 解封装 + WebCodecs AAC 解码，用户主动转 M4A 时动态加载）
+- LibAV.js 6.9.8.1 自定义 LGPL WASM fallback（仅 MOV/MP4 demux + AAC decoder + 重采样；本站托管，构建配置见 `vendor/libav/`）
 
 ## 项目结构
 
@@ -33,16 +36,19 @@ src/                     # 用户端（拾音主站）
   index.css              # Tailwind 入口 + vinyl-spin 动画 + color-scheme: light
   lib/
     types.ts             # 跨解密器共享类型：DecryptError / DecryptResult / AudioMeta
-    decrypt.ts           # 统一入口，按扩展名分发到 ncm.ts / kgm.ts / qmc.ts
+    decrypt.ts           # 统一入口，按扩展名分发到 ncm.ts / kgm.ts / qmc.ts / xm.ts
     ncm.ts               # 网易云 NCM 解密：AES → RC4 流 → Blob + ID3
     kgm.ts               # 酷狗 KGM/VPR v2 解密：表查 + XOR；首次使用懒加载 mask
     qmc.ts               # QQ 音乐 QMCv2 解密入口（v0.6.0 新增）：footer 解析 + cipher 分发
+    xm-id3.ts            # 喜马拉雅 XM 的 ID3 特征/字段解析
+    xm.ts                # 喜马拉雅 XM v2 两阶段 AES-CBC 解密 + 产物 magic 校验
+    m4a.ts               # M4A：Mediabunny/WebCodecs 主路径 + LibAV.js fallback
     qmc/                 # QMCv2 算法（移植自 unlock-music MIT mirror ipid/unlock-music）
       cipher.ts          #   QmcStatic / QmcMap / QmcRC4 三种 stream cipher
       key.ts             #   TEA-CBC key 派生（base64 + 双层 mix key + 自定义包裹）
       tea.ts             #   TEA cipher（Tiny Encryption Algorithm）
       handler-map.ts     #   扩展名 → 目标格式映射 + QMC_EXT_REGEX
-    transcode.ts         # FLAC/OGG → MP3：WASM 流式解码（2MB 分块）+ LAME 流式编码
+    transcode.ts         # FLAC/OGG/M4A → MP3：流式解码 + LAME 流式编码
     sniff.ts             # 文件头 magic 识别 + 扩展名兜底，输出 RealFormat
     analytics.ts         # 数据埋点 SDK（详见 docs/ANALYTICS_SPEC.md）
     worker/              # Web Worker 管道（v0.7.0 新增）：解密/转码计算全部出主线程
@@ -71,6 +77,9 @@ public/
   favicon.svg            # 黑胶唱片 SVG 图标
   icons.svg
   kgm-v2-mask.bin     # KGM 解密用查表（gzip 流，但不加 .gz 后缀避免 server/浏览器自动解压），当前 1.1MB（覆盖 ≤100MB KGM）；扩 mask 到 2.2MB 后可覆盖 ≤200MB（脚本见 scripts/build-kgm-mask.ts）
+  libav/              # M4A fallback 的裁剪 LibAV.js 资产（按需加载）
+
+vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构建说明
 ```
 
 ## 需求归属速查（关键词 → 改哪个子项目）
@@ -104,7 +113,7 @@ public/
 - **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
 - **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
 - **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
-- **运营后台（`admin/`）与主站解耦**：版本号独立编号（现为运营后台 v0.4.12，与主站 v0.7.4 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.14，与主站 v0.8.0 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
 - **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
 - **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
 - **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
@@ -117,7 +126,7 @@ type TrackedFile = {
   file: File
   status: 'pending' | 'decrypting' | 'done' | 'failed' | 'transcoding'
   progress: number        // 0–1
-  result?: DecryptResult  // { audio: Blob, format: 'mp3'|'flac'|'ogg', meta, cover, suggestedName }
+  result?: DecryptResult  // { audio: Blob, format: 'mp3'|'flac'|'ogg'|'m4a', meta, cover, suggestedName }
   coverUrl?: string       // blob URL 或 meta.albumPic CDN 地址
   errorCode?: DecryptErrorCode
   errorMessage?: string
@@ -201,6 +210,18 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.8.0 / 运营后台 v0.4.14 · 20260728 待发布
+
+- **喜马拉雅 XM v2**：新增独立 ID3 特征解析和两阶段 AES-CBC 解密；产物严格按真实 magic 输出 MP3/FLAC/OGG/M4A，v12 精准提示不支持，损坏产物不进入下载/转码
+- **统一一键转 MP3**：保留原 `FlacBatchPromptBanner` 和历史埋点名，只把统一可转码集合扩为 FLAC/OGG/M4A；M4A 默认保持原格式，用户点击后才转
+- **M4A 双解码路径**：Mediabunny + WebCodecs 为主，裁剪版 LibAV.js 6.9.8.1/FFmpeg 8.1 WASM 为 fallback；PCM 复用既有 LAME VBR -V 2 管线
+- **原始 M4A 上传**：与原始 FLAC/OGG 一样按真实 magic 准入，上传后自动转 MP3；MP4 ilst 中的标题、作者、专辑和 covr 会迁移到 MP3
+- **XM 封面**：兼容 XM 非标准 UTF-16 COMM，从外层标签取得喜马拉雅 CDN 封面；M4A 无损重封装写入 covr（AAC packets 不变），转 MP3 时写入 ID3 APIC
+- **MP3 封面兼容**：写入 APIC 前统一检查封面；已兼容的 JFIF Baseline JPEG 原样保留，Progressive/Adobe/非 JFIF 图片转为 sRGB JFIF Baseline JPEG，覆盖 NCM、XM 和 FLAC/OGG/M4A 转 MP3
+- **用户端与后台**：首页入口、格式矩阵、SEO/FAQ/JSON-LD、XM/M4A 徽章，以及后台格式筛选、颜色、来源/错误码/事件中文标签同步更新；事件名和后端 API/数据库不变
+- **发布安全**：前端部署增加带 commit/版本/全量 SHA-256 的三份快照、失败自动恢复和 `user/admin/all` 手动回滚 workflow；本版不修改或部署 server
+- 验证：XM 合成、原始 M4A 准入、VPR 分发与真实黄金样本 12/12，M4A covr 重封装专项 1/1，MP3 封面格式专项 2/2；WebCodecs/LibAV 双路径、原始 M4A 自动转码、XM 封面下载、转码失败恢复、混合批量气泡和后台 XM/M4A 筛选均完成浏览器验收；问题样本 APIC 已由 1000×1000 Progressive Adobe JPEG 转为 sRGB JFIF Baseline JPEG，并在 macOS Apple Music 的专辑卡片和播放栏实机显示；封面重封装前后 AAC 14,757 包 SHA-256 一致，NCM/KGM/QMC 旧样本与改动前输出 SHA-256/元数据一致；主站/后台独立构建及部署清单全资源 smoke 通过
+
 ### 运营后台 v0.4.13 / API v0.4.8 · 20260721 上线
 
 - **首页查询性能重构**：新增单接口 `GET /api/admin/stats/overview-bundle`，一次返回概览、漏斗、全部日趋势和设备组合；首页从至少 7 个并发请求改成 1 个请求，指标切换只在前端重绘
@@ -210,13 +231,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - **前端体验**：切换范围会取消过期请求并保留旧数据；统一 loading，显示数据更新时间；汇总降级时展示低干扰提示；设备数据改为组合计数并保留交叉筛选
 - 验证：后端首页专项测试 3/3、server/admin 独立构建、本地 Worker/缓存/回退/回填端到端、1280px 浏览器验收全部通过；生产观测见 [复盘 #6](docs/retrospectives/06-admin-v0.4.13-20260721.md)
 
-### 运营后台 v0.4.12 · 20260714 上线
-
-- **导航栏右上角显示运营后台版本号**：右侧固定排列为 `版本号 → 用户名 → 退出`，版本信息在登录后的全部后台页面持续可见
-- 版本号不写死：在 [admin/vite.config.ts](admin/vite.config.ts) 构建时读取 `admin/package.json` 并注入 `VITE_APP_VERSION`；后续发版只需正常 bump 包版本
-- [admin/src/App.tsx](admin/src/App.tsx) 使用 11px 低对比度等宽文本展示，保持单行；[admin/tsconfig.json](admin/tsconfig.json) 加载 `vite/client` 类型
-- 验证：后台独立构建通过；生产产物包含 `0.4.12`；本地实际登录后在 1280px / 1024px 宽度检查无重叠、无横向溢出，滚动后导航栏吸顶正常
-- 埋点 / 主站 / server 零改动
 
 # 通用
 - 优先选择编辑而非重写整个文件

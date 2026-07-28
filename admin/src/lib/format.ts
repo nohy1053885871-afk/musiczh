@@ -56,11 +56,11 @@ export const EVENT_LABELS: Record<string, string> = {
   dialog_reject_details_view: '主站 - 拦截详情弹窗 - 曝光',
   dialog_reject_details_close:'主站 - 拦截详情弹窗 - 关闭',
 
-  // v0.5.0 新增：FLAC 一键转 MP3 引导横条
-  banner_flac_prompt_view:        '主站 - FLAC 转 MP3 横条 - 曝光',
-  banner_flac_prompt_dismiss:     '主站 - FLAC 转 MP3 横条 - 关闭',
-  btn_flac_batch_transcode_view:  '主站 - FLAC 横条 - 一键转 MP3 按钮（曝光）',
-  btn_flac_batch_transcode_click: '主站 - FLAC 横条 - 一键转 MP3 按钮（点击）',
+  // v0.5.0 新增；v0.8.0 起沿用历史事件名，语义扩为三种可转码格式
+  banner_flac_prompt_view:        '主站 - FLAC/OGG/M4A 转 MP3 横条 - 曝光',
+  banner_flac_prompt_dismiss:     '主站 - FLAC/OGG/M4A 转 MP3 横条 - 关闭',
+  btn_flac_batch_transcode_view:  '主站 - FLAC/OGG/M4A 横条 - 一键转 MP3 按钮（曝光）',
+  btn_flac_batch_transcode_click: '主站 - FLAC/OGG/M4A 横条 - 一键转 MP3 按钮（点击）',
 
   // v0.6.0 新增：QQ 音乐使用引导 + 平台格式总览
   qq_guide_entry_view:           '主站 - 拖拽区下方 QQ 引导入口 - 曝光',
@@ -150,6 +150,7 @@ export const EXT_LABELS: Record<string, string> = {
   ncm: 'NCM 网易云',
   kgm: 'KGM 酷狗',
   vpr: 'VPR 酷狗',
+  xm: 'XM 喜马拉雅',
   // v0.6.0：QQ 音乐 QMCv2 系列
   mflac:  'mflac QQ',
   mflac0: 'mflac0 QQ',
@@ -182,6 +183,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   kgm: '酷狗',
   vpr: '酷狗 VPR',
   qmc: 'QQ 音乐',
+  xm: '喜马拉雅',
   qq_mflac: 'QQ 音乐（v0.6.0 前 sniff 拦截）',
 }
 
@@ -194,6 +196,10 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   OUTPUT_NOT_AUDIO:            '解密产物非音频（乱码/未知变体）',
   KGM_V4_UNSUPPORTED:          '酷狗 KGM v4（联网密钥）',
   QMC_NEW_VERSION_UNSUPPORTED: 'QQ 新版（密钥在云端）',
+  XM_PARSE_FAILED:             '喜马拉雅 XM 结构解析失败',
+  XM_VERSION_UNSUPPORTED:      '喜马拉雅 XM 版本暂不支持',
+  XM_DECRYPT_FAILED:           '喜马拉雅 XM 解密失败',
+  AAC_DECODE_FAILED:           'M4A/AAC 解码失败',
   UNSUPPORTED_FORMAT:          '不支持的格式',
   HIRES_NOT_SUPPORTED:         'Hi-Res FLAC 浏览器解不了',
   TRANSCODE_OOM:               '转码进程内存溢出/崩溃',

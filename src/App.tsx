@@ -7,6 +7,7 @@ import {
   type DecryptResult,
   type DecryptErrorCode,
 } from './lib/decrypt'
+import { isMp3TranscodableFormat } from './lib/types'
 // 解密/转码计算跑在 Worker 里（v0.7.0），client 保持原函数签名
 import {
   decryptAudioFile,
@@ -15,7 +16,12 @@ import {
 } from './lib/worker/client'
 import { sniffRealFormat } from './lib/sniff'
 import { stripFileExtensions } from './lib/filename'
-import { readMetaFromBlob, writeId3ToMp3, writeFlacMeta } from './lib/metadata'
+import {
+  readMetaFromBlob,
+  writeId3ToMp3,
+  writeFlacMeta,
+  writeM4aMeta,
+} from './lib/metadata'
 import { fetchRemoteCover, upgradeToHttps } from './lib/cover'
 import { analytics } from './lib/analytics'
 import { useImpression } from './lib/useImpression'
@@ -48,9 +54,11 @@ const SOURCE_TONES: Record<string, { label: string; tone: string }> = {
   ncm:  { label: 'NCM',  tone: '#C4310E' },
   kgm:  { label: 'KGM',  tone: '#1F6FB8' },
   vpr:  { label: 'VPR',  tone: '#1F6FB8' },
+  xm:   { label: 'XM',   tone: '#D06B18' },
   flac: { label: 'FLAC', tone: '#3A2E20' },
   mp3:  { label: 'MP3',  tone: '#3A2E20' },
   ogg:  { label: 'OGG',  tone: '#3A2E20' },
+  m4a:  { label: 'M4A',  tone: '#3A2E20' },
 }
 
 function sourceFromName(name: string): { label: string; tone: string } {
@@ -306,7 +314,7 @@ function DropZone({
         ref={inputRef}
         type="file"
         multiple
-        accept=".ncm,.kgm,.vpr,.flac,.ogg,.mflac,.mflac0,.mflach,.mgg,.mgg0,.mgg1,.mggl,.mmp4,.qmcflac,.qmcogg,.qmc0,.qmc2,.qmc3,.qmc4,.qmc6,.qmc8"
+        accept=".ncm,.kgm,.vpr,.xm,.flac,.ogg,.m4a,.mflac,.mflac0,.mflach,.mgg,.mgg0,.mgg1,.mggl,.mmp4,.qmcflac,.qmcogg,.qmc0,.qmc2,.qmc3,.qmc4,.qmc6,.qmc8"
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) {
@@ -359,7 +367,7 @@ function DropZone({
               color: '#8A8680',
             }}
           >
-            网易云 / 酷狗 / QQ 已支持 · 单个最大 200MB · 单次建议 ≤ 50 个
+            网易云 / 酷狗 / QQ / 喜马拉雅已支持 · 单个最大 200MB · 单次建议 ≤ 50 个
           </div>
         </div>
       </div>
@@ -391,7 +399,7 @@ function FileRow({
   const isTranscoding = file.status === 'transcoding'
   const isDone = file.status === 'done'
   const format = file.result?.format
-  const canTranscode = isDone && format && format !== 'mp3'
+  const canTranscode = isDone && isMp3TranscodableFormat(format)
   const [justDownloaded, setJustDownloaded] = useState(false)
 
   useEffect(() => {
@@ -882,14 +890,14 @@ function App() {
   )
 
   // override 参数：调用方直接传入待转码的 result，避免依赖 filesRef.current（React state 未 commit 时是 stale 的）
-  // 原始 flac 上传走 override 路径——processQueue 同步调用，filesRef 还是 pending 状态读不到 result
+  // 原始 FLAC/OGG/M4A 上传走 override 路径——processQueue 同步调用，filesRef 还是 pending 状态读不到 result
   const transcodeFile = useCallback(
     async (id: string, override?: DecryptResult) => {
       const target = filesRef.current.find((f) => f.id === id)
       if (!target) return
       const result = override ?? target.result
       if (!result) return
-      if (result.format === 'mp3') return
+      if (!isMp3TranscodableFormat(result.format)) return
       // 仅手动按钮路径（无 override）需要 status === 'done' 校验；override 路径由 caller 保证状态
       if (!override && target.status !== 'done') return
       updateFile(id, { status: 'transcoding', progress: 0 })
@@ -899,6 +907,7 @@ function App() {
         file_name: result.suggestedName,
         from_format: fromFormat,
         file_size: result.audio.size,
+        source: result.meta?.source,
         encoder: TRANSCODE_ENCODER,
       })
       // register inflight：若用户在转码过程中关页（auto-FLAC 大文件易触发 Safari OOM）
@@ -922,7 +931,7 @@ function App() {
             from_format: fromFormat,
           })
         })
-        // 把 result.cover + meta（原 FLAC/OGG 元数据）写到产物 MP3 的 ID3v2
+        // 把 result.cover + meta（原 FLAC/OGG/M4A 元数据）写到产物 MP3 的 ID3v2
         // 失败时静默回退到无标签 MP3
         let tagged = mp3Blob
         try {
@@ -931,7 +940,7 @@ function App() {
           /* 标签写入失败不影响主流程 */
         }
         const newName = result.suggestedName.replace(
-          /\.(flac|ogg)$/i,
+          /\.(flac|ogg|m4a)$/i,
           '.mp3',
         )
         // coverUrl 派生：cover Blob 优先，让列表预览能看到封面
@@ -1008,9 +1017,13 @@ function App() {
         // 文件名里若带 xxx.kgm.flac / xxx (1).flac 之类的脏后缀链，剥成纯 base 再拼真实格式
         const cleanBase = stripFileExtensions(next.file.name)
 
-        // 1) 原始 FLAC / OGG → 自动转码到 MP3
-        if (realFormat === 'flac' || realFormat === 'ogg') {
-          // 先 parse 原文件 metadata（VORBIS_COMMENT / METADATA_BLOCK_PICTURE），
+        // 1) 原始 FLAC / OGG / M4A → 自动转码到 MP3
+        if (
+          realFormat === 'flac' ||
+          realFormat === 'ogg' ||
+          realFormat === 'm4a'
+        ) {
+          // 先 parse 原文件 metadata（Vorbis / FLAC PICTURE / MP4 ilst），
           // 让转码完成后 writeId3ToMp3 能把 cover + 标签搬进新 MP3
           // readMetaFromBlob 内部已 try/catch 静默失败，直接 await 不再额外 .catch
           const parsed = await readMetaFromBlob(next.file, realFormat)
@@ -1071,11 +1084,11 @@ function App() {
           realFormat !== 'ncm' &&
           realFormat !== 'kgm' &&
           realFormat !== 'vpr' &&
-          realFormat !== 'qmc'
+          realFormat !== 'qmc' &&
+          realFormat !== 'xm'
         ) {
           const code: DecryptErrorCode = 'INVALID_HEADER'
-          const message =
-            '无法识别这个文件，请确认是网易云 .ncm / 酷狗 .kgm / .vpr / QQ .mflac / .mgg 或原始 .flac / .ogg / .mp3'
+          const message = '无法识别这个音频文件，请确认文件来源和完整性'
           updateFile(next.id, {
             status: 'failed',
             errorCode: code,
@@ -1108,14 +1121,60 @@ function App() {
         })
         const decryptT0 = Date.now()
         try {
-          const result = await decryptAudioFile(
+          const decryptedResult = await decryptAudioFile(
             next.file,
             (p) => updateFile(next.id, { progress: p }),
             realFormat,
           )
           const decryptMs = Date.now() - decryptT0 // 先截取：封面回填的联网耗时不计入解密性能埋点
-          // 列表即时显示（内嵌封面优先，否则用 albumPic URL 兜底），状态立刻 done；
-          // 封面回填在后台异步进行，不阻塞这里也不阻塞解密队列
+          let result = decryptedResult
+
+          // XM 的 M4A 必须在进入可下载状态前完成 covr 回填，否则页面已经显示
+          // CDN 封面但用户立即下载时，拿到的仍会是无封面的原始 M4A。
+          // 这里只重封装 MP4 容器并复制 AAC packets，不重新编码音频。
+          if (
+            result.format === 'm4a' &&
+            !result.cover &&
+            result.meta.albumPic
+          ) {
+            const remote = await fetchRemoteCover(result.meta.albumPic)
+            if (remote) {
+              try {
+                const taggedM4a = await writeM4aMeta(
+                  result.audio,
+                  remote,
+                  result.meta,
+                )
+                result = {
+                  ...result,
+                  audio: taggedM4a,
+                  cover: remote,
+                }
+                analytics.track('cover_backfill_done', {
+                  file_id: next.id,
+                  file_name: next.file.name,
+                  file_size: next.file.size,
+                  source: result.meta?.source,
+                })
+              } catch {
+                analytics.track('cover_backfill_fail', {
+                  file_id: next.id,
+                  file_name: next.file.name,
+                  file_size: next.file.size,
+                  source: result.meta?.source,
+                })
+              }
+            } else {
+              analytics.track('cover_backfill_fail', {
+                file_id: next.id,
+                file_name: next.file.name,
+                file_size: next.file.size,
+                source: result.meta?.source,
+              })
+            }
+          }
+
+          // M4A 的 covr 已在上面同步完成；FLAC/MP3 的历史回填仍在 done 后异步进行。
           const coverUrl = result.cover
             ? URL.createObjectURL(result.cover)
             : result.meta.albumPic
@@ -1129,7 +1188,7 @@ function App() {
             file_size: next.file.size,
             source: result.meta?.source,
             format: result.format,
-            has_cover: !!result.cover, // 内嵌口径（回填前），保持历史一致
+            has_cover: !!decryptedResult.cover, // 内嵌口径（回填前），保持历史一致
             // 性能埋点：解密耗时（ms）。file_size=原始加密字节，配合算「每 MB 解密耗时」
             decrypt_ms: decryptMs,
           })
@@ -1164,7 +1223,7 @@ function App() {
             })
           }
 
-          // 封面回填：无内嵌封面但有 albumPic → 抓网易云 CDN 图嵌入下载产物。
+          // FLAC/MP3 封面回填：无内嵌封面但有 albumPic → 抓 CDN 图嵌入下载产物。
           // 后台异步（不 await），既不阻塞 UI 也不阻塞串行解密队列；失败静默、文件仍可用。
           if (
             !result.cover &&
@@ -1186,11 +1245,21 @@ function App() {
                 return
               }
               try {
-                const retagged =
-                  backfillResult.format === 'flac'
-                    ? await writeFlacMeta(backfillResult.audio, remote, backfillResult.meta)
-                    : await writeId3ToMp3(backfillResult.audio, remote, backfillResult.meta)
-                // 只换 result（下载产物带封面）；列表 coverUrl 仍是同一张图，无需动
+                let retagged = backfillResult.audio
+                if (backfillResult.format === 'flac') {
+                  retagged = await writeFlacMeta(
+                    backfillResult.audio,
+                    remote,
+                    backfillResult.meta,
+                  )
+                } else if (backfillResult.format === 'mp3') {
+                  retagged = await writeId3ToMp3(
+                    backfillResult.audio,
+                    remote,
+                    backfillResult.meta,
+                  )
+                }
+                // 列表 coverUrl 已指向同一 CDN 图片，无需替换。
                 updateFile(fileId, {
                   result: { ...backfillResult, audio: retagged, cover: remote },
                 })
@@ -1354,13 +1423,13 @@ function App() {
     setTimeout(() => fileInputRef.current?.click(), 50)
   }, [pendingLargeBatch])
 
-  // 批量转 MP3：列表里所有 done 状态且 format=flac/ogg 的文件
-  // （v0.6.0：QQ 音乐 mgg 解出来是 OGG，也走批量转 MP3 路径）
+  // 批量转 MP3：列表里所有 done 状态且 format=flac/ogg/m4a 的文件。
+  // 判断与单行按钮、transcodeToMp3 共用 isMp3TranscodableFormat，避免条件漂移。
   const onBatchTranscodeFlac = useCallback(() => {
     const targets = filesRef.current.filter(
       (f) =>
         f.status === 'done' &&
-        (f.result?.format === 'flac' || f.result?.format === 'ogg'),
+        isMp3TranscodableFormat(f.result?.format),
     )
     targets.forEach((t) => {
       // transcodeFile 内部会做 status/result 校验，直接触发即可；串行由 await 节奏控制
@@ -1368,18 +1437,18 @@ function App() {
     })
   }, [transcodeFile])
 
-  // 列表中当前可批量转换的非 MP3 音频（FLAC + OGG）
+  // 列表中当前可批量转换的非 MP3 音频（FLAC + OGG + M4A）
   const flacReady = useMemo(
     () =>
       files.filter(
         (f) =>
           f.status === 'done' &&
-          (f.result?.format === 'flac' || f.result?.format === 'ogg'),
+          isMp3TranscodableFormat(f.result?.format),
       ),
     [files],
   )
   // dismiss 策略：dismiss 时把当前 flacReady 的 id 全部记下来；
-  // 下次列表里出现新的、不在该集合的 FLAC id 时，flacBannerHasNew 自然回 true 重显横条。
+  // 下次列表里出现新的、不在该集合的可转码 id 时，flacBannerHasNew 自然回 true 重显横条。
   // 集合不主动清理已离队的 id —— 单文件级 UUID 不会复用，记忆体不会无限增长（清空列表后 dismiss 也会被覆盖）
   const flacBannerHasNew = flacReady.some(
     (f) => !flacBannerDismissedIds.has(f.id),

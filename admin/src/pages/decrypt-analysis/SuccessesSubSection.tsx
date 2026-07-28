@@ -17,6 +17,7 @@ const EXT_OPTIONS = [
   { value: 'ncm', label: 'NCM' },
   { value: 'kgm', label: 'KGM' },
   { value: 'vpr', label: 'VPR' },
+  { value: 'xm', label: 'XM (喜马拉雅)' },
   { value: 'mflac', label: 'mflac (QQ)' },
   { value: 'mgg', label: 'mgg (QQ)' },
   { value: 'qmcflac', label: 'qmcflac (QQ)' },
@@ -24,6 +25,7 @@ const EXT_OPTIONS = [
   { value: 'mp3', label: 'MP3' },
   { value: 'flac', label: 'FLAC' },
   { value: 'ogg', label: 'OGG' },
+  { value: 'm4a', label: 'M4A' },
 ]
 
 const PAGE_SIZE = 10

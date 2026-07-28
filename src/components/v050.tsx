@@ -1,4 +1,4 @@
-// v0.5.0 新增 UI 模块：性能警告弹窗 / 拦截详情弹窗 / 改造横条 / FLAC 引导横条
+// v0.5.0 新增 UI 模块：性能警告弹窗 / 拦截详情弹窗 / 改造横条 / 非 MP3 引导横条
 // 设计稿：Claude Design hash FuYQ7RjwZi0eIzZjVndPIw (v0.5.0-spec.html)
 
 import { useEffect, useMemo, useState } from 'react'
@@ -552,7 +552,7 @@ export function WarningBannerV2({
   )
 }
 
-// ── M4：FLAC 一键转 MP3 引导横条 ─────────────────────────────────────────
+// ── M4：FLAC / OGG / M4A 一键转 MP3 引导横条 ─────────────────────────────
 export function FlacBatchPromptBanner({
   flacCount,
   onConvert,
@@ -606,7 +606,7 @@ export function FlacBatchPromptBanner({
       </div>
 
       <span className="flex-1 min-w-0 truncate">
-        <span className="font-medium">列表中有 {flacCount} 个 FLAC / OGG 文件</span>
+        <span className="font-medium">列表中有 {flacCount} 个 FLAC / OGG / M4A 文件</span>
         <span className="opacity-50 mx-1.5">·</span>
         <span>转为 MP3 兼容更广</span>
       </span>

@@ -7,6 +7,14 @@
 
 ---
 
+## 运营后台 v0.4.12 · 20260714 上线
+
+- **导航栏右上角显示运营后台版本号**：右侧固定排列为 `版本号 → 用户名 → 退出`，版本信息在登录后的全部后台页面持续可见
+- 版本号不写死：在 [admin/vite.config.ts](admin/vite.config.ts) 构建时读取 `admin/package.json` 并注入 `VITE_APP_VERSION`；后续发版只需正常 bump 包版本
+- [admin/src/App.tsx](admin/src/App.tsx) 使用 11px 低对比度等宽文本展示，保持单行；[admin/tsconfig.json](admin/tsconfig.json) 加载 `vite/client` 类型
+- 验证：后台独立构建通过；生产产物包含 `0.4.12`；本地实际登录后在 1280px / 1024px 宽度检查无重叠、无横向溢出，滚动后导航栏吸顶正常
+- 埋点 / 主站 / server 零改动
+
 ## 运营后台 v0.4.11 · 20260714 上线
 
 - **错误码中文标签真正接入失败/下载日志页**：v0.7.4 上线 smoke 时发现 `ERROR_CODE_LABEL` 从未被任何页面 import、构建时被 tree-shake，失败日志一直显示错误码原文

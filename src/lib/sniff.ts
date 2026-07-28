@@ -7,12 +7,13 @@
 
 import type { AudioFormat } from './types'
 import { QMC_EXT_REGEX } from './qmc/handler-map'
+import { hasXmSignature } from './xm-id3'
 
 /**
  * 真实格式：
- * - ncm/kgm/vpr：本工具能解密
+ * - ncm/kgm/vpr/xm：本工具能解密
  * - qmc：QQ 音乐加密格式（mflac/mgg/qmcXXX/bkc 等系列），走 src/lib/qmc.ts 解密
- * - flac/ogg：本工具能直接转 MP3
+ * - flac/ogg/m4a：本工具能直接转 MP3
  * - mp3：已经是目标格式，无需处理
  * - kgg_or_kgmv4：酷狗新版（KGG/KGM v4，需联网拿密钥），本工具不支持
  * - unknown：上面都不是
@@ -21,16 +22,18 @@ export type RealFormat =
   | 'ncm'
   | 'kgm'
   | 'vpr'
+  | 'xm'
   | 'qmc'
   | 'flac'
   | 'ogg'
+  | 'm4a'
   | 'mp3'
   | 'kgg_or_kgmv4'
   | 'unknown'
 
-/** RealFormat → AudioFormat（仅 mp3/flac/ogg 三种重叠） */
+/** RealFormat → AudioFormat（加密容器之外的真实音频格式） */
 export function toAudioFormat(rf: RealFormat): AudioFormat | null {
-  if (rf === 'mp3' || rf === 'flac' || rf === 'ogg') return rf
+  if (rf === 'mp3' || rf === 'flac' || rf === 'ogg' || rf === 'm4a') return rf
   return null
 }
 
@@ -48,6 +51,17 @@ export function sniffAudioFormat(bytes: Uint8Array): AudioFormat | null {
   // OGG: "OggS"
   if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
     return 'ogg'
+  }
+  // M4A / MP4 family: 4-byte box size + "ftyp".
+  // XM v2 的 M4A 产物 major brand 通常为 "M4A "；兼容 isom/mp42 等合法封装。
+  if (
+    bytes.length >= 12 &&
+    bytes[4] === 0x66 &&
+    bytes[5] === 0x74 &&
+    bytes[6] === 0x79 &&
+    bytes[7] === 0x70
+  ) {
+    return 'm4a'
   }
   // MP3: ID3v2 tag
   if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
@@ -124,8 +138,19 @@ export async function sniffRealFormat(file: File): Promise<RealFormat> {
   if (head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53) {
     return 'ogg'
   }
-  // MP3: ID3v2 tag ("ID3")
+  // M4A / MP4 family: box size + "ftyp"；按 magic 接受，避免只信扩展名。
+  if (
+    head.length >= 12 &&
+    head[4] === 0x66 &&
+    head[5] === 0x74 &&
+    head[6] === 0x79 &&
+    head[7] === 0x70
+  ) {
+    return 'm4a'
+  }
+  // ID3 开头既可能是普通 MP3，也可能是喜马拉雅 XM 外层容器。
   if (head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) {
+    if (/\.xm$/i.test(file.name) || (await hasXmSignature(file))) return 'xm'
     return 'mp3'
   }
   // MP3: MPEG audio sync (0xFF 后 3 bit 全 1)
@@ -143,6 +168,9 @@ export async function sniffRealFormat(file: File): Promise<RealFormat> {
   if (QMC_EXT_REGEX.test(file.name)) return 'qmc'
   // [mqms*] tag 是 QQ 音乐改后缀绕过的常见标记
   if (/\[mqms\d*\]/i.test(file.name)) return 'qmc'
+
+  // 损坏/截断的 .xm 仍交给 XM parser，给出精准错误，不伪装成 unknown。
+  if (/\.xm$/i.test(file.name)) return 'xm'
 
   return 'unknown'
 }

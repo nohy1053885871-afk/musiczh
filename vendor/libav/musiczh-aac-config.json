@@ -1,0 +1,8 @@
+[
+  "avformat",
+  "avcodec",
+  "swresample",
+  "demuxer-mov",
+  "parser-aac",
+  "decoder-aac"
+]

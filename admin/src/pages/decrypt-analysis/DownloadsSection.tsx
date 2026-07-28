@@ -28,9 +28,11 @@ const KIND_OPTIONS = [
 
 const EXT_OPTIONS = [
   { value: '', label: '全部格式' },
+  { value: 'xm', label: 'XM (喜马拉雅)' },
   { value: 'mp3', label: 'MP3' },
   { value: 'flac', label: 'FLAC' },
   { value: 'ogg', label: 'OGG' },
+  { value: 'm4a', label: 'M4A' },
 ]
 
 const PAGE_SIZE = 10

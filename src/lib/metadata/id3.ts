@@ -8,6 +8,7 @@
 import { ID3Writer } from 'browser-id3-writer'
 import type { AudioMeta } from '../types'
 import type { ParsedAudioMeta } from './index'
+import { normalizeCoverForMp3 } from './cover-normalize'
 
 /**
  * 解析 ID3v2 头部，返回所需字段。
@@ -108,7 +109,8 @@ export async function writeId3ToMp3(
   if (meta.album) writer.setFrame('TALB', meta.album)
   if (cover) {
     try {
-      const coverBuf = await cover.arrayBuffer()
+      const compatibleCover = await normalizeCoverForMp3(cover)
+      const coverBuf = await compatibleCover.arrayBuffer()
       writer.setFrame('APIC', {
         type: 3,
         data: coverBuf,
@@ -124,7 +126,6 @@ export async function writeId3ToMp3(
       const hex = Array.from(head)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join(' ')
-      // eslint-disable-next-line no-console
       console.warn(
         `[writeId3ToMp3] APIC 写入失败: ${(e as Error).message} | cover.type=${cover.type} | cover.size=${cover.size} | head16=${hex}`,
       )

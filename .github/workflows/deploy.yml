@@ -21,9 +21,9 @@ on:
           - server
           - all
 
-# 同分支并发部署排队，避免新旧两次 push 抢 rsync
+# 所有生产部署/回滚串行，避免 user/admin/server 或手动回滚互相抢 rsync
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: production-deploy
   cancel-in-progress: false
 
 env:
@@ -52,12 +52,16 @@ jobs:
               - 'index.html'
               - 'package.json'
               - 'package-lock.json'
+              - 'scripts/create-deploy-manifest.mjs'
+              - 'scripts/smoke-static-deploy.mjs'
               - 'vite.config.ts'
               - 'tsconfig.app.json'
               - 'tsconfig.json'
               - 'tsconfig.node.json'
             admin:
               - 'admin/**'
+              - 'scripts/create-deploy-manifest.mjs'
+              - 'scripts/smoke-static-deploy.mjs'
             server:
               - 'server/**'
             server_lock:
@@ -85,6 +89,9 @@ jobs:
       - name: 构建用户端
         run: npm run build
 
+      - name: 写入用户端部署清单
+        run: node scripts/create-deploy-manifest.mjs dist user "$(node -p "require('./package.json').version")" "${{ github.sha }}"
+
       - uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -95,6 +102,41 @@ jobs:
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      - name: 部署前快照用户端（保留最近 3 份）
+        id: backup-user
+        run: |
+          backup_ts=$(date -u +%Y%m%d-%H%M%S)
+          echo "timestamp=$backup_ts" >> "$GITHUB_OUTPUT"
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "BACKUP_TS='$backup_ts' PREVIOUS_COMMIT='${{ github.event.before }}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          backup_root=/www/backup/musiczh/user-rollback
+          source_dir=/www/wwwroot/musiczh
+          snapshot="$backup_root/$BACKUP_TS"
+          mkdir -p "$snapshot"
+          rsync -a --delete --exclude='.user.ini' "$source_dir/" "$snapshot/"
+          {
+            echo "target=user"
+            echo "snapshot=$BACKUP_TS"
+            echo "previous_commit=${PREVIOUS_COMMIT:-unknown}"
+            if [ -f "$source_dir/.deploy-manifest.json" ]; then
+              node -e "const m=require('$source_dir/.deploy-manifest.json'); console.log('previous_version='+m.version); console.log('previous_manifest_commit='+m.commit)"
+            else
+              echo "previous_version=unknown"
+              echo "previous_manifest_commit=unknown"
+            fi
+            echo "resource_sha256:"
+            find "$snapshot" -type f ! -name '_rollback-manifest.txt' -print0 |
+              sort -z |
+              xargs -0 -r sha256sum
+          } > "$snapshot/_rollback-manifest.txt"
+          find "$backup_root" -mindepth 1 -maxdepth 1 -type d -print0 |
+            xargs -0 -r ls -1dt |
+            tail -n +4 |
+            xargs -r rm -rf
+          echo "[backup] user saved at $BACKUP_TS"
+          REMOTE
+
       - name: rsync 同步到服务器
         run: |
           rsync -az --delete --delay-updates \
@@ -102,10 +144,25 @@ jobs:
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh/
 
-      - name: 验证站点可达
+      - name: 验证用户端版本与全部静态资源
+        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/
+
+      - name: 用户端部署失败时自动恢复
+        if: failure() && steps.backup-user.outputs.timestamp != ''
         run: |
-          sleep 2
-          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://sleepno.cn/
+          snapshot="${{ steps.backup-user.outputs.timestamp }}"
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "SNAPSHOT='$snapshot' bash -s" <<'REMOTE'
+          set -euo pipefail
+          source_dir="/www/backup/musiczh/user-rollback/$SNAPSHOT"
+          target_dir=/www/wwwroot/musiczh
+          test -f "$source_dir/_rollback-manifest.txt"
+          rsync -a --delete \
+            --exclude='_rollback-manifest.txt' --exclude='.user.ini' \
+            "$source_dir/" "$target_dir/"
+          echo "[rollback] user restored from $SNAPSHOT"
+          REMOTE
+          node scripts/smoke-static-deploy.mjs https://sleepno.cn/
 
   deploy-admin:
     name: 部署运营后台前端
@@ -134,6 +191,9 @@ jobs:
       - name: 构建运营后台
         run: npm run build:admin
 
+      - name: 写入运营后台部署清单
+        run: node scripts/create-deploy-manifest.mjs admin/dist admin "$(node -p "require('./admin/package.json').version")" "${{ github.sha }}"
+
       - uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -144,6 +204,41 @@ jobs:
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      - name: 部署前快照运营后台（保留最近 3 份）
+        id: backup-admin
+        run: |
+          backup_ts=$(date -u +%Y%m%d-%H%M%S)
+          echo "timestamp=$backup_ts" >> "$GITHUB_OUTPUT"
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "BACKUP_TS='$backup_ts' PREVIOUS_COMMIT='${{ github.event.before }}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          backup_root=/www/backup/musiczh/admin-rollback
+          source_dir=/www/wwwroot/musiczh-admin
+          snapshot="$backup_root/$BACKUP_TS"
+          mkdir -p "$snapshot"
+          rsync -a --delete --exclude='.user.ini' "$source_dir/" "$snapshot/"
+          {
+            echo "target=admin"
+            echo "snapshot=$BACKUP_TS"
+            echo "previous_commit=${PREVIOUS_COMMIT:-unknown}"
+            if [ -f "$source_dir/.deploy-manifest.json" ]; then
+              node -e "const m=require('$source_dir/.deploy-manifest.json'); console.log('previous_version='+m.version); console.log('previous_manifest_commit='+m.commit)"
+            else
+              echo "previous_version=unknown"
+              echo "previous_manifest_commit=unknown"
+            fi
+            echo "resource_sha256:"
+            find "$snapshot" -type f ! -name '_rollback-manifest.txt' -print0 |
+              sort -z |
+              xargs -0 -r sha256sum
+          } > "$snapshot/_rollback-manifest.txt"
+          find "$backup_root" -mindepth 1 -maxdepth 1 -type d -print0 |
+            xargs -0 -r ls -1dt |
+            tail -n +4 |
+            xargs -r rm -rf
+          echo "[backup] admin saved at $BACKUP_TS"
+          REMOTE
+
       - name: rsync 同步到服务器
         run: |
           rsync -az --delete --delay-updates \
@@ -151,10 +246,25 @@ jobs:
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             admin/dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh-admin/
 
-      - name: 验证后台可达
+      - name: 验证后台版本与全部静态资源
+        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/admin/
+
+      - name: 运营后台部署失败时自动恢复
+        if: failure() && steps.backup-admin.outputs.timestamp != ''
         run: |
-          sleep 2
-          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://sleepno.cn/admin/
+          snapshot="${{ steps.backup-admin.outputs.timestamp }}"
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "SNAPSHOT='$snapshot' bash -s" <<'REMOTE'
+          set -euo pipefail
+          source_dir="/www/backup/musiczh/admin-rollback/$SNAPSHOT"
+          target_dir=/www/wwwroot/musiczh-admin
+          test -f "$source_dir/_rollback-manifest.txt"
+          rsync -a --delete \
+            --exclude='_rollback-manifest.txt' --exclude='.user.ini' \
+            "$source_dir/" "$target_dir/"
+          echo "[rollback] admin restored from $SNAPSHOT"
+          REMOTE
+          node scripts/smoke-static-deploy.mjs https://sleepno.cn/admin/
 
   deploy-server:
     name: 部署后端 API

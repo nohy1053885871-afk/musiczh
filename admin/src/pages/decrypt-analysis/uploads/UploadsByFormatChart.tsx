@@ -27,8 +27,10 @@ const EXT_COLORS: Record<string, string> = {
   ncm:  '#1677FF',
   kgm:  '#52C41A',
   vpr:  '#13C2C2',
+  xm:   '#F05A2A',
   flac: '#FAAD14',
   ogg:  '#722ED1',
+  m4a:  '#2F54EB',
   mp3:  '#FA541C',
   // QMC 系列：紫红渐变区分
   mflac:   '#EB2F96',
@@ -100,10 +102,10 @@ function buildSeries(
 }
 
 const ALL_EXTS = [
-  'ncm', 'kgm', 'vpr',
+  'ncm', 'kgm', 'vpr', 'xm',
   'mflac', 'mflac0', 'mflach', 'mgg', 'mgg0', 'mgg1', 'mggl', 'mmp4',
   'qmcflac', 'qmcogg', 'qmc0', 'qmc2', 'qmc3', 'qmc4', 'qmc6', 'qmc8',
-  'flac', 'ogg', 'mp3',
+  'flac', 'ogg', 'm4a', 'mp3',
 ]
 
 export function UploadsByFormatChart({ rq, reloadKey }: { rq: string; reloadKey: number }) {

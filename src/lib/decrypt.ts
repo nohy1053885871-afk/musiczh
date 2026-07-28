@@ -7,17 +7,18 @@
 import { decryptNcm } from './ncm'
 import { decryptKgm } from './kgm'
 import { decryptQmc } from './qmc'
+import { decryptXm } from './xm'
 import { QMC_EXTS } from './qmc/handler-map'
 import { DecryptError, type DecryptResult, type ProgressCallback } from './types'
 
-export const SUPPORTED_EXTS = ['ncm', 'kgm', 'vpr', ...QMC_EXTS] as const
+export const SUPPORTED_EXTS = ['ncm', 'kgm', 'vpr', 'xm', ...QMC_EXTS] as const
 export type SupportedExt = (typeof SUPPORTED_EXTS)[number]
-// 上传准入 regex：含 .flac / .ogg / .kgg / 全部 QMC 扩展名。
-// flac / ogg 在 App.tsx processQueue 走 transcode-only 路径（跳过解密，WASM 流式解码后 LAME 编码）。
+// 上传准入 regex：含 .flac / .ogg / .m4a / .kgg / 全部 QMC 扩展名。
+// flac / ogg / m4a 在 App.tsx processQueue 走 transcode-only 路径（跳过解密，WASM 解码后 LAME 编码）。
 // kgg 进队列后 sniff 出 kgg_or_kgmv4 给精准错误（而不是上传被拒），便于诊断与统计。
 // QMC 系列进队列后走 decryptQmc；新版 STag 文件会在解密阶段抛 QMC_NEW_VERSION_UNSUPPORTED 引导用户。
 export const SUPPORTED_EXT_REGEX =
-  /\.(ncm|kgm|vpr|flac|ogg|kgg|mflac\d*|mflach|mgg\d*|mggl|mmp4|qmcflac|qmcogg|qmc[02346]|bkc(mp3|m4a|flac|wav|ape|ogg|wma)|tkm)$/i
+  /\.(ncm|kgm|vpr|xm|flac|ogg|m4a|kgg|mflac\d*|mflach|mgg\d*|mggl|mmp4|qmcflac|qmcogg|qmc[02346]|bkc(mp3|m4a|flac|wav|ape|ogg|wma)|tkm)$/i
 
 /**
  * 按文件名扩展名分发到具体解密器。
@@ -41,6 +42,8 @@ export async function decryptAudioFile(
     case 'kgm':
     case 'vpr':
       return decryptKgm(file, onProgress)
+    case 'xm':
+      return decryptXm(file, onProgress)
     default:
       // QMC 系列扩展名（mflac/mgg/qmcXXX/bkcXXX/tkm 等）
       if (ext && (QMC_EXTS as ReadonlyArray<string>).includes(ext)) {

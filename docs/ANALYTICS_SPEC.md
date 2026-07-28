@@ -66,9 +66,9 @@
 | `error_stack` | string | `err.stack`（截断 ≤ 8000 字符） |
 | `count` | number | 一次操作牵涉的文件数 |
 | `total_size` | number | 多文件总字节 |
-| `format` | string | `mp3` / `flac` / `ogg` |
-| `source` | string | `ncm` / `kgm` / `vpr` / `qmc`（**v0.6.0 起**：QQ 音乐 QMCv2 系列解密成功 / 失败时上报，含 STag 新版兜底）/ `qq_mflac`（**v0.5.1-v0.5.2** 仅 sniff 拦截阶段使用，运营后台 SOURCE_LABEL 仍保留映射便于回看历史失败日志） |
-| `from_format` | string | 转码前的格式：`flac` / `ogg`（**v0.6.1 起 OGG 直传接入主站**，新枚举值出现）。配合 `source IS NULL` 即可拆分「原始 flac 转码」vs「原始 ogg 转码」 |
+| `format` | string | `mp3` / `flac` / `ogg` / `m4a`（**v0.8.0 起**：XM 解密产物可为 M4A） |
+| `source` | string | `ncm` / `kgm` / `vpr` / `qmc`（**v0.6.0 起**：QQ 音乐 QMCv2 系列）/ `xm`（**v0.8.0 起**：喜马拉雅 XM v2）/ `qq_mflac`（**v0.5.1-v0.5.2** 仅 sniff 拦截阶段使用，运营后台 SOURCE_LABEL 仍保留映射便于回看历史失败日志） |
+| `from_format` | string | 转码前的格式：`flac` / `ogg` / `m4a`。配合 `source IS NULL` 可拆分原始 FLAC/OGG/M4A 上传；`source='xm'` 且 `from_format='m4a'` 表示 XM 解密后由用户主动转 MP3 |
 | `queue_size` | number | 当前队列长度 |
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
 | `status` | string | 文件当时状态 |
@@ -83,7 +83,7 @@
 | `sha256` | string | **v0.6.0 起新增** · QQ 安装包文件的 SHA-256（小写 hex，长度 64），仅 `qq_download_click` 携带。用于追踪服务器上的安装包是否被替换/篡改 |
 | `encoder` | string | **v0.6.2 起新增** · 转码编码器标识，命名约定 `<encoder>-<mode>-<param>`。当前枚举值：`wasm-lame-v2`（默认，LAME VBR -V 2，平均 ~190 kbps）；规划值 `wasm-lame-v0`（VBR -V 0，~245 kbps，公认透明）、`wasm-lame-cbr-192` / `wasm-lame-cbr-320`（CBR 模式，未启用）。`transcode_start` / `transcode_done` 携带 |
 | `output_size` | number | **v0.6.2 起新增** · 转码产物 MP3 的字节数；配合 file_size（源大小）和 sourceDuration 可推算平均码率分布。仅 `transcode_done` 携带 |
-| `has_cover` | boolean | **v0.6.3 起新增** · 转码 / 解密产物是否含封面。`transcode_done` 表示 FLAC/OGG 原文件能不能解出可写入 MP3 的 cover（取决于原文件是否带 VORBIS PICTURE）；`decrypt_done` 表示解密产物里是否能读到 ID3v2 APIC 或 FLAC PICTURE block——用于评估各平台元数据覆盖率与 UI 列表预览体验 |
+| `has_cover` | boolean | **v0.6.3 起新增** · 转码 / 解密产物是否含封面。`transcode_done` 表示 FLAC/OGG/M4A 原文件能不能解出可写入 MP3 的 cover；`decrypt_done` 仍是原始解密产物的内嵌口径，XM 外层封面 URL 写入 M4A `covr` 的结果由 `cover_backfill_done/fail` 表示 |
 | `decrypt_ms` | number | **v0.6.4 起新增** · 解密耗时（毫秒），wall-clock 包住整个 `decryptAudioFile()` 调用。`decrypt_done` 携带；`decrypt_fail` 也带（仅诊断"多久后失败"，**不进性能均值口径**）。运营后台「性能分析」消费：配合 `file_size`（=原始加密字节）算「平均解密耗时」「每 MB 解密耗时」。⚠️ 每会话首个 KGM 文件含 1.1MB mask 懒加载，该文件 `decrypt_ms` 会偏高（P95 自然吸收） |
 | `transcode_ms` | number | **v0.6.4 起新增** · 转码耗时（毫秒），wall-clock 包住 `transcodeToMp3()` 调用（不含 ID3 写入，耗时极小）。`transcode_done` 携带；`transcode_fail` 也带（诊断用，不进均值）。配合 `file_size`（=转码输入即解密产物字节）算「平均转码耗时」「每 MB 转码耗时」。⚠️ 每会话首个转码含 LAME WASM 加载，会偏高 |
 
@@ -106,9 +106,9 @@
 | `upload_zone_view` | 主站 - 上传区 - 曝光 | [src/App.tsx](../src/App.tsx) `DropZone` ref | — | session 内只触发一次 |
 | `upload_drop` | 主站 - 上传区 - 拖拽文件松手 | [src/App.tsx](../src/App.tsx) `DropZone.onDrop` | `count, total_size` | 批量动作事件，文件级请看 `upload_attempt` |
 | `upload_pick` | 主站 - 上传区 - 点击选择文件后确认 | [src/App.tsx](../src/App.tsx) `input.onChange` | `count` | 批量动作事件 |
-| `upload_attempt` | 主站 - 业务 - 上传成功（进入队列） | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size` | **每个通过限制规则的文件一条**；漏斗件维度的「上传」层；原始 .flac / .ogg 上传也走此事件（**v0.6.1 起 .ogg 接入**） |
+| `upload_attempt` | 主站 - 业务 - 上传成功（进入队列） | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size` | **每个通过限制规则的文件一条**；漏斗件维度的「上传」层；原始 .flac / .ogg / .m4a 和喜马拉雅 .xm 上传也走此事件 |
 | `upload_reject` | 主站 - 业务 - 上传被拒 | [src/App.tsx](../src/App.tsx) `addFiles` | `file_name, file_ext, file_size, reject_reason` | **每个被拒文件一条**；用于诊断"哪些格式 / 多大 / 多少超限" |
-| `btn_transcode_click` / `btn_transcode_view` | 主站 - 列表行 - 转 MP3 按钮 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, file_ext, file_size, format` | 仅 flac/ogg 才显示 |
+| `btn_transcode_click` / `btn_transcode_view` | 主站 - 列表行 - 转 MP3 按钮 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, file_ext, file_size, format` | 仅解密结果为 FLAC / OGG / M4A 时显示 |
 | `row_download_click` / `row_download_view` | 主站 - 列表行 - 单文件下载 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, format, file_size` | 仅 done 状态显示 |
 | `row_retry_click` / `row_retry_view` | 主站 - 列表行 - 重试 | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, error_code` | 仅 failed 状态显示 |
 | `row_remove_click` / `row_remove_view` | 主站 - 列表行 - 移除（×） | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, status` | |
@@ -117,15 +117,15 @@
 | `btn_download_all_click` / `btn_download_all_view` | 主站 - 工具栏 - 下载全部（散文件） | [src/App.tsx](../src/App.tsx) 工具栏 | `count` | |
 | `btn_download_zip_click` / `btn_download_zip_view` | 主站 - 工具栏 - 打包下载（ZIP） | [src/App.tsx](../src/App.tsx) 工具栏 | `count` | |
 | `decrypt_start` | 主站 - 业务 - 解密任务开始 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size` | |
-| `decrypt_done` | 主站 - 业务 - 解密成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size, source, format, has_cover, decrypt_ms` | **v0.6.3 起**带 `has_cover`：NCM 解密 100% 有（拾音主动写）；KGM/VPR/QMC 取决于原文件。**v0.6.4 起**带 `decrypt_ms`（解密耗时 ms）供性能分析；`file_size` 此处=原始加密字节，是「每 MB 解密耗时」的分母 |
-| `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, decrypt_ms, ...` | 同步触发 `trackFailure`。**v0.6.4 起**带 `decrypt_ms`（多久后失败，仅诊断，不进性能均值）。**v0.6.0 起**：QQ 文件走 `decryptQmc` 真解密，`source='qmc'`；新版客户端文件抛 `error_code='QMC_NEW_VERSION_UNSUPPORTED'`，运营后台单独显示「QQ 新版（密钥在云端）」。v0.5.1-v0.5.2 期间 sniff 直接拦截阶段使用 `source='qq_mflac'`，保留映射便于历史日志可读。**v0.7.1 起**新增 `error_code='OUTPUT_NOT_AUDIO'`：NCM 解密产物经 magic 健全性校验后仍不是合法音频（自愈扫描也找不回起点），不再把乱码当成功放出——上线后应趋近 0，突然成批 = 又有新文件类触发解析问题。**v0.7.4 起**新增 `error_code='FILE_UNREADABLE'`（与 `transcode_fail` 同源，见该行说明） |
+| `decrypt_done` | 主站 - 业务 - 解密成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size, source, format, has_cover, decrypt_ms` | **v0.8.0 起** `source='xm'`，`format` 按产物真实 magic 上报 `mp3/flac/ogg/m4a`，不按扩展名推断。**v0.6.3 起**带 `has_cover`；**v0.6.4 起**带 `decrypt_ms` |
+| `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, decrypt_ms, ...` | 同步触发 `trackFailure`。**v0.8.0 起** XM 可产生 `XM_PARSE_FAILED` / `XM_VERSION_UNSUPPORTED` / `XM_DECRYPT_FAILED`；解密后不是受支持音频仍统一使用 `OUTPUT_NOT_AUDIO`。既有 QQ、NCM 与 `FILE_UNREADABLE` 语义保持不变 |
 | `decrypt_offset_recovered` | **v0.7.1** 主站 - 诊断 - NCM 偏移自愈 | [src/App.tsx](../src/App.tsx) `processQueue`（`result.offsetRecovered`） | `file_name, file_ext, file_size, source` | NCM 主偏移（imageSpace）解出的不是合法音频、靠 magic 锚定扫描找回了真音频起点时触发。常态应为 0；一旦冒头 = 出现新偏移变体、但已被自愈兜住，提示该回头补 parser（不是用户可见故障） |
 | `decrypt_format_mismatch` | **v0.7.1** 主站 - 诊断 - 解密格式不符 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size, source, format` | 解密产物真实 magic 判定的格式（`format`）与元数据声称格式（`meta.format`，仅 NCM 有）在 flac/mp3 轴上冲突时触发。常态接近 0；抬升 = 某来源解析或元数据有系统性问题的早期信号 |
-| `cover_backfill_done` | **v0.7.1** 主站 - 业务 - 封面回填成功 | [src/App.tsx](../src/App.tsx) `processQueue` 后台异步 | `file_name, file_size, source` | 解密产物无内嵌封面但有 albumPic → 抓网易云 CDN 图嵌入下载产物成功。新版 NCM（不内嵌封面、只给 albumPic URL）走此路 |
-| `cover_backfill_fail` | **v0.7.1** 主站 - 业务 - 封面回填失败 | [src/App.tsx](../src/App.tsx) `processQueue` 后台异步 | `file_name, file_size, source` | 抓图失败（超时/网络/CORS/非图片）或写标签失败；不影响主流程，文件仍可用（列表仍用 albumPic URL 预览）。与 `cover_backfill_done` 组成成功率，期望 >90% |
-| `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size, encoder` | `source` 为空 = 原始 .flac / .ogg 上传（**v0.6.1 起 .ogg 接入**，`from_format` 区分两者）；带值（ncm/kgm/vpr）= 解密产物再转码。运营后台「转换成功」漏斗 / 卡片靠此区分以避双计数。**v0.6.2 起**带 `encoder` 字段（当前固定 `wasm-lame-v2`） |
-| `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size, source, encoder, output_size, has_cover, transcode_ms` | 同上；`source IS NULL` 是原始 flac / ogg 上传转码，按 `from_format` 拆分。**v0.6.2 起**带 `encoder` + `output_size`（MP3 字节数，用于事后算平均码率）。**v0.6.3 起**带 `has_cover`（产物 MP3 是否含 ID3v2 APIC，源 FLAC/OGG 没封面时为 false）。**v0.6.4 起**带 `transcode_ms`（转码耗时 ms）；`file_size`=转码输入字节，是「每 MB 转码耗时」的分母 |
-| `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_msg, error_stack, transcode_ms, ...` | 同步触发 `trackFailure`。**v0.6.4 起**带 `transcode_ms`（仅诊断，不进性能均值）。**v0.7.4 起**新增 `error_code='FILE_UNREADABLE'`：源 File 底层文件在流式分块读取途中被移动/删除/系统回收（DOMException NotFoundError/NotReadableError，Worker 序列化层统一映射），移动端从网盘/聊天应用临时目录选文件最易触发；环境性失败，占比显著（>10%）时考虑上传引导文案 |
+| `cover_backfill_done` | **v0.7.1** 主站 - 业务 - 封面回填成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_size, source` | 解密产物无内嵌封面但有 albumPic → 抓 CDN 图并写入下载产物成功。NCM 的 FLAC/MP3 在后台异步处理；**v0.8.0 起** XM M4A 在进入可下载状态前无损重封装并写入 `covr` |
+| `cover_backfill_fail` | **v0.7.1** 主站 - 业务 - 封面回填失败 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_size, source` | 抓图失败（超时/网络/CORS/非图片）或写标签失败；不影响音频可用性。与 `cover_backfill_done` 组成成功率，期望 >90% |
+| `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size, source, encoder` | 仅用户主动把解密产物 FLAC/OGG/M4A 转 MP3，或原始 FLAC/OGG/M4A 自动转码时产生；XM 解密完成为 M4A 时不会自动产生，用户点击后带 `source='xm'`。**v0.6.2 起**带 `encoder='wasm-lame-v2'` |
+| `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size, source, encoder, output_size, has_cover, transcode_ms` | `source IS NULL` 是原始 FLAC/OGG/M4A 上传；`source='xm'` 可由 `from_format` 区分 M4A/FLAC/OGG。产物统一为 MP3 |
+| `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_code, error_msg, error_stack, transcode_ms, ...` | 同步触发 `trackFailure`。**v0.8.0 起** M4A 的 WebCodecs 与 LibAV fallback 均失败时使用 `AAC_DECODE_FAILED`；失败后 UI 恢复原 `done + m4a`，仍可下载原文件 |
 | `download_done` | 主站 - 业务 - 下载完成 | [src/App.tsx](../src/App.tsx) `FileRow` 单文件 / `downloadAllSeparate` / `downloadAllAsZip` | `file_name, file_ext, file_size, download_kind` | ZIP 整批成功后按文件数批量发；漏斗件维度的「下载」层 |
 | `download_fail` | 主站 - 业务 - 下载失败 | 三处下载入口的 try/catch 兜底 | `download_kind, error_code, error_msg, file_name?` | 同步触发 `trackFailure('download',...)`；ZIP 整批失败时 `file_name` 留空 |
 | `transcode_progress` | **v0.4.1** 主站 - 业务 - 转码进度心跳 | [src/App.tsx](../src/App.tsx) `transcodeFile.onProgress` → SDK 分桶 | `file_id, file_name, file_ext, file_size, from_format, progress_bucket` | SDK 内按 `[0.1, 0.3, 0.5, 0.7, 0.9]` 五桶单向跨越触发，每桶每文件 emit 一次，用于定位 auto-FLAC 卡死在哪一段 |
@@ -136,9 +136,9 @@
 | `btn_reject_details_view` / `btn_reject_details_click` | **v0.5.0** 主站 - 上传拦截横条 - 查看详情按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `WarningBannerV2` 按钮 | `count` | `count` = 本次被拒文件数 |
 | `dialog_reject_details_view` | **v0.5.0** 主站 - 拦截详情弹窗 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `RejectDetailsModal` mount | `count` | |
 | `dialog_reject_details_close` | **v0.5.0** 主站 - 拦截详情弹窗 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `RejectDetailsModal` × / 底部按钮 / 遮罩 | `count` | |
-| `banner_flac_prompt_view` | **v0.5.0** 主站 - FLAC 一键转 MP3 横条 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` div ref | `count` | `count` = 当前列表 FLAC 数量 |
-| `banner_flac_prompt_dismiss` | **v0.5.0** 主站 - FLAC 一键转 MP3 横条 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` × | `count` | 关闭后下次列表出现**新**的 FLAC 文件才重显 |
-| `btn_flac_batch_transcode_view` / `btn_flac_batch_transcode_click` | **v0.5.0** 主站 - FLAC 横条 - 一键转 MP3 按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` CTA | `count` | 点击后批量触发所有 done-flac 行的 `transcodeFile`，与单行手动转码共用同一管线 |
+| `banner_flac_prompt_view` | **v0.5.0** 主站 - FLAC/OGG/M4A 一键转 MP3 横条 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` div ref | `count` | 事件名为历史兼容保留；**v0.8.0 起** `count` = 当前全部 done 且格式为 FLAC/OGG/M4A 的文件总数 |
+| `banner_flac_prompt_dismiss` | **v0.5.0** 主站 - FLAC/OGG/M4A 一键转 MP3 横条 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` × | `count` | 关闭时记录当前三种可转码文件 ID；后续出现任一新 ID 时重显 |
+| `btn_flac_batch_transcode_view` / `btn_flac_batch_transcode_click` | **v0.5.0** 主站 - FLAC/OGG/M4A 横条 - 一键转 MP3 按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` CTA | `count` | 事件名为历史兼容保留；点击后批量触发当前所有 done 且格式为 FLAC/OGG/M4A 的行，与单行按钮共用 `transcodeFile` |
 | `qq_guide_entry_view` / `qq_guide_entry_click` | **v0.6.0** 主站 - 拖拽区下方 QQ 引导入口 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideEntry` | — | 常驻入口，曝光率应接近拖拽区 |
 | `qq_guide_view` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 曝光 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` mount | `trigger: 'entry' \| 'failure' \| 'auto' \| 'matrix'` | 触发来源：entry=拖拽区入口点击；failure=QMC_NEW_VERSION_UNSUPPORTED 失败行 CTA；auto=首次拖入 QMC 文件且 localStorage 未标记；matrix=从平台/格式总览弹窗跳来 |
 | `qq_guide_dismiss` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 关闭 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` close | `trigger` | 与对应 `qq_guide_view` 组队 |

@@ -9,10 +9,11 @@
  * 失败语义：reader 内部捕获后返回空结构；writer 抛错，调用方静默回退。
  */
 
-import type { AudioMeta } from '../types'
+import type { AudioFormat, AudioMeta } from '../types'
 import { readId3v2, writeId3ToMp3 } from './id3'
 import { readFlacMeta, writeFlacMeta as writeFlacMetaCore } from './flac'
 import { readOggVorbisMeta } from './ogg'
+import { readM4aMeta, writeM4aMeta } from './m4a'
 import { sniffImageMime } from '../sniff'
 
 export type ParsedAudioMeta = {
@@ -29,7 +30,7 @@ const OGG_HEAD_WINDOW = 512 * 1024 // 512KB
 
 export async function readMetaFromBlob(
   blob: Blob,
-  format: 'mp3' | 'flac' | 'ogg',
+  format: AudioFormat,
 ): Promise<ParsedAudioMeta> {
   try {
     if (format === 'mp3') {
@@ -39,9 +40,14 @@ export async function readMetaFromBlob(
       const head = await readBlobHead(blob, FLAC_HEAD_WINDOW)
       return readFlacMeta(head)
     }
-    // ogg
-    const head = await readBlobHead(blob, OGG_HEAD_WINDOW)
-    return readOggVorbisMeta(head)
+    if (format === 'ogg') {
+      const head = await readBlobHead(blob, OGG_HEAD_WINDOW)
+      return readOggVorbisMeta(head)
+    }
+    if (format === 'm4a') {
+      return await readM4aMeta(blob)
+    }
+    return { cover: null }
   } catch {
     return { cover: null }
   }
@@ -74,7 +80,7 @@ async function readBlobHead(blob: Blob, maxBytes: number): Promise<Uint8Array> {
   return new Uint8Array(await blob.slice(0, size).arrayBuffer())
 }
 
-export { writeId3ToMp3 }
+export { writeId3ToMp3, writeM4aMeta }
 
 /**
  * FLAC writer 门面：把 Blob 读全后调用核心实现。

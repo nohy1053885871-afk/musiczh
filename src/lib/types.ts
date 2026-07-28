@@ -1,7 +1,7 @@
 /**
  * 拾音 · 解密相关共享类型
  *
- * 跨多个解密器（NCM / KGM / VPR）共享的类型定义。
+ * 跨多个解密器（NCM / KGM / VPR / QMC / XM）共享的类型定义。
  */
 
 export type DecryptErrorCode =
@@ -16,6 +16,12 @@ export type DecryptErrorCode =
   // QQ 音乐新版（v20+）：密钥已迁移到云端，文件尾部仅有 'STag' 标记，无法纯前端解密。
   // 引导用户下载旧版（v19.51 Windows）重新生成可解密文件。
   | 'QMC_NEW_VERSION_UNSUPPORTED'
+  // 喜马拉雅 XM 容器标签/长度字段损坏，无法进入解密阶段。
+  | 'XM_PARSE_FAILED'
+  // 当前只支持已验证的 XM v2；v12 等其他版本必须精准拦截。
+  | 'XM_VERSION_UNSUPPORTED'
+  // XM 两层 AES-CBC / base64 还原失败。
+  | 'XM_DECRYPT_FAILED'
   | 'UNSUPPORTED_FORMAT'
   // 真 FLAC 头但浏览器内置 codec 解不了（高概率是 24-bit / 96kHz+ Hi-Res FLAC）
   | 'HIRES_NOT_SUPPORTED'
@@ -25,6 +31,8 @@ export type DecryptErrorCode =
   // 流式分块 lazy 读把暴露窗口拉长到整个处理时长；移动端从网盘/聊天应用临时目录
   // 选取的文件（临时副本被清理）最易触发。环境性失败，引导用户存到本机后重传。
   | 'FILE_UNREADABLE'
+  // M4A/AAC 解码器（WebCodecs + LibAV fallback）都无法解出 PCM。
+  | 'AAC_DECODE_FAILED'
   | 'UNKNOWN'
 
 export class DecryptError extends Error {
@@ -39,10 +47,20 @@ export class DecryptError extends Error {
 }
 
 /** 来源平台 */
-export type AudioSource = 'ncm' | 'kgm' | 'vpr' | 'qmc'
+export type AudioSource = 'ncm' | 'kgm' | 'vpr' | 'qmc' | 'xm'
 
 /** 输出音频格式 */
-export type AudioFormat = 'mp3' | 'flac' | 'ogg'
+export type AudioFormat = 'mp3' | 'flac' | 'ogg' | 'm4a'
+
+/** 所有能复用「一键转 MP3」管线的非 MP3 格式；UI、批量过滤、转码入口共用唯一真源。 */
+export const MP3_TRANSCODABLE_FORMATS = ['flac', 'ogg', 'm4a'] as const
+export type Mp3TranscodableFormat = (typeof MP3_TRANSCODABLE_FORMATS)[number]
+
+export function isMp3TranscodableFormat(
+  format: AudioFormat | null | undefined,
+): format is Mp3TranscodableFormat {
+  return format != null && (MP3_TRANSCODABLE_FORMATS as readonly AudioFormat[]).includes(format)
+}
 
 /** 元数据：NCM 内嵌完整信息；KGM/VPR 多数没有，字段全可选 */
 export interface AudioMeta {

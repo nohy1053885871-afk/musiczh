@@ -1,0 +1,124 @@
+name: Rollback Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: '回滚哪个前端'
+        type: choice
+        required: true
+        default: user
+        options:
+          - user
+          - admin
+          - all
+      snapshot:
+        description: '快照时间（YYYYMMDD-HHMMSS）；留空恢复最近一份'
+        type: string
+        required: false
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  rollback-user:
+    name: 回滚用户端
+    if: inputs.target == 'user' || inputs.target == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 写入 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: 恢复用户端快照
+        env:
+          REQUESTED_SNAPSHOT: ${{ inputs.snapshot }}
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "REQUESTED_SNAPSHOT='$REQUESTED_SNAPSHOT' bash -s" <<'REMOTE'
+          set -euo pipefail
+          backup_root=/www/backup/musiczh/user-rollback
+          snapshot="$REQUESTED_SNAPSHOT"
+          if [ -n "$snapshot" ] && ! printf '%s' "$snapshot" | grep -Eq '^[0-9]{8}-[0-9]{6}$'; then
+            echo "快照格式错误：$snapshot"
+            exit 1
+          fi
+          if [ -z "$snapshot" ]; then
+            snapshot=$(find "$backup_root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | head -n 1)
+          fi
+          source_dir="$backup_root/$snapshot"
+          test -f "$source_dir/_rollback-manifest.txt"
+          rsync -a --delete \
+            --exclude='_rollback-manifest.txt' --exclude='.user.ini' \
+            "$source_dir/" /www/wwwroot/musiczh/
+          echo "[rollback] user restored from $snapshot"
+          sed -n '1,8p' "$source_dir/_rollback-manifest.txt"
+          REMOTE
+
+      - name: 验证用户端
+        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/
+
+  rollback-admin:
+    name: 回滚运营后台
+    if: inputs.target == 'admin' || inputs.target == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 写入 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: 恢复运营后台快照
+        env:
+          REQUESTED_SNAPSHOT: ${{ inputs.snapshot }}
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "REQUESTED_SNAPSHOT='$REQUESTED_SNAPSHOT' bash -s" <<'REMOTE'
+          set -euo pipefail
+          backup_root=/www/backup/musiczh/admin-rollback
+          snapshot="$REQUESTED_SNAPSHOT"
+          if [ -n "$snapshot" ] && ! printf '%s' "$snapshot" | grep -Eq '^[0-9]{8}-[0-9]{6}$'; then
+            echo "快照格式错误：$snapshot"
+            exit 1
+          fi
+          if [ -z "$snapshot" ]; then
+            snapshot=$(find "$backup_root" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | head -n 1)
+          fi
+          source_dir="$backup_root/$snapshot"
+          test -f "$source_dir/_rollback-manifest.txt"
+          rsync -a --delete \
+            --exclude='_rollback-manifest.txt' --exclude='.user.ini' \
+            "$source_dir/" /www/wwwroot/musiczh-admin/
+          echo "[rollback] admin restored from $snapshot"
+          sed -n '1,8p' "$source_dir/_rollback-manifest.txt"
+          REMOTE
+
+      - name: 验证运营后台
+        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/admin/

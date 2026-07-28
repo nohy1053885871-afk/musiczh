@@ -37,8 +37,11 @@ const ROWS: Row[] = [
   { platform: 'QQ 音乐', extsCell: '.mflac / .mflac0 / .mflach', noteCell: '仅 Windows 需下载旧版QQ客户端', parity: 'odd', isPlatformHead: true, platformRowspan: 3 },
   { platform: 'QQ 音乐', extsCell: '.mgg / .mgg0 / .mgg1 / .mggl', noteAction: 'open-qq-guide', parity: 'even', skipPlatformCell: true },
   { platform: 'QQ 音乐', extsCell: '.qmcflac / .qmcogg / .qmc0/2/3/…', parity: 'odd', skipPlatformCell: true },
-  // 通用音频（2 行 rowspan）
-  { platform: '通用音频', extsCell: '.flac / .ogg', noteCell: '自动转码', parity: 'even', isPlatformHead: true, platformRowspan: 2 },
+  // 喜马拉雅
+  { platform: '喜马拉雅', extsCell: '.xm', noteCell: 'v2 · 保持原格式，非 MP3 可一键转码', parity: 'even', isPlatformHead: true, platformRowspan: 1 },
+  // 通用音频（3 行 rowspan）
+  { platform: '通用音频', extsCell: '.flac / .ogg', noteCell: '上传后自动转 MP3', parity: 'odd', isPlatformHead: true, platformRowspan: 3 },
+  { platform: '通用音频', extsCell: '.m4a', noteCell: '上传后自动转 MP3', parity: 'even', skipPlatformCell: true },
   { platform: '通用音频', extsCell: '.mp3', noteCell: '已是目标格式', parity: 'odd', skipPlatformCell: true },
 ]
 
