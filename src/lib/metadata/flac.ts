@@ -24,6 +24,8 @@
  *   data_length (4 BE) + data
  */
 
+import { isCoverSizeAllowed } from '../cover-policy'
+import { sniffImageMime } from '../sniff'
 import type { ParsedAudioMeta } from './index'
 
 const FLAC_MAGIC = [0x66, 0x4c, 0x61, 0x43] // "fLaC"
@@ -42,6 +44,36 @@ interface FlacBlock {
  */
 export function readFlacMeta(headBytes: Uint8Array): ParsedAudioMeta {
   const blocks = scanFlacBlocks(headBytes)
+  return extractMetaFromBlocks(blocks)
+}
+
+/**
+ * 按 metadata block 头逐块读取完整 FLAC，不再依赖固定头部窗口。
+ * 只把 VORBIS_COMMENT / PICTURE payload 读入内存，其他 block 直接跳过。
+ */
+export async function readFlacMetaFromBlob(blob: Blob): Promise<ParsedAudioMeta> {
+  const magic = await readBlobSlice(blob, 0, 4)
+  if (!matchesMagic(magic)) throw new Error('not a FLAC stream')
+
+  const blocks: FlacBlock[] = []
+  let off = 4
+  while (off + 4 <= blob.size) {
+    const header = await readBlobSlice(blob, off, off + 4)
+    if (header.length < 4) break
+    const isLast = (header[0] & 0x80) !== 0
+    const type = header[0] & 0x7f
+    const size = (header[1] << 16) | (header[2] << 8) | header[3]
+    const payloadStart = off + 4
+    const payloadEnd = payloadStart + size
+    if (payloadEnd > blob.size) break
+
+    if (type === BLOCK_VORBIS_COMMENT || type === BLOCK_PICTURE) {
+      const payload = await readBlobSlice(blob, payloadStart, payloadEnd)
+      blocks.push({ isLast, type, payload })
+    }
+    off = payloadEnd
+    if (isLast) break
+  }
   return extractMetaFromBlocks(blocks)
 }
 
@@ -72,6 +104,7 @@ export function writeFlacMeta(
   if (vc) newBlocks.push({ isLast: false, type: BLOCK_VORBIS_COMMENT, payload: vc })
   if (cover && coverBytes && coverBytes.length > 0) {
     const pic = buildPictureBlock(coverBytes, coverMime)
+    if (pic.length > 0xffffff) throw new Error('FLAC PICTURE block is too large')
     newBlocks.push({ isLast: false, type: BLOCK_PICTURE, payload: pic })
   }
 
@@ -158,7 +191,10 @@ function extractMetaFromBlocks(blocks: FlacBlock[]): ParsedAudioMeta {
       if (parsed.album) result.album = parsed.album
     } else if (b.type === BLOCK_PICTURE) {
       const pic = parsePicturePayload(b.payload)
-      if (pic) result.cover = new Blob([pic.data as BlobPart], { type: pic.mime || 'image/jpeg' })
+      if (pic && isCoverSizeAllowed(pic.data.length)) {
+        const mime = sniffImageMime(pic.data.subarray(0, 12))
+        if (mime) result.cover = new Blob([pic.data as BlobPart], { type: mime })
+      }
     }
   }
   return result
@@ -225,12 +261,21 @@ export function parsePicturePayload(
   off += 4
   if (off + descLen > payload.length) return null
   off += descLen // skip description
+  if (off + 20 > payload.length) return null
   off += 16 // width/height/depth/colors
   if (off + 4 > payload.length) return null
   const dataLen = view.getUint32(off, false)
   off += 4
   if (off + dataLen > payload.length) return null
   return { mime, data: payload.subarray(off, off + dataLen) }
+}
+
+async function readBlobSlice(blob: Blob, start: number, end: number): Promise<Uint8Array> {
+  return new Uint8Array(await blob.slice(start, end).arrayBuffer())
+}
+
+function matchesMagic(bytes: Uint8Array): boolean {
+  return FLAC_MAGIC.every((value, index) => bytes[index] === value)
 }
 
 function buildVorbisCommentBlock(

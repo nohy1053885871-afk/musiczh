@@ -7,9 +7,8 @@
 
 import { sniffImageMime } from '../sniff'
 import type { AudioMeta } from '../types'
+import { MAX_COVER_BYTES, isCoverSizeAllowed } from '../cover-policy'
 import type { ParsedAudioMeta } from './index'
-
-const MAX_COVER_BYTES = 8 * 1024 * 1024
 
 export async function readM4aMeta(blob: Blob): Promise<ParsedAudioMeta> {
   const { ALL_FORMATS, BlobSource, Input } = await import('mediabunny')
@@ -26,8 +25,7 @@ export async function readM4aMeta(blob: Blob): Promise<ParsedAudioMeta> {
     let cover: Blob | null = null
     if (
       image &&
-      image.data.length > 0 &&
-      image.data.length <= MAX_COVER_BYTES
+      isCoverSizeAllowed(image.data.length)
     ) {
       const mime = sniffImageMime(image.data.subarray(0, 12))
       if (mime) {
@@ -57,6 +55,9 @@ export async function writeM4aMeta(
   cover: Blob,
   meta: AudioMeta,
 ): Promise<Blob> {
+  if (!isCoverSizeAllowed(cover.size)) {
+    throw new Error(`M4A 封面超过 ${MAX_COVER_BYTES} 字节上限`)
+  }
   const {
     ALL_FORMATS,
     BlobSource,

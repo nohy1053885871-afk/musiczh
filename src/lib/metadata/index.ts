@@ -10,9 +10,10 @@
  */
 
 import type { AudioFormat, AudioMeta } from '../types'
-import { readId3v2, writeId3ToMp3 } from './id3'
-import { readFlacMeta, writeFlacMeta as writeFlacMetaCore } from './flac'
-import { readOggVorbisMeta } from './ogg'
+import { isCoverSizeAllowed } from '../cover-policy'
+import { readId3v2FromBlob, writeId3ToMp3 } from './id3'
+import { readFlacMetaFromBlob, writeFlacMeta as writeFlacMetaCore } from './flac'
+import { readOggVorbisMetaFromBlob } from './ogg'
 import { readM4aMeta, writeM4aMeta } from './m4a'
 import { sniffImageMime } from '../sniff'
 
@@ -23,26 +24,19 @@ export type ParsedAudioMeta = {
   album?: string
 }
 
-// 读窗口大小：足够覆盖大多数 FLAC PICTURE block + ID3v2 头
-const ID3_HEAD_INIT = 10
-const FLAC_HEAD_WINDOW = 1024 * 1024 // 1MB
-const OGG_HEAD_WINDOW = 512 * 1024 // 512KB
-
 export async function readMetaFromBlob(
   blob: Blob,
   format: AudioFormat,
 ): Promise<ParsedAudioMeta> {
   try {
     if (format === 'mp3') {
-      return await readId3FromBlob(blob)
+      return await readId3v2FromBlob(blob)
     }
     if (format === 'flac') {
-      const head = await readBlobHead(blob, FLAC_HEAD_WINDOW)
-      return readFlacMeta(head)
+      return await readFlacMetaFromBlob(blob)
     }
     if (format === 'ogg') {
-      const head = await readBlobHead(blob, OGG_HEAD_WINDOW)
-      return readOggVorbisMeta(head)
+      return await readOggVorbisMetaFromBlob(blob)
     }
     if (format === 'm4a') {
       return await readM4aMeta(blob)
@@ -51,33 +45,6 @@ export async function readMetaFromBlob(
   } catch {
     return { cover: null }
   }
-}
-
-async function readId3FromBlob(blob: Blob): Promise<ParsedAudioMeta> {
-  const headInit = new Uint8Array(
-    await blob.slice(0, ID3_HEAD_INIT).arrayBuffer(),
-  )
-  if (
-    headInit.length < ID3_HEAD_INIT ||
-    headInit[0] !== 0x49 ||
-    headInit[1] !== 0x44 ||
-    headInit[2] !== 0x33
-  ) {
-    return { cover: null }
-  }
-  const tagSize =
-    ((headInit[6] & 0x7f) << 21) |
-    ((headInit[7] & 0x7f) << 14) |
-    ((headInit[8] & 0x7f) << 7) |
-    (headInit[9] & 0x7f)
-  const total = ID3_HEAD_INIT + tagSize
-  const headFull = new Uint8Array(await blob.slice(0, total).arrayBuffer())
-  return readId3v2(headFull)
-}
-
-async function readBlobHead(blob: Blob, maxBytes: number): Promise<Uint8Array> {
-  const size = Math.min(blob.size, maxBytes)
-  return new Uint8Array(await blob.slice(0, size).arrayBuffer())
 }
 
 export { writeId3ToMp3, writeM4aMeta }
@@ -96,7 +63,7 @@ export async function writeFlacMeta(
   const album = meta.album
   let coverBytes: Uint8Array | null = null
   let coverMime = 'image/jpeg'
-  if (cover) {
+  if (cover && isCoverSizeAllowed(cover.size)) {
     coverBytes = new Uint8Array(await cover.arrayBuffer())
     // 权威 mime 取自封面真实字节（magic），优先于 Blob.type——上游可能传来错误 type，
     // FLAC PICTURE block 声明的 mime 必须与数据一致，否则严格播放器解码失败丢封面。

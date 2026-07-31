@@ -28,6 +28,7 @@ import {
 } from './types'
 import { stripFileExtensions } from './filename'
 import { writeId3ToMp3, writeFlacMeta } from './metadata'
+import { isCoverSizeAllowed } from './cover-policy'
 import { sniffAudioFormat, sniffImageMime } from './sniff'
 
 // 两个固定的 AES 密钥（来自网易云客户端，业内公开）
@@ -132,7 +133,7 @@ export async function decryptNcm(
   offset += 4
   const imageRegionStart = offset // 封面 + padding 区起点（= metaEnd+13）
   let cover: Blob | null = null
-  if (coverLen > 0) {
+  if (isCoverSizeAllowed(coverLen)) {
     const coverBytes = new Uint8Array(buffer.slice(offset, offset + coverLen))
     // NCM 容器对 cover 字段不带 mime，按真实 magic 定 Blob.type：新版网易云封面是 PNG，
     // 旧代码一律标 image/jpeg 会让 FLAC PICTURE block 声明 jpeg 却装 PNG，严格播放器据声明
