@@ -9,8 +9,8 @@
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
 - 当前开发版本：v0.8.1（运营后台 v0.4.14，API v0.4.8）
-- 当前生产版本：主站 v0.7.4 · 运营后台 v0.4.13 · API v0.4.8
-- 上线状态：用户端 v0.8.0 ✅ · 运营后台 v0.4.14 ✅ · API v0.4.8 ✅（本次未部署）
+- 当前生产版本：主站 v0.8.1 · 运营后台 v0.4.14 · API v0.4.8
+- 上线状态：用户端 v0.8.1 ✅ · 运营后台 v0.4.14 ✅ · API v0.4.8 ✅（本次未部署后台与 API）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 
@@ -210,6 +210,15 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.8.1 · 20260731 上线
+
+- **全格式封面上限统一为 16 MiB**：覆盖远程图片、NCM 内嵌图片、ID3 APIC、FLAC PICTURE、OGG `METADATA_BLOCK_PICTURE` 和 M4A `covr`；超限只忽略封面，音频继续成功
+- **远程封面按 CDN 分流**：网易请求 `imageView&thumbnail=500y500`，喜马拉雅请求 `!op_type=3&columns=500&rows=500`，未知 CDN 不猜参数；先检查 `Content-Length`，再流式累计并在超限时立即取消
+- **两秒非阻断收尾**：新增 `finalizing` 状态，封面任务并发上限 3，排队、下载、归一化、写标签和验证统一计入两秒；失败或超时安全降级为原始音频，迟到结果不能覆盖完成态
+- **本地元数据读取补强**：FLAC 按 metadata block 读取，OGG 按 page 组装跨页 comment packet，ID3 按声明长度读取；KGM/QMC 只读预览、不重写原文件标签
+- **预览与下载一致**：UI 只展示已经验证且实际嵌入下载产物的同一 Blob，不再以远程图片制造“页面有封面、文件没封面”的假象
+- 验证：封面专项 19/19、XM 专项 12/12、M4A 专项 1/1、主站构建和本地浏览器问题样本真实下载通过；问题 NCM 的 MPEG 帧哈希、两份真实 XM 的 AAC packet 数量与哈希在回填前后保持一致；PR #52 合并后 Actions run 30625780474 仅部署主站，线上 v0.8.1 的 24 个静态文件全量 SHA-256 smoke 通过，运营后台与 API skipped
+
 ### v0.8.0 / 运营后台 v0.4.14 · 20260728 上线
 
 - **喜马拉雅 XM v2**：新增独立 ID3 特征解析和两阶段 AES-CBC 解密；产物严格按真实 magic 输出 MP3/FLAC/OGG/M4A，v12 精准提示不支持，损坏产物不进入下载/转码
@@ -221,16 +230,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - **用户端与后台**：首页入口、格式矩阵、SEO/FAQ/JSON-LD、XM/M4A 徽章，以及后台格式筛选、颜色、来源/错误码/事件中文标签同步更新；事件名和后端 API/数据库不变
 - **发布安全**：前端部署增加带 commit/版本/全量 SHA-256 的三份快照、失败自动恢复和 `user/admin/all` 手动回滚 workflow；本版不修改或部署 server
 - 验证：XM 合成、原始 M4A 准入、VPR 分发与真实黄金样本 12/12，M4A covr 重封装专项 1/1，MP3 封面格式专项 2/2；WebCodecs/LibAV 双路径、原始 M4A 自动转码、XM 封面下载、转码失败恢复、混合批量气泡和后台 XM/M4A 筛选均完成浏览器验收；问题样本 APIC 已由 1000×1000 Progressive Adobe JPEG 转为 sRGB JFIF Baseline JPEG，并在 macOS Apple Music 的专辑卡片和播放栏实机显示；封面重封装前后 AAC 14,757 包 SHA-256 一致，NCM/KGM/QMC 旧样本与改动前输出 SHA-256/元数据一致；Actions run #78 主站/后台部署成功、server skipped，线上主站 24 个和后台 3 个静态文件全量 SHA-256 smoke 通过
-
-### 运营后台 v0.4.13 / API v0.4.8 · 20260721 上线
-
-- **首页查询性能重构**：新增单接口 `GET /api/admin/stats/overview-bundle`，一次返回概览、漏斗、全部日趋势和设备组合；首页从至少 7 个并发请求改成 1 个请求，指标切换只在前端重绘
-- **止血层**：原始事件统计合并为条件聚合，60 秒成功结果缓存，相同范围并发请求合并；重 SQL 全部隔离到独立 Worker Thread，主线程继续处理 `/api/track`
-- **日汇总层**：新增日指标、精确日访客、file_id 终态、逐上传事件状态和游标五张表；按 `events.id` 每 30 秒增量处理，精确跨日 UV，首尾不完整日期回读原始事件；逐上传表兼容生产少量重复 file_id，严格保持旧口径
-- **安全迁移**：独立可恢复回填 CLI 每批 10,000 行，追平尾部后对今日、7/30/90/365 天和两个自定义区间自动对账；全部一致才切 `ready`，异常或落后自动 `raw_fallback`，可用一条状态命令回滚
-- **前端体验**：切换范围会取消过期请求并保留旧数据；统一 loading，显示数据更新时间；汇总降级时展示低干扰提示；设备数据改为组合计数并保留交叉筛选
-- 验证：后端首页专项测试 3/3、server/admin 独立构建、本地 Worker/缓存/回退/回填端到端、1280px 浏览器验收全部通过；生产观测见 [复盘 #6](docs/retrospectives/06-admin-v0.4.13-20260721.md)
-
 
 # 通用
 - 优先选择编辑而非重写整个文件
