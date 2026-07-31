@@ -61,7 +61,7 @@
 | `file_name` | string | 完整文件名（**用户已授权上报**，便于排查） |
 | `file_ext` | string | 扩展名（小写，不带点）|
 | `file_size` | number | 字节 |
-| `error_code` | string | `DecryptErrorCode` 之一 |
+| `error_code` | string | 解密/转码/下载错误码；**v0.8.1 起** `cover_backfill_fail` 复用本字段上报 `COVER_TIMEOUT` / `COVER_TOO_LARGE` / `COVER_HTTP_ERROR` / `COVER_NETWORK_ERROR` / `COVER_UNSUPPORTED_IMAGE` / `COVER_TAG_WRITE_FAILED` / `COVER_EMBED_VERIFY_FAILED` |
 | `error_msg` | string | 错误描述 |
 | `error_stack` | string | `err.stack`（截断 ≤ 8000 字符） |
 | `count` | number | 一次操作牵涉的文件数 |
@@ -121,8 +121,8 @@
 | `decrypt_fail` | 主站 - 业务 - 解密失败 | [src/App.tsx](../src/App.tsx) `processQueue` catch | `file_name, error_code, source?, decrypt_ms, ...` | 同步触发 `trackFailure`。**v0.8.0 起** XM 可产生 `XM_PARSE_FAILED` / `XM_VERSION_UNSUPPORTED` / `XM_DECRYPT_FAILED`；解密后不是受支持音频仍统一使用 `OUTPUT_NOT_AUDIO`。既有 QQ、NCM 与 `FILE_UNREADABLE` 语义保持不变 |
 | `decrypt_offset_recovered` | **v0.7.1** 主站 - 诊断 - NCM 偏移自愈 | [src/App.tsx](../src/App.tsx) `processQueue`（`result.offsetRecovered`） | `file_name, file_ext, file_size, source` | NCM 主偏移（imageSpace）解出的不是合法音频、靠 magic 锚定扫描找回了真音频起点时触发。常态应为 0；一旦冒头 = 出现新偏移变体、但已被自愈兜住，提示该回头补 parser（不是用户可见故障） |
 | `decrypt_format_mismatch` | **v0.7.1** 主站 - 诊断 - 解密格式不符 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size, source, format` | 解密产物真实 magic 判定的格式（`format`）与元数据声称格式（`meta.format`，仅 NCM 有）在 flac/mp3 轴上冲突时触发。常态接近 0；抬升 = 某来源解析或元数据有系统性问题的早期信号 |
-| `cover_backfill_done` | **v0.7.1** 主站 - 业务 - 封面回填成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_size, source` | 解密产物无内嵌封面但有 albumPic → 抓 CDN 图并写入下载产物成功。NCM 的 FLAC/MP3 在后台异步处理；**v0.8.0 起** XM M4A 在进入可下载状态前无损重封装并写入 `covr` |
-| `cover_backfill_fail` | **v0.7.1** 主站 - 业务 - 封面回填失败 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_size, source` | 抓图失败（超时/网络/CORS/非图片）或写标签失败；不影响音频可用性。与 `cover_backfill_done` 组成成功率，期望 >90% |
+| `cover_backfill_done` | **v0.7.1** 主站 - 业务 - 封面回填成功 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_size, source` | 解密产物无内嵌封面但有 albumPic → 抓 CDN 图并写入下载产物成功。**v0.8.1 起** NCM/XM 共用并发 3、总期限 2 秒的 `finalizing` 收尾；成功或明确降级后才进入 `done`，但不阻塞后续音频解密 |
+| `cover_backfill_fail` | **v0.7.1** 主站 - 业务 - 封面回填失败 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_size, source, error_code` | **v0.8.1 起**用明确 `COVER_*` 码区分总期限、超限、HTTP、网络、图片格式、标签写入和写后验证失败；任何失败都只降级为原始音频，不产生 `decrypt_fail`。与 `cover_backfill_done` 组成成功率，目标 ≥95% |
 | `transcode_start` | 主站 - 业务 - 转码（→MP3）开始 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size, source, encoder` | 仅用户主动把解密产物 FLAC/OGG/M4A 转 MP3，或原始 FLAC/OGG/M4A 自动转码时产生；XM 解密完成为 M4A 时不会自动产生，用户点击后带 `source='xm'`。**v0.6.2 起**带 `encoder='wasm-lame-v2'` |
 | `transcode_done` | 主站 - 业务 - 转码成功 | [src/App.tsx](../src/App.tsx) `transcodeFile` | `file_name, from_format, file_size, source, encoder, output_size, has_cover, transcode_ms` | `source IS NULL` 是原始 FLAC/OGG/M4A 上传；`source='xm'` 可由 `from_format` 区分 M4A/FLAC/OGG。产物统一为 MP3 |
 | `transcode_fail` | 主站 - 业务 - 转码失败 | [src/App.tsx](../src/App.tsx) `transcodeFile` catch | `file_name, error_code, error_msg, error_stack, transcode_ms, ...` | 同步触发 `trackFailure`。**v0.8.0 起** M4A 的 WebCodecs 与 LibAV fallback 均失败时使用 `AAC_DECODE_FAILED`；失败后 UI 恢复原 `done + m4a`，仍可下载原文件 |

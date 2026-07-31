@@ -8,7 +8,7 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.0（运营后台 v0.4.14，API v0.4.8）
+- 当前开发版本：v0.8.1（运营后台 v0.4.14，API v0.4.8）
 - 当前生产版本：主站 v0.7.4 · 运营后台 v0.4.13 · API v0.4.8
 - 上线状态：用户端 v0.8.0 ✅ · 运营后台 v0.4.14 ✅ · API v0.4.8 ✅（本次未部署）
 
@@ -113,7 +113,7 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 - **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
 - **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
 - **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
-- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.14，与主站 v0.8.0 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.14，与主站 v0.8.1 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
 - **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
 - **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
 - **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
@@ -124,10 +124,10 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 type TrackedFile = {
   id: string
   file: File
-  status: 'pending' | 'decrypting' | 'done' | 'failed' | 'transcoding'
+  status: 'pending' | 'decrypting' | 'finalizing' | 'done' | 'failed' | 'transcoding'
   progress: number        // 0–1
   result?: DecryptResult  // { audio: Blob, format: 'mp3'|'flac'|'ogg'|'m4a', meta, cover, suggestedName }
-  coverUrl?: string       // blob URL 或 meta.albumPic CDN 地址
+  coverUrl?: string       // 只指向已验证、与下载产物共用的封面 Blob URL
   errorCode?: DecryptErrorCode
   errorMessage?: string
 }

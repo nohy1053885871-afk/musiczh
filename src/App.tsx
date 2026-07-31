@@ -19,10 +19,11 @@ import { stripFileExtensions } from './lib/filename'
 import {
   readMetaFromBlob,
   writeId3ToMp3,
-  writeFlacMeta,
-  writeM4aMeta,
 } from './lib/metadata'
-import { fetchRemoteCover, upgradeToHttps } from './lib/cover'
+import {
+  coverFinalizer,
+  needsRemoteCoverFinalization,
+} from './lib/cover-finalize'
 import { analytics } from './lib/analytics'
 import { useImpression } from './lib/useImpression'
 import {
@@ -70,7 +71,13 @@ function sourceFromName(name: string): { label: string; tone: string } {
 const LARGE_BATCH_THRESHOLD = 50
 const MAX_FILE_SIZE = 200 * 1024 * 1024
 
-type FileStatus = 'pending' | 'decrypting' | 'done' | 'failed' | 'transcoding'
+type FileStatus =
+  | 'pending'
+  | 'decrypting'
+  | 'finalizing'
+  | 'done'
+  | 'failed'
+  | 'transcoding'
 
 type TrackedFile = {
   id: string
@@ -79,6 +86,7 @@ type TrackedFile = {
   progress: number
   result?: DecryptResult
   coverUrl?: string
+  finalizeToken?: string
   errorCode?: DecryptErrorCode
   errorMessage?: string
 }
@@ -396,6 +404,7 @@ function FileRow({
   const artist = meta?.artist?.map((a) => a[0]).join(', ')
   const isFailed = file.status === 'failed'
   const isDecrypting = file.status === 'decrypting'
+  const isFinalizing = file.status === 'finalizing'
   const isTranscoding = file.status === 'transcoding'
   const isDone = file.status === 'done'
   const format = file.result?.format
@@ -440,7 +449,7 @@ function FileRow({
           />
         ) : (
           <div
-            className={`w-12 h-12 rounded-full relative ${isDecrypting || isTranscoding ? 'vinyl-spin-fast' : ''}`}
+            className={`w-12 h-12 rounded-full relative ${isDecrypting || isFinalizing || isTranscoding ? 'vinyl-spin-fast' : ''}`}
             style={{
               background:
                 'radial-gradient(circle at 30% 22%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 50% 50%, #1A1A1A 0%, #0A0A0A 70%, #050505 100%)',
@@ -527,7 +536,14 @@ function FileRow({
             )
           })()}
         </div>
-        {isDecrypting || isTranscoding ? (
+        {isFinalizing ? (
+          <div
+            className="mt-1.5 text-[11px]"
+            style={{ color: '#8A8680' }}
+          >
+            正在整理音频文件…
+          </div>
+        ) : isDecrypting || isTranscoding ? (
           <div className="mt-1.5 flex items-center gap-2">
             <div
               className="flex-1 h-1.5 rounded-full overflow-hidden"
@@ -944,9 +960,9 @@ function App() {
           '.mp3',
         )
         // coverUrl 派生：cover Blob 优先，让列表预览能看到封面
-        const coverUrl = result.cover
-          ? URL.createObjectURL(result.cover)
-          : result.meta.albumPic || undefined
+        const coverUrl = target.coverUrl ?? (
+          result.cover ? URL.createObjectURL(result.cover) : undefined
+        )
         updateFile(id, {
           status: 'done',
           progress: 1,
@@ -1127,67 +1143,13 @@ function App() {
             realFormat,
           )
           const decryptMs = Date.now() - decryptT0 // 先截取：封面回填的联网耗时不计入解密性能埋点
-          let result = decryptedResult
-
-          // XM 的 M4A 必须在进入可下载状态前完成 covr 回填，否则页面已经显示
-          // CDN 封面但用户立即下载时，拿到的仍会是无封面的原始 M4A。
-          // 这里只重封装 MP4 容器并复制 AAC packets，不重新编码音频。
-          if (
-            result.format === 'm4a' &&
-            !result.cover &&
-            result.meta.albumPic
-          ) {
-            const remote = await fetchRemoteCover(result.meta.albumPic)
-            if (remote) {
-              try {
-                const taggedM4a = await writeM4aMeta(
-                  result.audio,
-                  remote,
-                  result.meta,
-                )
-                result = {
-                  ...result,
-                  audio: taggedM4a,
-                  cover: remote,
-                }
-                analytics.track('cover_backfill_done', {
-                  file_id: next.id,
-                  file_name: next.file.name,
-                  file_size: next.file.size,
-                  source: result.meta?.source,
-                })
-              } catch {
-                analytics.track('cover_backfill_fail', {
-                  file_id: next.id,
-                  file_name: next.file.name,
-                  file_size: next.file.size,
-                  source: result.meta?.source,
-                })
-              }
-            } else {
-              analytics.track('cover_backfill_fail', {
-                file_id: next.id,
-                file_name: next.file.name,
-                file_size: next.file.size,
-                source: result.meta?.source,
-              })
-            }
-          }
-
-          // M4A 的 covr 已在上面同步完成；FLAC/MP3 的历史回填仍在 done 后异步进行。
-          const coverUrl = result.cover
-            ? URL.createObjectURL(result.cover)
-            : result.meta.albumPic
-              ? upgradeToHttps(result.meta.albumPic)
-              : undefined
-          updateFile(next.id, { status: 'done', result, coverUrl, progress: 1 })
           analytics.track('decrypt_done', {
             file_id: next.id,
             file_name: next.file.name,
             file_ext: fileExt,
             file_size: next.file.size,
-            source: result.meta?.source,
-            format: result.format,
+            source: decryptedResult.meta?.source,
+            format: decryptedResult.format,
             has_cover: !!decryptedResult.cover, // 内嵌口径（回填前），保持历史一致
             // 性能埋点：解密耗时（ms）。file_size=原始加密字节，配合算「每 MB 解密耗时」
             decrypt_ms: decryptMs,
@@ -1195,83 +1157,84 @@ function App() {
           analytics.unregisterInflight(next.id)
 
           // 诊断信号（防呆可观测化，纯计算无网络）
-          if (result.offsetRecovered) {
+          if (decryptedResult.offsetRecovered) {
             // 主偏移解出非音频、靠 magic 锚定扫描找回了起点 → 预警"出现新偏移变体、该补 parser"
             analytics.track('decrypt_offset_recovered', {
               file_id: next.id,
               file_name: next.file.name,
               file_ext: fileExt,
               file_size: next.file.size,
-              source: result.meta?.source,
+              source: decryptedResult.meta?.source,
             })
           }
           const declaredFmt =
-            result.meta.format?.toLowerCase() === 'flac'
+            decryptedResult.meta.format?.toLowerCase() === 'flac'
               ? 'flac'
-              : result.meta.format?.toLowerCase() === 'mp3'
+              : decryptedResult.meta.format?.toLowerCase() === 'mp3'
                 ? 'mp3'
                 : null
-          if (declaredFmt && declaredFmt !== result.format) {
+          if (declaredFmt && declaredFmt !== decryptedResult.format) {
             // 真实 magic 与元数据声称格式冲突 → 某类文件解析/元数据有系统性问题的早期信号
             analytics.track('decrypt_format_mismatch', {
               file_id: next.id,
               file_name: next.file.name,
               file_ext: fileExt,
               file_size: next.file.size,
-              source: result.meta?.source,
-              format: result.format,
+              source: decryptedResult.meta?.source,
+              format: decryptedResult.format,
             })
           }
 
-          // FLAC/MP3 封面回填：无内嵌封面但有 albumPic → 抓 CDN 图嵌入下载产物。
-          // 后台异步（不 await），既不阻塞 UI 也不阻塞串行解密队列；失败静默、文件仍可用。
-          if (
-            !result.cover &&
-            result.meta.albumPic &&
-            (result.format === 'flac' || result.format === 'mp3')
-          ) {
-            const backfillResult = result
-            const albumPic = result.meta.albumPic
-            const fileId = next.id
-            const fileName = next.file.name
-            const fileSize = next.file.size
-            const src = result.meta?.source
-            void (async () => {
-              const remote = await fetchRemoteCover(albumPic)
-              if (!remote) {
-                analytics.track('cover_backfill_fail', {
-                  file_id: fileId, file_name: fileName, file_size: fileSize, source: src,
-                })
-                return
-              }
-              try {
-                let retagged = backfillResult.audio
-                if (backfillResult.format === 'flac') {
-                  retagged = await writeFlacMeta(
-                    backfillResult.audio,
-                    remote,
-                    backfillResult.meta,
-                  )
-                } else if (backfillResult.format === 'mp3') {
-                  retagged = await writeId3ToMp3(
-                    backfillResult.audio,
-                    remote,
-                    backfillResult.meta,
-                  )
-                }
-                // 列表 coverUrl 已指向同一 CDN 图片，无需替换。
-                updateFile(fileId, {
-                  result: { ...backfillResult, audio: retagged, cover: remote },
-                })
-                analytics.track('cover_backfill_done', {
-                  file_id: fileId, file_name: fileName, file_size: fileSize, source: src,
-                })
-              } catch {
-                analytics.track('cover_backfill_fail', {
-                  file_id: fileId, file_name: fileName, file_size: fileSize, source: src,
-                })
-              }
-            })()
+          if (needsRemoteCoverFinalization(decryptedResult)) {
+            const finalizeToken =
+              typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : `cover-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+            updateFile(next.id, {
+              status: 'finalizing',
+              progress: 1,
+              result: decryptedResult,
+              coverUrl: undefined,
+              finalizeToken,
+            })
+            void coverFinalizer.enqueue(decryptedResult).then((outcome) => {
+              const current = filesRef.current.find((file) => file.id === next.id)
+              if (
+                !current ||
+                current.status !== 'finalizing' ||
+                current.finalizeToken !== finalizeToken
+              ) return
+
+              const coverUrl = outcome.ok && outcome.result.cover
+                ? URL.createObjectURL(outcome.result.cover)
+                : undefined
+              updateFile(next.id, {
+                status: 'done',
+                progress: 1,
+                result: outcome.result,
+                coverUrl,
+                finalizeToken: undefined,
+              })
+              analytics.track(
+                outcome.ok ? 'cover_backfill_done' : 'cover_backfill_fail',
+                {
+                  file_id: next.id,
+                  file_name: next.file.name,
+                  file_size: next.file.size,
+                  source: decryptedResult.meta?.source,
+                  error_code: outcome.ok ? undefined : outcome.errorCode,
+                },
+              )
+            })
+          } else {
+            updateFile(next.id, {
+              status: 'done',
+              progress: 1,
+              result: decryptedResult,
+              coverUrl: decryptedResult.cover
+                ? URL.createObjectURL(decryptedResult.cover)
+                : undefined,
+            })
           }
         } catch (err) {
           let code: DecryptErrorCode = 'UNKNOWN'
@@ -1581,9 +1544,12 @@ function App() {
     setFiles([])
   }
 
-  // 解密 / 转码都算「正在处理」，UI 表现同口径（黑胶旋转 + 队列 header 指示器）
+  // 解密 / 封面收尾 / 转码都算「正在处理」，UI 表现同口径。
   const currentlyActive = files.find(
-    (f) => f.status === 'decrypting' || f.status === 'transcoding',
+    (f) =>
+      f.status === 'decrypting' ||
+      f.status === 'finalizing' ||
+      f.status === 'transcoding',
   )
   const showVinylSpin = !!currentlyActive || isDragging
   const currentCoverUrl = currentlyActive?.coverUrl ?? null
@@ -1846,19 +1812,25 @@ function App() {
                       style={{ background: '#E8431A' }}
                       aria-hidden
                     />
-                    <span>正在转换</span>
+                    <span>
+                      {currentlyActive.status === 'finalizing'
+                        ? '正在整理音频文件…'
+                        : '正在转换'}
+                    </span>
                     <span
                       className="truncate"
                       style={{ color: '#1C1A18', maxWidth: 280 }}
                     >
                       {currentTitle}
                     </span>
-                    <span
-                      className="tabular-nums shrink-0"
-                      style={{ color: '#E8431A' }}
-                    >
-                      {Math.round((currentlyActive.progress ?? 0) * 100)}%
-                    </span>
+                    {currentlyActive.status !== 'finalizing' && (
+                      <span
+                        className="tabular-nums shrink-0"
+                        style={{ color: '#E8431A' }}
+                      >
+                        {Math.round((currentlyActive.progress ?? 0) * 100)}%
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
