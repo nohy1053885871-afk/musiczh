@@ -11,7 +11,21 @@ import { eventLabel, labelForButtonBase, formatPct } from '../lib/format'
 const { Title, Text } = Typography
 
 type ButtonRow = ButtonsResp['buttons'][number]
+type CompatRow = ButtonsResp['browser_compat'][number]
 type RawRow = ButtonsResp['raw'][number]
+
+const BROWSER_FAMILY_LABELS: Record<string, string> = {
+  chromium: 'Chromium',
+  edge: 'Edge',
+  firefox: 'Firefox',
+  safari: 'Safari',
+  ios_webkit: 'iOS / iPadOS WebKit',
+  unknown: '未知',
+}
+
+function browserFamilyLabel(family: string): string {
+  return BROWSER_FAMILY_LABELS[family] ?? family
+}
 
 export function ButtonsPage() {
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
@@ -69,6 +83,19 @@ export function ButtonsPage() {
     { title: 'UV', dataIndex: 'uv', key: 'uv', align: 'right', width: 90 },
   ]
 
+  const compatColumns: ColumnsType<CompatRow> = [
+    { title: '浏览器', dataIndex: 'browser_family', key: 'browser_family', width: 170,
+      render: (value) => browserFamilyLabel(value) },
+    { title: '检测版本', dataIndex: 'detected_version', key: 'detected_version', width: 110 },
+    { title: '最低要求', dataIndex: 'required_version', key: 'required_version', width: 110 },
+    { title: '曝光 PV', dataIndex: 'view_pv', key: 'view_pv', align: 'right', width: 90 },
+    { title: '曝光 UV', dataIndex: 'view_uv', key: 'view_uv', align: 'right', width: 90 },
+    { title: '确定 PV', dataIndex: 'confirm_pv', key: 'confirm_pv', align: 'right', width: 90 },
+    { title: '确定 UV', dataIndex: 'confirm_uv', key: 'confirm_uv', align: 'right', width: 90 },
+    { title: '关闭 PV', dataIndex: 'close_pv', key: 'close_pv', align: 'right', width: 90 },
+    { title: '关闭 UV', dataIndex: 'close_uv', key: 'close_uv', align: 'right', width: 90 },
+  ]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
@@ -92,6 +119,32 @@ export function ButtonsPage() {
           allowClear
         />
       </Card>
+
+      <DataTableCard<CompatRow>
+        title="低版本浏览器提示"
+        toolbar={
+          <DownloadCSVButton<CompatRow>
+            filename="browser-compat.csv"
+            columns={[
+              { key: 'browser_family', title: '浏览器', format: (r) => browserFamilyLabel(r.browser_family) },
+              { key: 'detected_version', title: '检测版本' },
+              { key: 'required_version', title: '最低要求' },
+              { key: 'view_pv', title: '曝光 PV' },
+              { key: 'view_uv', title: '曝光 UV' },
+              { key: 'confirm_pv', title: '确定 PV' },
+              { key: 'confirm_uv', title: '确定 UV' },
+              { key: 'close_pv', title: '关闭 PV' },
+              { key: 'close_uv', title: '关闭 UV' },
+            ]}
+            dataSource={data?.browser_compat ?? []}
+          />
+        }
+        columns={compatColumns}
+        dataSource={data?.browser_compat ?? []}
+        rowKey={(row) => `${row.browser_family}-${row.detected_version}-${row.required_version}`}
+        loading={loading}
+        scroll={{ x: 1010 }}
+      />
 
       <DataTableCard<ButtonRow>
         title="按钮聚合（曝光 vs 点击）"

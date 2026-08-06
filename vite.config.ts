@@ -16,6 +16,9 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
   },
+  build: {
+    target: ['chrome111', 'edge111', 'firefox114', 'safari16.4', 'ios16.4'],
+  },
   worker: {
     // 缺省 iife 不支持代码分割，会把三个 WASM 库（lame/flac/ogg-vorbis，各内联 base64）
     // 全部塞进 worker 主 chunk（~1MB）；es 格式保持动态 import 按需加载

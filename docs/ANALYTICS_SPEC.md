@@ -86,6 +86,9 @@
 | `has_cover` | boolean | **v0.6.3 起新增** · 转码 / 解密产物是否含封面。`transcode_done` 表示 FLAC/OGG/M4A 原文件能不能解出可写入 MP3 的 cover；`decrypt_done` 仍是原始解密产物的内嵌口径，XM 外层封面 URL 写入 M4A `covr` 的结果由 `cover_backfill_done/fail` 表示 |
 | `decrypt_ms` | number | **v0.6.4 起新增** · 解密耗时（毫秒），wall-clock 包住整个 `decryptAudioFile()` 调用。`decrypt_done` 携带；`decrypt_fail` 也带（仅诊断"多久后失败"，**不进性能均值口径**）。运营后台「性能分析」消费：配合 `file_size`（=原始加密字节）算「平均解密耗时」「每 MB 解密耗时」。⚠️ 每会话首个 KGM 文件含 1.1MB mask 懒加载，该文件 `decrypt_ms` 会偏高（P95 自然吸收） |
 | `transcode_ms` | number | **v0.6.4 起新增** · 转码耗时（毫秒），wall-clock 包住 `transcodeToMp3()` 调用（不含 ID3 写入，耗时极小）。`transcode_done` 携带；`transcode_fail` 也带（诊断用，不进均值）。配合 `file_size`（=转码输入即解密产物字节）算「平均转码耗时」「每 MB 转码耗时」。⚠️ 每会话首个转码含 LAME WASM 加载，会偏高 |
+| `browser_family` | string | **v0.8.2 起新增** · 兼容性提示识别出的浏览器族：`chromium` / `edge` / `firefox` / `safari` / `ios_webkit`。未知浏览器不展示提示，也不产生兼容性事件 |
+| `detected_version` | string | **v0.8.2 起新增** · 从 User-Agent / User-Agent Client Hints 解析出的浏览器或 iOS WebKit 版本，例如 `14.1`；只用于兼容性提示统计 |
+| `required_version` | string | **v0.8.2 起新增** · 对应浏览器族的最低支持版本，例如 Safari 的 `16.4`；与前端兼容性门槛保持一致 |
 
 **绝对禁止**：上报文件二进制内容、文件内容哈希（指纹）、用户输入的密码 / 账号、网银卡号等隐私信息。
 
@@ -114,6 +117,9 @@
 | `row_remove_click` / `row_remove_view` | 主站 - 列表行 - 移除（×） | [src/App.tsx](../src/App.tsx) `FileRow` | `file_name, status` | |
 | `btn_clear_all_click` / `btn_clear_all_view` | 主站 - 工具栏 - 全部清空 | [src/App.tsx](../src/App.tsx) `ClearAllButton` | — | click 打开二次确认 |
 | `dialog_clear_confirm` | 主站 - 全部清空二次确认 | [src/App.tsx](../src/App.tsx) `ClearAllButton` 弹层 | `action: 'confirm' \| 'cancel'` | |
+| `dialog_browser_compat_view` | **v0.8.2** 主站 - 浏览器版本过低弹窗 - 曝光 | [src/components/browser-compat-modal.tsx](../src/components/browser-compat-modal.tsx) mount | `browser_family, detected_version, required_version` | 仅明确低于支持门槛时产生；未知浏览器和已支持版本不提示、不上报 |
+| `dialog_browser_compat_confirm` | **v0.8.2** 主站 - 浏览器版本过低弹窗 - 确定 | [src/components/browser-compat-modal.tsx](../src/components/browser-compat-modal.tsx) 确定按钮 | `action='confirm', browser_family, detected_version, required_version` | 弱提示，不跳转、不阻断页面能力；同标签页会话内不重复展示 |
+| `dialog_browser_compat_close` | **v0.8.2** 主站 - 浏览器版本过低弹窗 - 关闭 | [src/components/browser-compat-modal.tsx](../src/components/browser-compat-modal.tsx) 关闭按钮 / Esc / 遮罩 | `action: 'button' \| 'esc' \| 'overlay', browser_family, detected_version, required_version` | 三种关闭入口共用事件，用 `action` 区分 |
 | `btn_download_all_click` / `btn_download_all_view` | 主站 - 工具栏 - 下载全部（散文件） | [src/App.tsx](../src/App.tsx) 工具栏 | `count` | |
 | `btn_download_zip_click` / `btn_download_zip_view` | 主站 - 工具栏 - 打包下载（ZIP） | [src/App.tsx](../src/App.tsx) 工具栏 | `count` | |
 | `decrypt_start` | 主站 - 业务 - 解密任务开始 | [src/App.tsx](../src/App.tsx) `processQueue` | `file_name, file_ext, file_size` | |
