@@ -24,6 +24,8 @@ const ALLOWED_PROPS = new Set([
   // v0.6.4 新增：解密 / 转码耗时（毫秒），运营后台「性能分析」聚合用
   // decrypt_done/decrypt_fail 带 decrypt_ms；transcode_done/transcode_fail 带 transcode_ms
   'decrypt_ms', 'transcode_ms',
+  // v0.8.2：低版本浏览器弱提示的识别结果（不采集额外指纹）
+  'browser_family', 'detected_version', 'required_version',
 ])
 
 const FailureSchema = z.object({

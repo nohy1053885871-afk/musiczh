@@ -224,6 +224,14 @@ export type ButtonsResp = {
     ctr: number | null
     ctr_uv: number | null
   }[]
+  browser_compat: {
+    browser_family: string
+    detected_version: string
+    required_version: string
+    view_pv: number; view_uv: number
+    confirm_pv: number; confirm_uv: number
+    close_pv: number; close_uv: number
+  }[]
   raw: { event: string; pv: number; uv: number }[]
 }
 

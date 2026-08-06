@@ -4,6 +4,7 @@ import db from '../db.js'
 import { requireAdmin } from '../middleware/auth.js'
 import { parseUA } from '../lib/ua.js'
 import { parseTimeRange } from '../lib/timeRange.js'
+import { getBrowserCompatStats } from '../lib/browserCompatStats.js'
 
 // 启动时算一次本地时区相对 UTC 的偏移（ms）。
 // SQLite 没有时区函数，纯 ts/86400000 切桶按 UTC 0 点切，
@@ -332,7 +333,16 @@ adminStats.get('/buttons', (c) => {
     ctr_uv: b.view_uv > 0 ? b.click_uv / b.view_uv : null,
   })).sort((a, b) => b.click_pv - a.click_pv)
 
-  return c.json({ range, from, to, buttons, raw: rows })
+  const browserCompat = getBrowserCompatStats(from, to)
+
+  return c.json({
+    range,
+    from,
+    to,
+    buttons,
+    browser_compat: browserCompat,
+    raw: rows,
+  })
 })
 
 // 折线图：8 个核心指标按天聚合，metric 可单选

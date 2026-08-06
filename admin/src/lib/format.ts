@@ -23,6 +23,11 @@ export const EVENT_LABELS: Record<string, string> = {
   btn_clear_all_view:  '主站 - 工具栏 - 全部清空（曝光）',
   dialog_clear_confirm: '主站 - 全部清空二次确认',
 
+  // 主站 v0.8.2：明确低于支持门槛时展示的弱提示
+  dialog_browser_compat_view: '主站 - 浏览器版本过低弹窗 - 曝光',
+  dialog_browser_compat_confirm: '主站 - 浏览器版本过低弹窗 - 确定',
+  dialog_browser_compat_close: '主站 - 浏览器版本过低弹窗 - 关闭',
+
   btn_download_all_click: '主站 - 工具栏 - 下载全部（散文件）',
   btn_download_all_view:  '主站 - 工具栏 - 下载全部（曝光）',
 

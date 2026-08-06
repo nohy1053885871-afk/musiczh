@@ -8,9 +8,9 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.1（运营后台 v0.4.14，API v0.4.8）
+- 当前开发版本：v0.8.2（运营后台 v0.4.15，API v0.4.9）
 - 当前生产版本：主站 v0.8.1 · 运营后台 v0.4.14 · API v0.4.8
-- 上线状态：用户端 v0.8.1 ✅ · 运营后台 v0.4.14 ✅ · API v0.4.8 ✅（本次未部署后台与 API）
+- 上线状态：生产仍为主站 v0.8.1 · 运营后台 v0.4.14 · API v0.4.8；v0.8.2 / v0.4.15 / v0.4.9 仅本地验收，尚未发布
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 
@@ -59,6 +59,7 @@ src/                     # 用户端（拾音主站）
     v050.tsx             # v0.5.0 弹窗 / 横条组件
     qq-guide.tsx         # v0.6.0 QQ 音乐使用说明弹窗 + 拖拽区下方入口
     support-matrix.tsx   # v0.6.0 平台/格式总览弹窗 + 拖拽区下方入口
+    browser-compat-modal.tsx # v0.8.2 低版本浏览器弱提示弹窗
 
 admin/                   # 运营后台前端（独立 vite 项目，base: '/admin/'）
   src/{pages,components,lib}/
@@ -113,7 +114,7 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 - **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
 - **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
 - **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
-- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.14，与主站 v0.8.1 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.15，与主站 v0.8.2 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
 - **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
 - **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
 - **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
@@ -210,6 +211,15 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.8.2 / 运营后台 v0.4.15 / API v0.4.9 · 20260806 待上线
+
+- **低版本浏览器弱提示**：Chrome/Chromium 与 Edge 最低 111、Firefox 最低 114、macOS Safari 与 iOS/iPadOS WebKit 最低 16.4；只对“已识别且明确低于门槛”显示非阻断弹窗，未知 UA 不猜测、不阻断
+- **iOS 判断与会话规则**：iOS 上的 Chrome/Edge/Firefox 统一按系统 WebKit 版本判断；确定、关闭、Esc、遮罩都只关闭弹窗，同一标签页会话内不重复提示，`sessionStorage` 失效时退回内存标记
+- **首屏性能边界**：兼容判断在首屏 commit 后执行，不创建探测 Worker、不发网络请求；弹窗独立动态加载，支持用户的生产 HTML 不预加载弹窗 chunk；正式构建目标显式固定为 `chrome111 / edge111 / firefox114 / safari16.4 / ios16.4`
+- **埋点与 API**：新增 `dialog_browser_compat_view/confirm/close` 事件和浏览器族、检测版本、最低版本字段；API 白名单接收新字段，`/api/admin/stats/buttons` 增加按浏览器版本聚合的曝光、确定、关闭 PV/UV，无数据库迁移
+- **运营后台**：按钮埋点页增加“低版本浏览器提示”表格和 CSV 下载；事件中文标签、API 类型和版本同步更新
+- 验证：兼容矩阵 7/7；XM 11 通过 / 1 私有黄金样本跳过，M4A 1 私有黄金样本跳过，封面 16 通过 / 1 私有黄金样本跳过；主站、运营后台、API 三端构建通过；隔离数据库完成白名单过滤与聚合联调；浏览器完成文案、焦点、确定、关闭、Esc、遮罩和支持环境不误弹验收；检测器 100,000 次平均 0.00117 ms/次，主入口 gzip 增量 0.78 KiB
+
 ### v0.8.1 · 20260731 上线
 
 - **全格式封面上限统一为 16 MiB**：覆盖远程图片、NCM 内嵌图片、ID3 APIC、FLAC PICTURE、OGG `METADATA_BLOCK_PICTURE` 和 M4A `covr`；超限只忽略封面，音频继续成功
@@ -218,18 +228,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - **本地元数据读取补强**：FLAC 按 metadata block 读取，OGG 按 page 组装跨页 comment packet，ID3 按声明长度读取；KGM/QMC 只读预览、不重写原文件标签
 - **预览与下载一致**：UI 只展示已经验证且实际嵌入下载产物的同一 Blob，不再以远程图片制造“页面有封面、文件没封面”的假象
 - 验证：封面专项 19/19、XM 专项 12/12、M4A 专项 1/1、主站构建和本地浏览器问题样本真实下载通过；问题 NCM 的 MPEG 帧哈希、两份真实 XM 的 AAC packet 数量与哈希在回填前后保持一致；PR #52 合并后 Actions run 30625780474 仅部署主站，线上 v0.8.1 的 24 个静态文件全量 SHA-256 smoke 通过，运营后台与 API skipped
-
-### v0.8.0 / 运营后台 v0.4.14 · 20260728 上线
-
-- **喜马拉雅 XM v2**：新增独立 ID3 特征解析和两阶段 AES-CBC 解密；产物严格按真实 magic 输出 MP3/FLAC/OGG/M4A，v12 精准提示不支持，损坏产物不进入下载/转码
-- **统一一键转 MP3**：保留原 `FlacBatchPromptBanner` 和历史埋点名，只把统一可转码集合扩为 FLAC/OGG/M4A；M4A 默认保持原格式，用户点击后才转
-- **M4A 双解码路径**：Mediabunny + WebCodecs 为主，裁剪版 LibAV.js 6.9.8.1/FFmpeg 8.1 WASM 为 fallback；PCM 复用既有 LAME VBR -V 2 管线
-- **原始 M4A 上传**：与原始 FLAC/OGG 一样按真实 magic 准入，上传后自动转 MP3；MP4 ilst 中的标题、作者、专辑和 covr 会迁移到 MP3
-- **XM 封面**：兼容 XM 非标准 UTF-16 COMM，从外层标签取得喜马拉雅 CDN 封面；M4A 无损重封装写入 covr（AAC packets 不变），转 MP3 时写入 ID3 APIC
-- **MP3 封面兼容**：写入 APIC 前统一检查封面；已兼容的 JFIF Baseline JPEG 原样保留，Progressive/Adobe/非 JFIF 图片转为 sRGB JFIF Baseline JPEG，覆盖 NCM、XM 和 FLAC/OGG/M4A 转 MP3
-- **用户端与后台**：首页入口、格式矩阵、SEO/FAQ/JSON-LD、XM/M4A 徽章，以及后台格式筛选、颜色、来源/错误码/事件中文标签同步更新；事件名和后端 API/数据库不变
-- **发布安全**：前端部署增加带 commit/版本/全量 SHA-256 的三份快照、失败自动恢复和 `user/admin/all` 手动回滚 workflow；本版不修改或部署 server
-- 验证：XM 合成、原始 M4A 准入、VPR 分发与真实黄金样本 12/12，M4A covr 重封装专项 1/1，MP3 封面格式专项 2/2；WebCodecs/LibAV 双路径、原始 M4A 自动转码、XM 封面下载、转码失败恢复、混合批量气泡和后台 XM/M4A 筛选均完成浏览器验收；问题样本 APIC 已由 1000×1000 Progressive Adobe JPEG 转为 sRGB JFIF Baseline JPEG，并在 macOS Apple Music 的专辑卡片和播放栏实机显示；封面重封装前后 AAC 14,757 包 SHA-256 一致，NCM/KGM/QMC 旧样本与改动前输出 SHA-256/元数据一致；Actions run #78 主站/后台部署成功、server skipped，线上主站 24 个和后台 3 个静态文件全量 SHA-256 smoke 通过
 
 # 通用
 - 优先选择编辑而非重写整个文件

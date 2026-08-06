@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import JSZip from 'jszip'
 import {
@@ -43,6 +43,25 @@ import {
   SupportMatrixEntry,
   SupportMatrixModal,
 } from './components/support-matrix'
+import {
+  detectBrowserCompatibility,
+  type BrowserCompatibility,
+} from './lib/browser-compat'
+
+const LazyBrowserCompatModal = lazy(() =>
+  import('./components/browser-compat-modal').then((module) => ({
+    default: module.BrowserCompatModal,
+  })),
+)
+const BROWSER_COMPAT_SESSION_KEY = '_sleepno_browser_compat_dismissed_v1'
+let browserCompatDismissedInMemory = false
+
+const BROWSER_COMPAT_PREVIEW: BrowserCompatibility = {
+  status: 'unsupported',
+  family: 'safari',
+  detectedVersion: '14.1',
+  requiredVersion: '16.4',
+}
 
 function fileExtOf(name: string): string {
   const dot = name.lastIndexOf('.')
@@ -841,6 +860,11 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const [files, setFiles] = useState<TrackedFile[]>([])
+  const browserCompatPreview =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get('preview') === 'browser-compat'
+  const [browserCompatibility, setBrowserCompatibility] =
+    useState<BrowserCompatibility | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isZipping, setIsZipping] = useState(false)
   const [zipProgress, setZipProgress] = useState(0)
@@ -865,6 +889,38 @@ function App() {
     trigger: 'entry',
   })
   const [matrixOpen, setMatrixOpen] = useState(false)
+
+  useEffect(() => {
+    const frameId = requestAnimationFrame(() => {
+      if (browserCompatPreview) {
+        setBrowserCompatibility(BROWSER_COMPAT_PREVIEW)
+        return
+      }
+      if (browserCompatDismissedInMemory) return
+      try {
+        if (sessionStorage.getItem(BROWSER_COMPAT_SESSION_KEY) === '1') return
+      } catch {
+        // 隐私模式或安全策略禁用 sessionStorage 时，退回模块内存标记。
+      }
+
+      const compatibility = detectBrowserCompatibility()
+      if (compatibility.status === 'unsupported') {
+        setBrowserCompatibility(compatibility)
+      }
+    })
+    return () => cancelAnimationFrame(frameId)
+  }, [browserCompatPreview])
+
+  const dismissBrowserCompat = useCallback(() => {
+    setBrowserCompatibility(null)
+    if (browserCompatPreview) return
+    browserCompatDismissedInMemory = true
+    try {
+      sessionStorage.setItem(BROWSER_COMPAT_SESSION_KEY, '1')
+    } catch {
+      // 内存标记已覆盖当前页面生命周期，无需阻断用户操作。
+    }
+  }, [browserCompatPreview])
   const openQqGuide = useCallback((trigger: QqGuideTrigger) => {
     setQqGuide({ open: true, trigger })
   }, [])
@@ -1959,6 +2015,14 @@ function App() {
           onClose={() => setMatrixOpen(false)}
           onJumpToQqGuide={openQqGuide}
         />
+      )}
+      {browserCompatibility && (
+        <Suspense fallback={null}>
+          <LazyBrowserCompatModal
+            compatibility={browserCompatibility}
+            onDismiss={dismissBrowserCompat}
+          />
+        </Suspense>
       )}
     </div>
   )
