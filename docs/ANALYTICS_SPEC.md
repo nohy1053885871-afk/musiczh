@@ -149,6 +149,9 @@
 | `qq_guide_view` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 曝光 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` mount | `trigger: 'entry' \| 'failure' \| 'auto' \| 'matrix'` | 触发来源：entry=拖拽区入口点击；failure=QMC_NEW_VERSION_UNSUPPORTED 失败行 CTA；auto=首次拖入 QMC 文件且 localStorage 未标记；matrix=从平台/格式总览弹窗跳来 |
 | `qq_guide_dismiss` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 关闭 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` close | `trigger` | 与对应 `qq_guide_view` 组队 |
 | `qq_download_click` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 下载旧版安装包按钮 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` CTA | `trigger, sha256?` | `sha256` 用于追踪安装包版本一致性 |
+| `download_help_entry_view` / `download_help_entry_click` | **v0.8.3** 主站 - 拖拽区下方下载帮助入口 | [src/components/download-help.tsx](../src/components/download-help.tsx) `DownloadHelp` | — | 常驻入口“下载后找不到文件？”；曝光沿用 session 内去重规则 |
+| `download_help_view` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 曝光 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) mount | — | 内容覆盖下载保存位置、连续下载权限和 ZIP 兜底 |
+| `download_help_close` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 关闭 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) 关闭 | `action: 'button' \| 'close_x' \| 'esc' \| 'overlay'` | 四种关闭路径共用事件；组件内部去重，单次打开只上报一次关闭 |
 | `support_matrix_entry_view` / `support_matrix_entry_click` | **v0.6.0** 主站 - 拖拽区下方「查看全部格式」入口 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixEntry` | — | |
 | `support_matrix_view` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 曝光 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` mount | — | |
 | `support_matrix_dismiss` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 关闭 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` close | — | |
