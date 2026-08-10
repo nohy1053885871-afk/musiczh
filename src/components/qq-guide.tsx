@@ -13,6 +13,7 @@ export const QQ_GUIDE_COPY = {
   title: 'QQ 音乐解密 · 使用说明',
   subtitle: '仅支持 Windows · v19.51 旧版',
   callout: '只支持旧版 QQ 音乐（v19.51 Windows）下载的文件，新版不支持。',
+  securityNotice: '为方便使用安装包为绿色去更新版，易被防火墙误报病毒并拦截；可关闭防火墙放心安装，或自行寻找 QQ 音乐v19.51安装包；',
   steps: [
     '卸载当前版本的 QQ 音乐（如果已装）',
     '下载下方旧版安装包，解压即用',
@@ -172,7 +173,7 @@ export function QqGuideModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center px-3"
+      className="fixed inset-0 z-50 flex items-center justify-center px-3 py-4"
       style={{ background: 'rgba(28,26,24,0.48)', backdropFilter: 'blur(2px)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget) closeWith('overlay')
@@ -182,6 +183,8 @@ export function QqGuideModal({
         className="modal-in relative rounded-2xl w-full"
         style={{
           maxWidth: 440,
+          maxHeight: 'calc(100dvh - 32px)',
+          overflowY: 'auto',
           background: 'linear-gradient(180deg, #F4F2EE 0%, #EAE8E4 100%)',
           padding: 28,
           boxShadow:
@@ -257,19 +260,30 @@ export function QqGuideModal({
           </div>
         </div>
 
-        {/* 红色 callout */}
+        {/* 旧版限制 + 安装包风险：统一为单一红色系编号条幅 */}
         <div
           className="rounded-md mb-5"
           style={{
-            padding: '10px 14px',
+            padding: '11px 14px',
             background: 'rgba(184,48,32,0.07)',
             borderLeft: '2.5px solid #B83020',
             color: '#B83020',
-            fontSize: 12.5,
-            lineHeight: 1.65,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5)',
           }}
         >
-          {QQ_GUIDE_COPY.callout}
+          <ol className="flex list-none flex-col gap-2 p-0 text-[12.5px] font-normal leading-[1.65]">
+            {[QQ_GUIDE_COPY.callout, QQ_GUIDE_COPY.securityNotice].map((text, index) => (
+              <li key={text} className="flex items-start gap-2">
+                <span
+                  className="w-4 shrink-0 text-right text-[11px]"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  {index + 1}.
+                </span>
+                <span>{text}</span>
+              </li>
+            ))}
+          </ol>
         </div>
 
         {/* 操作步骤 */}

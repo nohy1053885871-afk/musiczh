@@ -7,6 +7,15 @@
 
 ---
 
+## v0.8.1 · 20260731 上线
+
+- **全格式封面上限统一为 16 MiB**：覆盖远程图片、NCM 内嵌图片、ID3 APIC、FLAC PICTURE、OGG `METADATA_BLOCK_PICTURE` 和 M4A `covr`；超限只忽略封面，音频继续成功
+- **远程封面按 CDN 分流**：网易请求 `imageView&thumbnail=500y500`，喜马拉雅请求 `!op_type=3&columns=500&rows=500`，未知 CDN 不猜参数；先检查 `Content-Length`，再流式累计并在超限时立即取消
+- **两秒非阻断收尾**：新增 `finalizing` 状态，封面任务并发上限 3，排队、下载、归一化、写标签和验证统一计入两秒；失败或超时安全降级为原始音频，迟到结果不能覆盖完成态
+- **本地元数据读取补强**：FLAC 按 metadata block 读取，OGG 按 page 组装跨页 comment packet，ID3 按声明长度读取；KGM/QMC 只读预览、不重写原文件标签
+- **预览与下载一致**：UI 只展示已经验证且实际嵌入下载产物的同一 Blob，不再以远程图片制造“页面有封面、文件没封面”的假象
+- 验证：封面专项 19/19、XM 专项 12/12、M4A 专项 1/1、主站构建和本地浏览器问题样本真实下载通过；问题 NCM 的 MPEG 帧哈希、两份真实 XM 的 AAC packet 数量与哈希在回填前后保持一致；PR #52 合并后 Actions run 30625780474 仅部署主站，线上 v0.8.1 的 24 个静态文件全量 SHA-256 smoke 通过，运营后台与 API skipped
+
 ## v0.8.0 / 运营后台 v0.4.14 · 20260728 上线
 
 - **喜马拉雅 XM v2**：新增独立 ID3 特征解析和两阶段 AES-CBC 解密；产物严格按真实 magic 输出 MP3/FLAC/OGG/M4A，v12 精准提示不支持，损坏产物不进入下载/转码

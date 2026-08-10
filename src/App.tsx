@@ -43,6 +43,7 @@ import {
   SupportMatrixEntry,
   SupportMatrixModal,
 } from './components/support-matrix'
+import { DownloadHelp } from './components/download-help'
 import {
   detectBrowserCompatibility,
   type BrowserCompatibility,
@@ -1745,6 +1746,7 @@ function App() {
               <SupportMatrixEntry onOpen={() => setMatrixOpen(true)} />
               <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
               <QqGuideEntry onOpen={openQqGuide} />
+              <DownloadHelp />
             </div>
           </div>
         </section>
