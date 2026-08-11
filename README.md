@@ -181,7 +181,7 @@ find $DST -name 'analytics-*.db' -mtime +30 -delete
 - [x] 数据埋点 + 运营后台
 - [ ] QQ 音乐 `.qmc` / `.mflac`
 - [ ] 酷我 `.kwm`
-- [ ] 酷狗 KGM v4
+- [ ] 酷狗 KGG / 新版外部 Key 格式
 - [ ] FLAC 文件 Vorbis Comments + PICTURE block 标签写入
 
 ---

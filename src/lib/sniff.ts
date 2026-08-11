@@ -15,7 +15,7 @@ import { hasXmSignature } from './xm-id3'
  * - qmc：QQ 音乐加密格式（mflac/mgg/qmcXXX/bkc 等系列），走 src/lib/qmc.ts 解密
  * - flac/ogg/m4a：本工具能直接转 MP3
  * - mp3：已经是目标格式，无需处理
- * - kgg_or_kgmv4：酷狗新版（KGG/KGM v4，需联网拿密钥），本工具不支持
+ * - kgg_or_kgmv4：酷狗新版外部 Key 格式，本工具暂不支持
  * - unknown：上面都不是
  */
 export type RealFormat =
@@ -158,7 +158,7 @@ export async function sniffRealFormat(file: File): Promise<RealFormat> {
     return 'mp3'
   }
 
-  // 头不是已知 magic 但文件名暗示 KGG → 大概率酷狗新版（KGG / KGM v4）
+  // 头不是已知 magic 但文件名暗示 KGG → 大概率酷狗新版外部 Key 格式
   // 名字识别只是辅助，magic 才是权威；这里覆盖「.kgg / .kgg (n).flac」之类
   if (/\.kgg(\.|$|[^a-z])/i.test(file.name)) return 'kgg_or_kgmv4'
 

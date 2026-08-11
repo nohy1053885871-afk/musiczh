@@ -15,7 +15,7 @@ export const SUPPORTED_EXTS = ['ncm', 'kgm', 'vpr', 'xm', ...QMC_EXTS] as const
 export type SupportedExt = (typeof SUPPORTED_EXTS)[number]
 // 上传准入 regex：含 .flac / .ogg / .m4a / .kgg / 全部 QMC 扩展名。
 // flac / ogg / m4a 在 App.tsx processQueue 走 transcode-only 路径（跳过解密，WASM 解码后 LAME 编码）。
-// kgg 进队列后 sniff 出 kgg_or_kgmv4 给精准错误（而不是上传被拒），便于诊断与统计。
+// kgg 进队列后 sniff 出 kgg_or_kgmv4 给精准错误与电脑端重下引导（而不是上传被拒）。
 // QMC 系列进队列后走 decryptQmc；新版 STag 文件会在解密阶段抛 QMC_NEW_VERSION_UNSUPPORTED 引导用户。
 export const SUPPORTED_EXT_REGEX =
   /\.(ncm|kgm|vpr|xm|flac|ogg|m4a|kgg|mflac\d*|mflach|mgg\d*|mggl|mmp4|qmcflac|qmcogg|qmc[02346]|bkc(mp3|m4a|flac|wav|ape|ogg|wma)|tkm)$/i

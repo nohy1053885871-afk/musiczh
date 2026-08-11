@@ -203,7 +203,7 @@ export const ERROR_CODE_LABEL: Record<string, string> = {
   FILE_TOO_LARGE:              '文件过大',
   DECRYPT_FAILED:              '解密失败',
   OUTPUT_NOT_AUDIO:            '解密产物非音频（乱码/未知变体）',
-  KGM_V4_UNSUPPORTED:          '酷狗 KGM v4（联网密钥）',
+  KGM_V4_UNSUPPORTED:          '酷狗新版加密（需外部密钥）',
   QMC_NEW_VERSION_UNSUPPORTED: 'QQ 新版（密钥在云端）',
   XM_PARSE_FAILED:             '喜马拉雅 XM 结构解析失败',
   XM_VERSION_UNSUPPORTED:      '喜马拉雅 XM 版本暂不支持',
