@@ -209,10 +209,10 @@ export async function decryptKgm(
   // ========== 5. 识别格式 ==========
   const format = sniffAudioFormat(audio)
   if (!format) {
-    // 99% 是 v4（密钥需要联网获取），剩下是文件损坏
+    // 高概率是酷狗新版外部 Key 格式，剩下是文件损坏或尚未识别的变体。
     throw new DecryptError(
       'KGM_V4_UNSUPPORTED',
-      '这可能是酷狗新版加密格式（v4），本工具暂不支持',
+      '这可能是酷狗新版加密格式，暂时无法转换。请在电脑客户端重新下载后上传并解密',
     )
   }
 

@@ -32,7 +32,7 @@ const ROWS: Row[] = [
   // 网易云
   { platform: '网易云', extsCell: '.ncm', noteCell: '全平台 · 单文件 ≤200MB', parity: 'odd', isPlatformHead: true, platformRowspan: 1 },
   // 酷狗
-  { platform: '酷狗', extsCell: '.kgm / .vpr', noteCell: '全平台 · 单文件 ≤100MB', parity: 'even', isPlatformHead: true, platformRowspan: 1 },
+  { platform: '酷狗', extsCell: '.kgm / .vpr', noteCell: '仅支持密钥内置版本 · 单文件 ≤100MB', parity: 'even', isPlatformHead: true, platformRowspan: 1 },
   // QQ 音乐（3 行 rowspan）
   { platform: 'QQ 音乐', extsCell: '.mflac / .mflac0 / .mflach', noteCell: '仅 Windows 需下载旧版QQ客户端', parity: 'odd', isPlatformHead: true, platformRowspan: 3 },
   { platform: 'QQ 音乐', extsCell: '.mgg / .mgg0 / .mgg1 / .mggl', noteAction: 'open-qq-guide', parity: 'even', skipPlatformCell: true },

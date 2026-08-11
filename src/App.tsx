@@ -74,6 +74,7 @@ function fileExtOf(name: string): string {
 const SOURCE_TONES: Record<string, { label: string; tone: string }> = {
   ncm:  { label: 'NCM',  tone: '#C4310E' },
   kgm:  { label: 'KGM',  tone: '#1F6FB8' },
+  kgg:  { label: 'KGG',  tone: '#1F6FB8' },
   vpr:  { label: 'VPR',  tone: '#1F6FB8' },
   xm:   { label: 'XM',   tone: '#D06B18' },
   flac: { label: 'FLAC', tone: '#3A2E20' },
@@ -83,6 +84,10 @@ const SOURCE_TONES: Record<string, { label: string; tone: string }> = {
 }
 
 function sourceFromName(name: string): { label: string; tone: string } {
+  // 酷狗常见「xxx.kgg.flac / xxx.kgm.flac」双重后缀。来源徽章应显示
+  // 加密容器，而不是只取最后一段后误标成 FLAC。
+  const kugouContainer = name.match(/\.(kgg|kgm|vpr)(?:\.|$)/i)?.[1]?.toLowerCase()
+  if (kugouContainer) return SOURCE_TONES[kugouContainer]
   const ext = fileExtOf(name)
   return SOURCE_TONES[ext] ?? { label: ext.toUpperCase() || '?', tone: '#8A8680' }
 }
@@ -427,6 +432,9 @@ function FileRow({
   const isFinalizing = file.status === 'finalizing'
   const isTranscoding = file.status === 'transcoding'
   const isDone = file.status === 'done'
+  const isExternalKeyFailure =
+    file.errorCode === 'KGM_V4_UNSUPPORTED' ||
+    file.errorCode === 'QMC_NEW_VERSION_UNSUPPORTED'
   const format = file.result?.format
   const canTranscode = isDone && isMp3TranscodableFormat(format)
   const [justDownloaded, setJustDownloaded] = useState(false)
@@ -595,7 +603,7 @@ function FileRow({
         ) : isFailed ? (
           <div className="mt-0.5 flex items-center gap-2 flex-wrap">
             <span
-              className="text-[11px] truncate"
+              className="min-w-0 break-words text-[11px] leading-[1.55]"
               style={{ color: '#B83020' }}
             >
               {file.errorMessage || '解析失败'}
@@ -737,7 +745,7 @@ function FileRow({
             </span>
           </button>
         )}
-        {isFailed && (
+        {isFailed && !isExternalKeyFailure && (
           <button
             ref={retryBtnRef}
             onClick={(e) => {
@@ -1130,10 +1138,10 @@ function App() {
           continue
         }
 
-        // 3) KGG / KGM v4：本工具不支持（联网密钥协议），给精准错误
+        // 3) KGG / 酷狗新版外部 Key 格式：当前文件本身不含可用密钥，给出重下引导
         if (realFormat === 'kgg_or_kgmv4') {
           const code: DecryptErrorCode = 'KGM_V4_UNSUPPORTED'
-          const message = '这可能是酷狗新版加密格式（v4），本工具暂不支持'
+          const message = '这可能是酷狗新版加密格式，暂时无法转换。请在电脑客户端重新下载后上传并解密'
           updateFile(next.id, {
             status: 'failed',
             errorCode: code,

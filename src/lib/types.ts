@@ -12,6 +12,7 @@ export type DecryptErrorCode =
   // 解密流程跑完了，但产物头部不是任何已知音频 magic（fLaC/ID3/MPEG/OggS）。
   // 说明解密对齐出错或文件损坏——绝不把乱码当"成功"放出，单独成码便于失败看板精确计数。
   | 'OUTPUT_NOT_AUDIO'
+  // 历史错误码名保留以兼容既有埋点；当前表示酷狗新版外部 Key / KGG 类文件。
   | 'KGM_V4_UNSUPPORTED'
   // QQ 音乐新版（v20+）：密钥已迁移到云端，文件尾部仅有 'STag' 标记，无法纯前端解密。
   // 引导用户下载旧版（v19.51 Windows）重新生成可解密文件。
