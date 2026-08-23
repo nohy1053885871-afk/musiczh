@@ -126,9 +126,15 @@ CREATE TABLE IF NOT EXISTS admins (
   last_login_at INTEGER
 );
 
--- 预留：功能开关 / 配置中心（本期不实现）
+-- 功能开关 / 配置中心
 CREATE TABLE IF NOT EXISTS feature_flags (
   key         TEXT PRIMARY KEY,
   value       TEXT NOT NULL,
   updated_at  INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
+  'homepage_guidance_visible',
+  'true',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
 );

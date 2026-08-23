@@ -48,6 +48,7 @@ import {
   detectBrowserCompatibility,
   type BrowserCompatibility,
 } from './lib/browser-compat'
+import { useHomepageGuidanceVisible } from './lib/public-config'
 
 const LazyBrowserCompatModal = lazy(() =>
   import('./components/browser-compat-modal').then((module) => ({
@@ -294,11 +295,13 @@ function DropZone({
   isDragging,
   setIsDragging,
   inputRef,
+  showHomepageGuidance,
 }: {
   onFiles: (files: FileList | File[]) => void
   isDragging: boolean
   setIsDragging: (v: boolean) => void
   inputRef?: RefObject<HTMLInputElement | null>
+  showHomepageGuidance: boolean
 }) {
   const embossedShadow =
     'inset 0 2px 6px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)'
@@ -400,7 +403,13 @@ function DropZone({
               color: '#8A8680',
             }}
           >
-            网易云 / 酷狗 / QQ / 喜马拉雅已支持 · 单个最大 200MB · 单次建议 ≤ 50 个
+            {showHomepageGuidance && (
+              <>
+                <span>网易云 / 酷狗 / QQ / 喜马拉雅已支持</span>
+                <span aria-hidden> · </span>
+              </>
+            )}
+            <span>单个最大 200MB · 单次建议 ≤ 50 个</span>
           </div>
         </div>
       </div>
@@ -869,6 +878,7 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const [files, setFiles] = useState<TrackedFile[]>([])
+  const homepageGuidanceVisible = useHomepageGuidanceVisible()
   const browserCompatPreview =
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).get('preview') === 'browser-compat'
@@ -1740,6 +1750,7 @@ function App() {
                 isDragging={isDragging}
                 setIsDragging={setIsDragging}
                 inputRef={fileInputRef}
+                showHomepageGuidance={homepageGuidanceVisible === true}
               />
             </div>
             <div
@@ -1751,10 +1762,16 @@ function App() {
                 lineHeight: 1.8,
               }}
             >
-              <SupportMatrixEntry onOpen={() => setMatrixOpen(true)} />
-              <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
-              <QqGuideEntry onOpen={openQqGuide} />
-              <DownloadHelp />
+              {homepageGuidanceVisible === true && (
+                <>
+                  <SupportMatrixEntry onOpen={() => setMatrixOpen(true)} />
+                  <span style={{ color: 'rgba(28,26,24,0.35)', padding: '0 6px', userSelect: 'none' }}>·</span>
+                  <QqGuideEntry onOpen={openQqGuide} />
+                </>
+              )}
+              <DownloadHelp
+                showLeadingSeparator={homepageGuidanceVisible === true}
+              />
             </div>
           </div>
         </section>

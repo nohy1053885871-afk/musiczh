@@ -68,8 +68,8 @@ export const EVENT_LABELS: Record<string, string> = {
   btn_flac_batch_transcode_click: '主站 - FLAC/OGG/M4A 横条 - 一键转 MP3 按钮（点击）',
 
   // v0.6.0 新增：QQ 音乐使用引导 + 平台格式总览
-  qq_guide_entry_view:           '主站 - 拖拽区下方 QQ 引导入口 - 曝光',
-  qq_guide_entry_click:          '主站 - 拖拽区下方 QQ 引导入口 - 点击',
+  qq_guide_entry_view:           '主站 - 拖拽区下方 QQ 引导入口 - 曝光（受配置开关控制）',
+  qq_guide_entry_click:          '主站 - 拖拽区下方 QQ 引导入口 - 点击（受配置开关控制）',
   qq_guide_view:                 '主站 - QQ 使用说明弹窗 - 曝光（带触发来源 entry/failure/auto/matrix）',
   qq_guide_dismiss:              '主站 - QQ 使用说明弹窗 - 关闭',
   qq_download_click:             '主站 - QQ 使用说明弹窗 - 下载旧版安装包按钮',
@@ -77,8 +77,8 @@ export const EVENT_LABELS: Record<string, string> = {
   download_help_entry_click:     '主站 - 拖拽区下方下载帮助入口 - 点击',
   download_help_view:            '主站 - 下载文件位置帮助弹窗 - 曝光',
   download_help_close:           '主站 - 下载文件位置帮助弹窗 - 关闭',
-  support_matrix_entry_view:     '主站 - 拖拽区下方「查看全部格式」入口 - 曝光',
-  support_matrix_entry_click:    '主站 - 拖拽区下方「查看全部格式」入口 - 点击',
+  support_matrix_entry_view:     '主站 - 拖拽区下方「查看全部格式」入口 - 曝光（受配置开关控制）',
+  support_matrix_entry_click:    '主站 - 拖拽区下方「查看全部格式」入口 - 点击（受配置开关控制）',
   support_matrix_view:           '主站 - 平台/格式总览弹窗 - 曝光',
   support_matrix_dismiss:        '主站 - 平台/格式总览弹窗 - 关闭',
 

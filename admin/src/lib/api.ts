@@ -50,6 +50,19 @@ export const api = {
     }),
   logout: () => request<{ ok: true }>('/admin/logout', { method: 'POST' }),
 
+  homepageGuidanceFlag: () =>
+    request<HomepageGuidanceFlag>(
+      '/admin/feature-flags/homepage-guidance',
+    ),
+  updateHomepageGuidanceFlag: (enabled: boolean) =>
+    request<HomepageGuidanceFlag>(
+      '/admin/feature-flags/homepage-guidance',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
+      },
+    ),
+
   overview: (rangeQuery: string) => request<OverviewResp>(`/admin/stats/overview?${rangeQuery}`),
   overviewBundle: (rangeQuery: string, refresh = false, signal?: AbortSignal) =>
     request<OverviewBundleResp>(
@@ -104,6 +117,11 @@ export const api = {
     from?: number; to?: number; range?: string
   }) => request<DownloadsResp>(`/admin/downloads?${buildQuery(params)}`),
   downloadDetail: (id: number) => request<DownloadDetail>(`/admin/downloads/${id}`),
+}
+
+export type HomepageGuidanceFlag = {
+  enabled: boolean
+  updatedAt: number | null
 }
 
 export type OverviewResp = {
