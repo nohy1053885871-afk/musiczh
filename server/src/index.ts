@@ -13,6 +13,8 @@ import adminVisitors from './routes/adminVisitors.js'
 import adminUploads from './routes/adminUploads.js'
 import adminDownloads from './routes/adminDownloads.js'
 import adminOverview from './routes/adminOverview.js'
+import adminFeatureFlags from './routes/adminFeatureFlags.js'
+import publicConfig from './routes/publicConfig.js'
 import { startOverviewRollupTimer } from './lib/overview/client.js'
 import { rateLimit } from './middleware/ratelimit.js'
 import { seedAdmin } from './seed/admin.js'
@@ -37,12 +39,13 @@ app.use(
       return allowedOrigins.includes(origin) ? origin : ''
     },
     credentials: true,
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
   }),
 )
 
 app.get('/api/health', (c) => c.json({ ok: true, ts: Date.now() }))
+app.route('/api/config', publicConfig)
 
 // 公开埋点入口（带限流）
 app.use('/api/track', rateLimit)
@@ -57,6 +60,7 @@ app.route('/api/admin/successes', adminSuccesses)
 app.route('/api/admin/visitors', adminVisitors)
 app.route('/api/admin/uploads', adminUploads)
 app.route('/api/admin/downloads', adminDownloads)
+app.route('/api/admin/feature-flags', adminFeatureFlags)
 
 // 启动时执行一次保留策略 + 安排每日 cron
 runRetention()

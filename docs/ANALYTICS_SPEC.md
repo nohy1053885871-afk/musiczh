@@ -145,14 +145,14 @@
 | `banner_flac_prompt_view` | **v0.5.0** 主站 - FLAC/OGG/M4A 一键转 MP3 横条 - 曝光 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` div ref | `count` | 事件名为历史兼容保留；**v0.8.0 起** `count` = 当前全部 done 且格式为 FLAC/OGG/M4A 的文件总数 |
 | `banner_flac_prompt_dismiss` | **v0.5.0** 主站 - FLAC/OGG/M4A 一键转 MP3 横条 - 关闭 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` × | `count` | 关闭时记录当前三种可转码文件 ID；后续出现任一新 ID 时重显 |
 | `btn_flac_batch_transcode_view` / `btn_flac_batch_transcode_click` | **v0.5.0** 主站 - FLAC/OGG/M4A 横条 - 一键转 MP3 按钮 | [src/components/v050.tsx](../src/components/v050.tsx) `FlacBatchPromptBanner` CTA | `count` | 事件名为历史兼容保留；点击后批量触发当前所有 done 且格式为 FLAC/OGG/M4A 的行，与单行按钮共用 `transcodeFile` |
-| `qq_guide_entry_view` / `qq_guide_entry_click` | **v0.6.0** 主站 - 拖拽区下方 QQ 引导入口 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideEntry` | — | 常驻入口，曝光率应接近拖拽区 |
+| `qq_guide_entry_view` / `qq_guide_entry_click` | **v0.6.0** 主站 - 拖拽区下方 QQ 引导入口 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideEntry` | — | **v0.8.5 起**受 `homepage_guidance_visible` 控制；关闭时组件不挂载，因此不产生入口曝光/点击。失败行和自动唤起仍可产生后续弹窗事件 |
 | `qq_guide_view` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 曝光 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` mount | `trigger: 'entry' \| 'failure' \| 'auto' \| 'matrix'` | 触发来源：entry=拖拽区入口点击；failure=QMC_NEW_VERSION_UNSUPPORTED 失败行 CTA；auto=首次拖入 QMC 文件且 localStorage 未标记；matrix=从平台/格式总览弹窗跳来 |
 | `qq_guide_dismiss` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 关闭 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` close | `trigger` | 与对应 `qq_guide_view` 组队 |
 | `qq_download_click` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 下载旧版安装包按钮 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` CTA | `trigger, sha256?` | `sha256` 用于追踪安装包版本一致性 |
 | `download_help_entry_view` / `download_help_entry_click` | **v0.8.3** 主站 - 拖拽区下方下载帮助入口 | [src/components/download-help.tsx](../src/components/download-help.tsx) `DownloadHelp` | — | 常驻入口“下载后找不到文件？”；曝光沿用 session 内去重规则 |
 | `download_help_view` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 曝光 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) mount | — | 内容覆盖下载保存位置、连续下载权限和 ZIP 兜底 |
 | `download_help_close` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 关闭 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) 关闭 | `action: 'button' \| 'close_x' \| 'esc' \| 'overlay'` | 四种关闭路径共用事件；组件内部去重，单次打开只上报一次关闭 |
-| `support_matrix_entry_view` / `support_matrix_entry_click` | **v0.6.0** 主站 - 拖拽区下方「查看全部格式」入口 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixEntry` | — | |
+| `support_matrix_entry_view` / `support_matrix_entry_click` | **v0.6.0** 主站 - 拖拽区下方「查看全部格式」入口 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixEntry` | — | **v0.8.5 起**受 `homepage_guidance_visible` 控制；关闭时组件不挂载，因此不产生入口曝光/点击 |
 | `support_matrix_view` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 曝光 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` mount | — | |
 | `support_matrix_dismiss` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 关闭 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` close | — | |
 

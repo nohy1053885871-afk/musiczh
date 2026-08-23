@@ -1,6 +1,6 @@
 {
   "name": "musiczh-server",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "拾音运营后台 - 后端 API（Hono + SQLite）",
   "private": true,
   "type": "module",
@@ -11,7 +11,8 @@
     "start:prod": "node dist/index.js",
     "overview:backfill": "tsx src/scripts/backfillOverview.ts",
     "overview:status": "tsx src/scripts/setOverviewRollupStatus.ts",
-    "test:overview": "tsx --test src/lib/overview/*.test.ts"
+    "test:overview": "tsx --test src/lib/overview/*.test.ts",
+    "test:feature-flags": "tsx --test src/lib/featureFlags.test.ts src/routes/featureFlags.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

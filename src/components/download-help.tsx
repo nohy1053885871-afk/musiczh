@@ -8,7 +8,11 @@ const LazyDownloadHelpModal = lazy(() =>
   })),
 )
 
-export function DownloadHelp() {
+export function DownloadHelp({
+  showLeadingSeparator = true,
+}: {
+  showLeadingSeparator?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [openId, setOpenId] = useState(0)
   const entryRef = useImpression<HTMLButtonElement>('download_help_entry_view')
@@ -32,13 +36,15 @@ export function DownloadHelp() {
           outlineOffset: '2px',
         }}
       >
-        <span
-          aria-hidden
-          className="px-1.5"
-          style={{ color: 'rgba(28,26,24,0.35)', userSelect: 'none' }}
-        >
-          ·
-        </span>
+        {showLeadingSeparator && (
+          <span
+            aria-hidden
+            className="px-1.5"
+            style={{ color: 'rgba(28,26,24,0.35)', userSelect: 'none' }}
+          >
+            ·
+          </span>
+        )}
         <span className="px-0.5 group-hover:underline">下载后找不到文件？</span>
       </button>
 

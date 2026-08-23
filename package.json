@@ -1,7 +1,7 @@
 {
   "name": "musiczh",
   "private": true,
-  "version": "0.8.4",
+  "version": "0.8.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "test:m4a": "tsx --test src/lib/metadata/m4a.test.ts",
     "test:cover": "tsx --test src/lib/cover*.test.ts src/lib/metadata/cover*.test.ts",
     "test:browser-compat": "tsx --test src/lib/browser-compat.test.ts",
+    "test:public-config": "tsx --test src/lib/public-config.test.ts",
     "preview": "vite preview",
     "dev:server": "npm --prefix server run dev",
     "build:server": "npm --prefix server run build",
