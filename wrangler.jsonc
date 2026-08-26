@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "shiyinmp3",
+  "compatibility_date": "2026-08-26",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "preview.shiyinmp3.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "shiyinmp3.com",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -10,6 +10,7 @@
 
 | # | 主题 | 日期 | 文件 |
 |---|---|---|---|
+| #14 | Cloudflare 正式域名与双构建上线 | 2026-08-27 | [14-cloudflare-formal-launch-20260827.md](14-cloudflare-formal-launch-20260827.md) |
 | #13 | v0.8.6 IP 访问控制与 SEO 宣传清理（本地验收） | 2026-08-26 | [13-v0.8.6-site-access-seo-cleanup-20260826.md](13-v0.8.6-site-access-seo-cleanup-20260826.md) |
 | #12 | v0.8.5 首页指引运营开关（本地验收） | 2026-08-23 | [12-v0.8.5-homepage-guidance-flag-20260823.md](12-v0.8.5-homepage-guidance-flag-20260823.md) |
 | #11 | v0.8.4 酷狗外部 Key 失败引导 | 2026-08-11 | [11-v0.8.4-kugou-guidance-20260811.md](11-v0.8.4-kugou-guidance-20260811.md) |

@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:cloudflare": "tsc -b && vite build --mode cloudflare",
+    "check:cloudflare": "npm run build:cloudflare && wrangler deploy --dry-run",
+    "preview:cloudflare": "npm run build:cloudflare && wrangler dev",
+    "deploy:cloudflare:preview": "npm run build:cloudflare && wrangler deploy",
     "lint": "eslint .",
     "test:xm": "tsx --test src/lib/xm.test.ts",
     "test:m4a": "tsx --test src/lib/metadata/m4a.test.ts",
@@ -45,6 +49,7 @@
     "tsx": "^4.19.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "wrangler": "^4.125.0"
   }
 }

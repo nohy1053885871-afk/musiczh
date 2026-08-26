@@ -37,8 +37,8 @@ import {
   QqGuideEntry,
   QqGuideModal,
   QqWhyCta,
-  type QqGuideTrigger,
 } from './components/qq-guide'
+import type { QqGuideTrigger } from './lib/qq-installer'
 import {
   SupportMatrixEntry,
   SupportMatrixModal,
@@ -2000,7 +2000,7 @@ function App() {
       {/* Toast */}
       {toast && (
         <div
-          className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 px-4 py-2 rounded-lg text-sm"
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 px-4 py-2 rounded-lg text-sm"
           style={{
             background: '#1C1A18',
             color: '#F4F2EE',
@@ -2035,12 +2035,14 @@ function App() {
         <QqGuideModal
           trigger={qqGuide.trigger}
           onClose={() => setQqGuide((g) => ({ ...g, open: false }))}
+          onNotify={notify}
         />
       )}
       {matrixOpen && (
         <SupportMatrixModal
           onClose={() => setMatrixOpen(false)}
           onJumpToQqGuide={openQqGuide}
+          onNotify={notify}
         />
       )}
       {browserCompatibility && (
