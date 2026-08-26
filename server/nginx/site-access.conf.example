@@ -1,6 +1,79 @@
 # 拾音公开站点 IP 访问控制。以下内容放在 sleepno.cn 的 server { ... } 内，
 # 并替换现有同名 location；应用前必须备份原配置并执行 nginx -t。
+#
+# 生产宝塔 nginx 未编译 auth_request，但已内置 ngx_http_lua。这里使用
+# access_by_lua_block + cosocket 调 API，兼容 HTTP/2；不要改成 ngx.location.capture，
+# 当前 Lua 模块会对 HTTP/2 请求报 "http2 requests not supported yet"。
 
+add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+
+# 管理后台、管理 API、健康检查、内部判定和证书验证永久豁免。
+access_by_lua_block {
+    local uri = ngx.var.uri
+
+    local function deny_request()
+        ngx.status = 403
+        ngx.header["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+        if uri:sub(1, 5) == "/api/" then
+            ngx.header.content_type = "application/json; charset=utf-8"
+            ngx.print('{"error":"access_restricted"}')
+        else
+            ngx.header.content_type = "text/html; charset=utf-8"
+            local file = io.open("/www/wwwroot/musiczh/restricted.html", "rb")
+            if file then
+                ngx.print(file:read("*a"))
+                file:close()
+            else
+                ngx.print('<!doctype html><meta charset="utf-8"><title>访问受限</title><h1>访问受限</h1>')
+            end
+        end
+        return ngx.exit(403)
+    end
+
+    if uri == "/__site_access_check"
+        or uri == "/api/health"
+        or uri == "/api/admin"
+        or uri:sub(1, 11) == "/api/admin/"
+        or uri == "/admin"
+        or uri:sub(1, 7) == "/admin/"
+        or uri:sub(1, 13) == "/.well-known/" then
+        return
+    end
+
+    local socket = ngx.socket.tcp()
+    socket:settimeouts(1000, 1000, 1000)
+    local connected = socket:connect("127.0.0.1", 8787)
+    if not connected then
+        return ngx.exit(500)
+    end
+
+    local request = "GET /internal/site-access-check HTTP/1.1\r\n"
+        .. "Host: 127.0.0.1\r\n"
+        .. "X-Real-IP: " .. ngx.var.remote_addr .. "\r\n"
+        .. "Connection: close\r\n\r\n"
+    local sent = socket:send(request)
+    if not sent then
+        socket:close()
+        return ngx.exit(500)
+    end
+
+    local status_line = socket:receive("*l")
+    socket:close()
+    if not status_line then
+        return ngx.exit(500)
+    end
+
+    local status = tonumber(status_line:match("^HTTP/%d+%.%d+%s+(%d+)") or "")
+    if status == 204 then
+        return
+    end
+    if status == 403 then
+        return deny_request()
+    end
+    return ngx.exit(500)
+}
+
+# 保留内部 location，便于服务器本机定向验收；外部请求无法访问。
 location = /__site_access_check {
     internal;
     proxy_pass http://127.0.0.1:8787/internal/site-access-check;
@@ -11,15 +84,9 @@ location = /__site_access_check {
     proxy_set_header X-Original-URI $request_uri;
 }
 
-location @site_access_forbidden_api {
-    default_type application/json;
-    return 403 '{"error":"access_restricted"}';
-}
-
 location = /restricted.html {
     internal;
     root /www/wwwroot/musiczh;
-    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
 }
 
 # 健康检查公开，供 CI 与监控使用。
@@ -39,6 +106,7 @@ location = /api/admin {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+
 location ^~ /api/admin/ {
     proxy_pass http://127.0.0.1:8787;
     proxy_set_header Host $host;
@@ -47,10 +115,8 @@ location ^~ /api/admin/ {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
-# 其余公开 API 统一鉴权，拒绝时返回 JSON。
+# 其余公开 API 由 server 级 access_by_lua_block 鉴权。
 location /api/ {
-    auth_request /__site_access_check;
-    error_page 403 = @site_access_forbidden_api;
     proxy_pass http://127.0.0.1:8787;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -60,26 +126,31 @@ location /api/ {
 }
 
 # 运营后台不受 IP 规则限制，避免错误配置后失去恢复入口。
-location /admin {
+location = /admin {
+    return 301 /admin/;
+}
+
+location ^~ /admin/ {
     alias /www/wwwroot/musiczh-admin/;
     index index.html;
-    try_files $uri $uri/ /admin/index.html;
+    try_files $uri $uri/ @admin_spa;
+}
+
+location @admin_spa {
+    root /www/wwwroot/musiczh-admin;
+    try_files /index.html =404;
 }
 
 location ^~ /downloads/ {
-    auth_request /__site_access_check;
-    error_page 403 /restricted.html;
     alias /www/wwwroot/musiczh-downloads/;
     autoindex off;
     add_header Cache-Control "public, max-age=86400";
+    # location 级 add_header 会覆盖继承，因此这里重复声明。
     add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
 }
 
 location / {
-    auth_request /__site_access_check;
-    error_page 403 /restricted.html;
     root /www/wwwroot/musiczh;
     index index.html;
     try_files $uri $uri/ /index.html;
-    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
 }
