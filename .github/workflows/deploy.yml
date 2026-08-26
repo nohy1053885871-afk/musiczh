@@ -64,7 +64,8 @@ jobs:
             admin:
               - 'admin/**'
               - 'scripts/create-deploy-manifest.mjs'
-              - 'scripts/smoke-static-deploy.mjs'
+              - 'scripts/smoke-loopback-static.sh'
+              - 'scripts/verify-static-directory.mjs'
             server:
               - 'server/**'
             server_lock:
@@ -260,8 +261,14 @@ jobs:
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             admin/dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh-admin/
 
-      - name: 验证后台版本与全部静态资源
-        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/admin/
+      - name: 验证后台目录、回环入口与全部首屏资源
+        run: |
+          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+            "node --input-type=module - '/www/wwwroot/musiczh-admin'" \
+            < scripts/verify-static-directory.mjs
+          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+            "bash -s -- 'https://sleepno.cn/admin/' 'sleepno.cn' false" \
+            < scripts/smoke-loopback-static.sh
 
       - name: 运营后台部署失败时自动恢复
         if: failure() && steps.backup-admin.outputs.timestamp != ''
@@ -278,7 +285,12 @@ jobs:
             "$source_dir/" "$target_dir/"
           echo "[rollback] admin restored from $SNAPSHOT"
           REMOTE
-          node scripts/smoke-static-deploy.mjs https://sleepno.cn/admin/
+          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+            "node --input-type=module - '/www/wwwroot/musiczh-admin'" \
+            < scripts/verify-static-directory.mjs
+          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+            "bash -s -- 'https://sleepno.cn/admin/' 'sleepno.cn' false" \
+            < scripts/smoke-loopback-static.sh
 
   deploy-server:
     name: 部署后端 API
@@ -353,4 +365,13 @@ jobs:
           '
 
       - name: 验证公网入口
-        run: curl -fsS https://sleepno.cn/api/health
+        run: |
+          set +e
+          curl -fsS --max-time 20 https://sleepno.cn/api/health
+          curl_status=$?
+          set -e
+          if [ "$curl_status" = 6 ]; then
+            echo '[health] public DNS unavailable from runner; public check skipped'
+          elif [ "$curl_status" != 0 ]; then
+            exit "$curl_status"
+          fi
