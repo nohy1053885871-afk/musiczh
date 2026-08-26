@@ -11,6 +11,7 @@ import {
   api,
   type HomepageGuidanceFlag,
 } from '../lib/api'
+import { SiteAccessCard } from '../components/settings/SiteAccessCard'
 
 const { Title, Text } = Typography
 
@@ -86,9 +87,11 @@ export function SettingsPage() {
       <div>
         <Title level={4} style={{ margin: 0 }}>配置中心</Title>
         <Text type="secondary" style={{ fontSize: 12 }}>
-          管理主站运行时展示配置
+          管理主站运行时展示与访问范围
         </Text>
       </div>
+
+      <SiteAccessCard />
 
       <Card title="首页格式与 QQ 指引" loading={loading}>
         {loadError && (

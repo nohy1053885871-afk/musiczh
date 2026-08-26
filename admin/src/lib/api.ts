@@ -62,6 +62,30 @@ export const api = {
         body: JSON.stringify({ enabled }),
       },
     ),
+  siteAccess: () => request<SiteAccessSnapshot>('/admin/site-access'),
+  ensureCurrentIpRule: () =>
+    request<SiteAccessSnapshot>('/admin/site-access/ip-rules/current', {
+      method: 'POST',
+    }),
+  createIpRule: (input: CreateIpRuleInput) =>
+    request<SiteAccessSnapshot>('/admin/site-access/ip-rules', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateIpRule: (id: number, input: UpdateIpRuleInput) =>
+    request<SiteAccessSnapshot>(`/admin/site-access/ip-rules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deleteIpRule: (id: number) =>
+    request<SiteAccessSnapshot>(`/admin/site-access/ip-rules/${id}`, {
+      method: 'DELETE',
+    }),
+  updateSiteAccessMode: (enabled: boolean) =>
+    request<SiteAccessSnapshot>('/admin/site-access/mode', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled }),
+    }),
 
   overview: (rangeQuery: string) => request<OverviewResp>(`/admin/stats/overview?${rangeQuery}`),
   overviewBundle: (rangeQuery: string, refresh = false, signal?: AbortSignal) =>
@@ -122,6 +146,37 @@ export const api = {
 export type HomepageGuidanceFlag = {
   enabled: boolean
   updatedAt: number | null
+}
+
+export type IpRuleKind = 'allow' | 'deny'
+
+export type SiteAccessIpRule = {
+  id: number
+  address: string
+  rule: IpRuleKind
+  note: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type SiteAccessSnapshot = {
+  enabled: boolean
+  currentIp: string | null
+  updatedAt: number | null
+  allowedIps: SiteAccessIpRule[]
+  blockedIps: SiteAccessIpRule[]
+}
+
+export type CreateIpRuleInput = {
+  address: string
+  rule: IpRuleKind
+  note?: string | null
+}
+
+export type UpdateIpRuleInput = {
+  rule?: IpRuleKind
+  note?: string | null
+  confirmCurrentIp?: boolean
 }
 
 export type OverviewResp = {
