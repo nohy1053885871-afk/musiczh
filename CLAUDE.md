@@ -8,9 +8,10 @@
 - 线上主站：https://sleepno.cn
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.5（运营后台 v0.4.18，API v0.4.10）
+- 当前开发版本：v0.8.6（运营后台 v0.4.19，API v0.4.11）
 - 当前生产版本：主站 v0.8.5 · 运营后台 v0.4.18 · API v0.4.10
 - 上线状态：用户端 v0.8.5 ✅ · 运营后台 v0.4.18 ✅ · API v0.4.10 ✅
+- 当前开发事项：公开站点 IP 白名单/黑名单访问控制与 SEO 宣传清理（未上线）
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 
@@ -91,7 +92,7 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 |---|---|---|
 | 解密 / 转码 / 上传 UI / 拖拽 / 主站按钮 / 主站文案 / 黑胶动画 | **主站** | `src/App.tsx` · `src/lib/{decrypt,ncm,kgm,qmc,transcode}.ts` · `src/lib/qmc/*` |
 | 数据看板 / 折线图 / 漏斗 / 失败日志页 / 登录页 / 时间筛选 / 后台 UI | **运营后台前端** | `admin/src/pages/{Overview,Buttons,Failures,Login}.tsx` · `admin/src/components/` |
-| `/api/track` / 鉴权 / SQLite / DDL / 数据保留 cron / 后端聚合查询 | **后端 API** | `server/src/routes/` · `server/src/schema.sql` · `server/src/middleware/` |
+| `/api/track` / IP 访问控制 / 鉴权 / SQLite / DDL / 数据保留 cron / 后端聚合查询 | **后端 API** | `server/src/routes/` · `server/src/lib/siteAccess.ts` · `server/src/schema.sql` · `server/src/middleware/` · `server/nginx/` |
 | 埋点（新事件 / 新接入点 / 字段白名单） | **跨子项目** | `src/lib/analytics.ts` + `src/App.tsx` 调用点 + `server/src/routes/track.ts` + `docs/ANALYTICS_SPEC.md`（必登记） |
 | 部署 / 打包 / nginx / pm2 / `.env` / 备份 | **不改代码** | [DEPLOY.md](DEPLOY.md) |
 

@@ -1,0 +1,85 @@
+# 拾音公开站点 IP 访问控制。以下内容放在 sleepno.cn 的 server { ... } 内，
+# 并替换现有同名 location；应用前必须备份原配置并执行 nginx -t。
+
+location = /__site_access_check {
+    internal;
+    proxy_pass http://127.0.0.1:8787/internal/site-access-check;
+    proxy_pass_request_body off;
+    proxy_cache off;
+    proxy_set_header Content-Length "";
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Original-URI $request_uri;
+}
+
+location @site_access_forbidden_api {
+    default_type application/json;
+    return 403 '{"error":"access_restricted"}';
+}
+
+location = /restricted.html {
+    internal;
+    root /www/wwwroot/musiczh;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+}
+
+# 健康检查公开，供 CI 与监控使用。
+location = /api/health {
+    proxy_pass http://127.0.0.1:8787;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# 管理 API 不受 IP 规则限制，仍由管理员 Cookie 鉴权。
+location = /api/admin {
+    proxy_pass http://127.0.0.1:8787;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location ^~ /api/admin/ {
+    proxy_pass http://127.0.0.1:8787;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# 其余公开 API 统一鉴权，拒绝时返回 JSON。
+location /api/ {
+    auth_request /__site_access_check;
+    error_page 403 = @site_access_forbidden_api;
+    proxy_pass http://127.0.0.1:8787;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# 运营后台不受 IP 规则限制，避免错误配置后失去恢复入口。
+location /admin {
+    alias /www/wwwroot/musiczh-admin/;
+    index index.html;
+    try_files $uri $uri/ /admin/index.html;
+}
+
+location ^~ /downloads/ {
+    auth_request /__site_access_check;
+    error_page 403 /restricted.html;
+    alias /www/wwwroot/musiczh-downloads/;
+    autoindex off;
+    add_header Cache-Control "public, max-age=86400";
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+}
+
+location / {
+    auth_request /__site_access_check;
+    error_page 403 /restricted.html;
+    root /www/wwwroot/musiczh;
+    index index.html;
+    try_files $uri $uri/ /index.html;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+}

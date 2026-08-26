@@ -54,6 +54,9 @@ jobs:
               - 'package-lock.json'
               - 'scripts/create-deploy-manifest.mjs'
               - 'scripts/smoke-static-deploy.mjs'
+              - 'scripts/smoke-loopback-static.sh'
+              - 'scripts/smoke-restricted-user-deploy.sh'
+              - 'scripts/verify-static-directory.mjs'
               - 'vite.config.ts'
               - 'tsconfig.app.json'
               - 'tsconfig.json'
@@ -144,8 +147,14 @@ jobs:
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             dist/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/www/wwwroot/musiczh/
 
-      - name: 验证用户端版本与全部静态资源
-        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/
+      - name: 验证用户端目录、回环入口与限制感知的公网状态
+        run: |
+          bash scripts/smoke-restricted-user-deploy.sh \
+            '${{ secrets.SSH_PORT }}' \
+            '${{ secrets.SSH_USER }}' \
+            '${{ secrets.SSH_HOST }}' \
+            /www/wwwroot/musiczh \
+            https://sleepno.cn/
 
       - name: 用户端部署失败时自动恢复
         if: failure() && steps.backup-user.outputs.timestamp != ''
@@ -162,7 +171,12 @@ jobs:
             "$source_dir/" "$target_dir/"
           echo "[rollback] user restored from $SNAPSHOT"
           REMOTE
-          node scripts/smoke-static-deploy.mjs https://sleepno.cn/
+          bash scripts/smoke-restricted-user-deploy.sh \
+            '${{ secrets.SSH_PORT }}' \
+            '${{ secrets.SSH_USER }}' \
+            '${{ secrets.SSH_HOST }}' \
+            /www/wwwroot/musiczh \
+            https://sleepno.cn/
 
   deploy-admin:
     name: 部署运营后台前端

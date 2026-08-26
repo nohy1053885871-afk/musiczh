@@ -138,3 +138,21 @@ VALUES (
   'true',
   CAST(strftime('%s', 'now') AS INTEGER) * 1000
 );
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
+  'site_access_restricted',
+  'false',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+);
+
+-- 公开站点 IP 访问规则。同一规范化地址只能属于白名单或黑名单之一。
+CREATE TABLE IF NOT EXISTS site_access_ip_rules (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  address    TEXT UNIQUE NOT NULL,
+  rule       TEXT NOT NULL CHECK (rule IN ('allow', 'deny')),
+  note       TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_site_access_ip_rules_rule
+  ON site_access_ip_rules(rule);

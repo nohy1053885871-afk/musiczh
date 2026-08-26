@@ -1,4 +1,2 @@
 User-agent: *
-Allow: /
-
-Sitemap: https://sleepno.cn/sitemap.xml
+Disallow: /
