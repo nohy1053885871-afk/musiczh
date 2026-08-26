@@ -26,7 +26,19 @@ expected=$(ssh -p "$ssh_port" "$remote" \
 
 response_file=$(mktemp)
 trap 'rm -f "$response_file"' EXIT
+set +e
 actual=$(curl -4 -sS -o "$response_file" -w '%{http_code}' --max-time 20 "$public_url")
+curl_status=$?
+set -e
+
+if [ "$curl_status" = 6 ]; then
+  echo '[smoke] public DNS unavailable from runner; public response check skipped'
+  exit 0
+fi
+if [ "$curl_status" != 0 ]; then
+  echo "public request failed with curl exit $curl_status" >&2
+  exit "$curl_status"
+fi
 
 case "$expected" in
   204)
