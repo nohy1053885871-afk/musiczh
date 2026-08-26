@@ -49,7 +49,7 @@
 - [x] 绑定 `shiyinmp3.com` Custom Domain。
 - [x] 完成 v0.8.6 Cloudflare 最终部署和公网验收。
 - [x] 完成 PR 与主分支 CI 固化。
-- [ ] 创建 Cloudflare 发布标签并确认指向收尾合并提交。
+- [x] 发布标签 `cloudflare-v0.8.6` 已创建，并指向收尾合并提交 `3409a8b4be51c093c338845972694ec58a7de0b9`。
 - [ ] 项目主从常用网络完成正式域名真实文件转换与 Toast 点击复验。
 - [ ] 第四阶段接通 API 与运营后台，并确认 Cloudflare 访问控制策略。
 - [ ] 后续启用 R2、迁移 QQ 安装包并恢复 Cloudflare 下载开关。
