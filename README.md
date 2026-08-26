@@ -3,7 +3,7 @@
 一个纯前端的加密音乐解密工具——把 **网易云 `.ncm`**、**酷狗 `.kgm` / `.vpr`** 解密还原为 MP3 / FLAC / OGG。
 所有文件都在浏览器本地处理，不上传任何服务器。**永久免费，永无广告**。
 
-🎵 在线试用：[https://sleepno.cn](https://sleepno.cn)
+🎵 Cloudflare 主站：[https://shiyinmp3.com](https://shiyinmp3.com) · 阿里云原站：[https://sleepno.cn](https://sleepno.cn)
 
 > 项目背景与技术栈见 [CLAUDE.md](CLAUDE.md)。
 > 数据埋点规范见 [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md)。

@@ -3,13 +3,14 @@
 
 import { useEffect } from 'react'
 import { analytics } from '../lib/analytics'
+import {
+  requestQqInstallerDownload,
+  type QqGuideTrigger,
+} from '../lib/qq-installer'
 import { useImpression } from '../lib/useImpression'
 
-// ── 触发来源（埋点 trigger 字段） ────────────────────────────────────────────
-export type QqGuideTrigger = 'entry' | 'failure' | 'auto' | 'matrix'
-
 // ── 文案常量（运营可独立调） ─────────────────────────────────────────────────
-export const QQ_GUIDE_COPY = {
+const QQ_GUIDE_COPY = {
   title: 'QQ 音乐解密 · 使用说明',
   subtitle: '仅支持 Windows · v19.51 旧版',
   callout: '只支持旧版 QQ 音乐（v19.51 Windows）下载的文件，新版不支持。',
@@ -27,11 +28,6 @@ export const QQ_GUIDE_COPY = {
   downloadCta: '⬇ 下载 QQ 音乐 v19.51（约 105 MB）',
   closeCta: '关闭',
 } as const
-
-// 安装包路径与 sha256（与 [docs/QQ_INSTALLER_SHA256.md](docs/QQ_INSTALLER_SHA256.md) 同步）
-export const QQ_INSTALLER_PATH = '/downloads/qq-music-v19.51-windows.zip'
-export const QQ_INSTALLER_SHA256 =
-  'f1e2e2e35d1ffa6caadd8dea528c4b6120c5130e73260b3a73635d30531557cb'
 
 // ── 通用：弹窗 Esc 关闭 hook ────────────────────────────────────────────────
 function useEscClose(active: boolean, onClose: () => void) {
@@ -144,9 +140,11 @@ export function QqWhyCta({ onOpen }: { onOpen: (trigger: QqGuideTrigger) => void
 export function QqGuideModal({
   trigger,
   onClose,
+  onNotify,
 }: {
   trigger: QqGuideTrigger
   onClose: () => void
+  onNotify: (message: string) => void
 }) {
   useEscClose(true, () => {
     analytics.track('qq_guide_dismiss', { trigger, method: 'esc' })
@@ -163,12 +161,7 @@ export function QqGuideModal({
   }
 
   const onDownload = () => {
-    analytics.track('qq_download_click', {
-      trigger,
-      sha256: QQ_INSTALLER_SHA256,
-    })
-    // 让浏览器按 path 触发原生下载（含 Content-Disposition / Content-Type 由 nginx 决定）
-    window.location.href = QQ_INSTALLER_PATH
+    requestQqInstallerDownload(trigger, onNotify)
   }
 
   return (

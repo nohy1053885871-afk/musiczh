@@ -5,12 +5,14 @@
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
 解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
-- 线上主站：https://sleepno.cn
+- Cloudflare 主站：https://shiyinmp3.com（用户端已上线且全站 `noindex`；API、运营后台和 QQ 安装包迁移待后续阶段）
+- 阿里云原站：https://sleepno.cn
+- Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
 - 当前开发版本：v0.8.6（运营后台 v0.4.19，API v0.4.11）
-- 当前生产版本：主站 v0.8.6 · 运营后台 v0.4.19 · API v0.4.11
-- 上线状态：用户端 v0.8.6 ✅ · 运营后台 v0.4.19 ✅ · API v0.4.11 ✅
+- 当前生产版本：Cloudflare/阿里云主站 v0.8.6 · 运营后台 v0.4.19 · API v0.4.11
+- 上线状态：Cloudflare 用户端 v0.8.6 ✅ · 阿里云用户端 v0.8.6 ✅ · 运营后台 v0.4.19 ✅ · API v0.4.11 ✅
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 

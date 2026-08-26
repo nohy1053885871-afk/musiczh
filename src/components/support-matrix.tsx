@@ -5,10 +5,9 @@ import { useEffect } from 'react'
 import { analytics } from '../lib/analytics'
 import { useImpression } from '../lib/useImpression'
 import {
-  QQ_INSTALLER_PATH,
-  QQ_INSTALLER_SHA256,
+  requestQqInstallerDownload,
   type QqGuideTrigger,
-} from './qq-guide'
+} from '../lib/qq-installer'
 
 // ── 表格数据（与 src/lib/decrypt.ts SUPPORTED_EXTS / qmc/handler-map.ts 同步） ─
 // 用 React 渲染 rowspan 表格，3 列结构：平台 / 加密扩展名 / 备注与限制
@@ -108,10 +107,12 @@ export function SupportMatrixEntry({ onOpen }: { onOpen: () => void }) {
 export function SupportMatrixModal({
   onClose,
   onJumpToQqGuide,
+  onNotify,
 }: {
   onClose: () => void
   /** 点击 QQ 行内联按钮：关闭本弹窗 + 打开 QqGuideModal（trigger='matrix'） */
   onJumpToQqGuide: (trigger: QqGuideTrigger) => void
+  onNotify: (message: string) => void
 }) {
   useEscClose(true, () => {
     analytics.track('support_matrix_dismiss', { method: 'esc' })
@@ -128,11 +129,7 @@ export function SupportMatrixModal({
   }
 
   const onDownload = () => {
-    analytics.track('qq_download_click', {
-      trigger: 'matrix' as QqGuideTrigger,
-      sha256: QQ_INSTALLER_SHA256,
-    })
-    window.location.href = QQ_INSTALLER_PATH
+    requestQqInstallerDownload('matrix', onNotify)
   }
 
   return (
