@@ -1,12 +1,12 @@
 {
   "name": "musiczh",
   "private": true,
-  "version": "0.8.6",
+  "version": "0.8.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:cloudflare": "tsc -b && vite build --mode cloudflare",
+    "build:cloudflare": "tsc -b && vite build --mode cloudflare && npm --prefix admin run build -- --mode cloudflare",
     "check:cloudflare": "npm run build:cloudflare && wrangler deploy --dry-run",
     "preview:cloudflare": "npm run build:cloudflare && wrangler dev",
     "deploy:cloudflare:preview": "npm run build:cloudflare && wrangler deploy",
@@ -16,6 +16,7 @@
     "test:cover": "tsx --test src/lib/cover*.test.ts src/lib/metadata/cover*.test.ts",
     "test:browser-compat": "tsx --test src/lib/browser-compat.test.ts",
     "test:public-config": "tsx --test src/lib/public-config.test.ts",
+    "test:cloudflare-proxy": "tsx --test worker/index.test.ts",
     "preview": "vite preview",
     "dev:server": "npm --prefix server run dev",
     "build:server": "npm --prefix server run build",

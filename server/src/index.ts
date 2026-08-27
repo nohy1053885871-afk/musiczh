@@ -19,12 +19,16 @@ import adminSiteAccess from './routes/adminSiteAccess.js'
 import internalSiteAccess from './routes/internalSiteAccess.js'
 import { startOverviewRollupTimer } from './lib/overview/client.js'
 import { rateLimit } from './middleware/ratelimit.js'
+import { cloudflareOriginGate } from './middleware/cloudflareOrigin.js'
 import { seedAdmin } from './seed/admin.js'
 import { startRetentionCron, runRetention } from './lib/retention.js'
 
 seedAdmin()
 
 const app = new Hono()
+
+// Cloudflare Tunnel 专用 Host 必须先完成源站密钥校验，避免公开 Tunnel 绕过 nginx。
+app.use('*', cloudflareOriginGate)
 
 // nginx auth_request 专用；放在 logger 前，避免每个静态资源产生一条 API 日志。
 app.route('/internal/site-access-check', internalSiteAccess)

@@ -1,0 +1,95 @@
+name: Validate Cloudflare
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'worker/**'
+      - 'admin/**'
+      - 'server/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'wrangler.jsonc'
+      - '.github/workflows/validate-cloudflare.yml'
+      - '.github/workflows/configure-cloudflare-tunnel.yml'
+      - 'scripts/configure-cloudflare-tunnel.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'worker/**'
+      - 'admin/**'
+      - 'server/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'wrangler.jsonc'
+      - '.github/workflows/validate-cloudflare.yml'
+      - '.github/workflows/configure-cloudflare-tunnel.yml'
+      - 'scripts/configure-cloudflare-tunnel.sh'
+
+concurrency:
+  group: cloudflare-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  worker-and-assets:
+    name: Worker 与双前端
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            admin/package-lock.json
+      - name: 安装依赖
+        run: |
+          npm ci
+          npm --prefix admin ci
+      - name: Worker 单元测试
+        run: npm run test:cloudflare-proxy
+      - name: Cloudflare 双前端构建
+        run: npm run build:cloudflare
+      - name: Wrangler dry-run
+        run: npx wrangler deploy --dry-run
+      - name: 检查双入口与安装包边界
+        run: |
+          test -f dist/index.html
+          test -f dist/admin/index.html
+          grep -R -q '暂不支持，敬请期待' dist/assets
+          if grep -R -q '/downloads/qq-music-v19.51-windows.zip' dist/assets; then
+            echo '[cloudflare] installer path leaked into Cloudflare bundle' >&2
+            exit 1
+          fi
+
+  protected-origin:
+    name: Tunnel 源站鉴权
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: 安装后端依赖
+        run: npm --prefix server ci
+      - name: TypeScript 构建
+        run: npm run build:server
+      - name: 源站鉴权测试
+        run: npm --prefix server run test:cloudflare-origin
+      - name: 访问控制回归
+        run: npm --prefix server run test:site-access
+      - name: 部署脚本语法
+        run: bash -n scripts/configure-cloudflare-tunnel.sh

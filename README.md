@@ -75,13 +75,18 @@ node -e 'console.log(require("bcryptjs").hashSync("你的密码", 10))'
 npm run build           # 用户端 dist/
 npm run build:admin     # 后台   admin/dist/
 npm run build:server    # 后端   server/dist/（pm2 直接跑 tsx 也可，本地 build 通常不用）
+npm run build:cloudflare # Cloudflare 用户端 + dist/admin/ + /api Worker
 ```
 
 每个 build 命令仅触碰自己的子项目，**不会牵连其他**。
 
 ---
 
-## 生产部署（阿里云 ECS + 宝塔面板）
+## 生产部署（Cloudflare + 阿里云 ECS）
+
+`shiyinmp3.com` 的用户端与 `/admin/` 静态资源由 Cloudflare Workers Static Assets
+承载；同域 `/api/*` 由 Worker 经 Cloudflare Tunnel 转发到阿里云本机 API，因此两个
+入口共用同一份 SQLite，不上传音频文件。阿里云原站继续保留独立 nginx 入口。
 
 ### 服务器目录布局
 

@@ -13,6 +13,7 @@ dist-ssr
 *.local
 *.zip
 .wrangler/
+.dev.vars
 
 # Claude Code 本地工作目录（worktrees、会话状态）
 .claude/

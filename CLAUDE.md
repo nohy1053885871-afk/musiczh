@@ -10,7 +10,7 @@
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
 - 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.6（运营后台 v0.4.19，API v0.4.11）
+- 当前开发版本：v0.8.7（运营后台 v0.4.19，API v0.4.12）
 - 当前生产版本：Cloudflare/阿里云主站 v0.8.6 · 运营后台 v0.4.19 · API v0.4.11
 - 上线状态：Cloudflare 用户端 v0.8.6 ✅ · 阿里云用户端 v0.8.6 ✅ · 运营后台 v0.4.19 ✅ · API v0.4.11 ✅
 
@@ -75,6 +75,9 @@ server/                  # 后端 API（Hono + better-sqlite3 + JWT）
   ecosystem.config.cjs   # pm2 守护配置
   .env.example           # ADMIN_USERNAME / ADMIN_PASSWORD_HASH / JWT_SECRET / RETENTION_DAYS
 
+worker/                  # Cloudflare Worker：/api 同源代理，静态资源仍由 Assets binding 承载
+  index.ts               # Tunnel 源站代理、真实 IP、Cookie 透传、no-store/fail-closed
+
 docs/
   ANALYTICS_SPEC.md      # 埋点规范文档（事件全表 + 中文描述 + 字段白名单）
 
@@ -108,6 +111,7 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 - 新增异步流程 → 同时埋 `*_start` 与 `*_done` / `*_fail`，失败必走 `analytics.trackFailure`
 - 任何新增事件，先在 [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 事件全表登记一行（含中文描述），再在 `admin/src/lib/format.ts` 的 `EVENT_LABELS` 加映射
 - 🚨 **改了 `server/**` 的 PR 合到 main 后，必须额外手动 dispatch 后端部署**：GitHub Actions 的 deploy-server job **故意不在 push 时触发**（防坏版本 502 整站挂），条件是 `workflow_dispatch || refs/tags/v*`。merge 完跑 `gh workflow run deploy.yml --ref main -f target=server` + `gh run watch` 看 success 才算上线完成；前端 `?? 0` fallback 会把"字段缺失"伪装成"零数据"，光看 UI 不报错 ≠ 后端真的上了
+- Cloudflare `/api` 或 Tunnel 变更的生产顺序固定为：后端 API → `Configure Cloudflare Tunnel` workflow → Cloudflare Worker；禁止先把代理 Worker 指向尚未受保护或尚未连通的源站。两枚 Token 只存 GitHub/Worker/服务器密钥，绝不写入仓库或日志
 
 ## 项目主的隐性约定（代码/git 里看不出，两个工具都要遵守）
 
@@ -169,6 +173,10 @@ npm run dev:server   # http://localhost:8787（tsx watch，热重载）
 | 用户端 | `/www/wwwroot/musiczh/` | `location /` |
 | 运营后台前端 | `/www/wwwroot/musiczh-admin/` | `location ^~ /admin/`（alias + named location 处理 SPA fallback） |
 | 后端 API | `/www/wwwroot/musiczh-api/` （pm2 守护，Node 20+） | `location /api/` 反代 `127.0.0.1:8787` |
+
+Cloudflare 用户端与运营后台共享同一 Workers Static Assets 部署；`/api/*` 由 Worker 经
+Cloudflare Tunnel 转发到上述同一 API/SQLite。Cloudflare 构建命令为
+`npm run build:cloudflare`，其中后台产物写入 `dist/admin/`。
 
 - 服务器：阿里云 ECS，宝塔面板管理
 - 部署 zip 命名：`musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，统一落主仓根目录 `/Users/bojue/musiczh/`
