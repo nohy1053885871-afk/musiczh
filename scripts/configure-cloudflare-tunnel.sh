@@ -11,6 +11,33 @@ BINARY='/usr/local/bin/cloudflared'
 SERVICE='/etc/systemd/system/cloudflared-musiczh.service'
 TUNNEL_ENV='/etc/cloudflared/musiczh.env'
 
+select_cloudflared_asset() {
+  case "$1" in
+    x86_64|amd64)
+      asset='cloudflared-linux-amd64'
+      expected_sha="$CLOUDFLARED_AMD64_SHA256"
+      ;;
+    aarch64|arm64)
+      asset='cloudflared-linux-arm64'
+      expected_sha="$CLOUDFLARED_ARM64_SHA256"
+      ;;
+    *)
+      echo "[tunnel] unsupported architecture: $1" >&2
+      return 1
+      ;;
+  esac
+}
+
+if [ "${1:-}" = '--asset-for-architecture' ]; then
+  if [ "$#" -ne 2 ]; then
+    echo 'usage: configure-cloudflare-tunnel.sh --asset-for-architecture <architecture>' >&2
+    exit 1
+  fi
+  select_cloudflared_asset "$2"
+  printf '%s\n%s\n%s\n' "$CLOUDFLARED_VERSION" "$asset" "$expected_sha"
+  exit 0
+fi
+
 require_secret() {
   local name="$1"
   if [ -z "${!name:-}" ]; then
@@ -31,20 +58,7 @@ if [ ! -f "$API_ENV" ]; then
   exit 1
 fi
 
-case "$(uname -m)" in
-  x86_64|amd64)
-    asset='cloudflared-linux-amd64'
-    expected_sha="$CLOUDFLARED_AMD64_SHA256"
-    ;;
-  aarch64|arm64)
-    asset='cloudflared-linux-arm64'
-    expected_sha="$CLOUDFLARED_ARM64_SHA256"
-    ;;
-  *)
-    echo "[tunnel] unsupported architecture: $(uname -m)" >&2
-    exit 1
-    ;;
-esac
+select_cloudflared_asset "$(uname -m)"
 
 timestamp="$(date -u +%Y%m%d-%H%M%S)"
 backup_dir="/www/backup/musiczh/cloudflare-tunnel/$timestamp"
@@ -97,11 +111,26 @@ rollback() {
 }
 trap rollback ERR
 
-download="$(mktemp)"
+if [ -n "${CLOUDFLARED_STAGED_PATH:-}" ]; then
+  case "$CLOUDFLARED_STAGED_PATH" in
+    /tmp/musiczh-cloudflared-*) ;;
+    *)
+      echo '[tunnel] staged binary must use the dedicated /tmp/musiczh-cloudflared-* path' >&2
+      exit 1
+      ;;
+  esac
+  if [ ! -f "$CLOUDFLARED_STAGED_PATH" ]; then
+    echo "[tunnel] staged binary not found: $CLOUDFLARED_STAGED_PATH" >&2
+    exit 1
+  fi
+  download="$CLOUDFLARED_STAGED_PATH"
+else
+  download="$(mktemp)"
+  curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 \
+    "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/$asset" \
+    -o "$download"
+fi
 trap 'rm -f "$download"' EXIT
-curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 \
-  "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/$asset" \
-  -o "$download"
 printf '%s  %s\n' "$expected_sha" "$download" | sha256sum -c -
 install -m 755 "$download" "$BINARY"
 
