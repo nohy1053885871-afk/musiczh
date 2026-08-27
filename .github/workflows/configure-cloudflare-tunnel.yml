@@ -32,11 +32,42 @@ jobs:
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      - name: 检测服务器架构
+        id: cloudflared
+        run: |
+          architecture=$(ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o TCPKeepAlive=yes \
+            -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+            'uname -m')
+          mapfile -t metadata < <(bash scripts/configure-cloudflare-tunnel.sh \
+            --asset-for-architecture "$architecture")
+          test "${#metadata[@]}" -eq 3
+          echo "version=${metadata[0]}" >> "$GITHUB_OUTPUT"
+          echo "asset=${metadata[1]}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${metadata[2]}" >> "$GITHUB_OUTPUT"
+
+      - name: 下载并校验 cloudflared
+        run: |
+          curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 300 \
+            "https://github.com/cloudflare/cloudflared/releases/download/${{ steps.cloudflared.outputs.version }}/${{ steps.cloudflared.outputs.asset }}" \
+            -o "$RUNNER_TEMP/cloudflared"
+          printf '%s  %s\n' '${{ steps.cloudflared.outputs.sha256 }}' "$RUNNER_TEMP/cloudflared" |
+            sha256sum -c -
+
+      - name: 上传 cloudflared 到服务器
+        env:
+          REMOTE_CLOUDFLARED_PATH: /tmp/musiczh-cloudflared-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          scp -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o TCPKeepAlive=yes \
+            -P '${{ secrets.SSH_PORT }}' "$RUNNER_TEMP/cloudflared" \
+            '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}':"$REMOTE_CLOUDFLARED_PATH"
+
       - name: 安装并启动 cloudflared
+        env:
+          REMOTE_CLOUDFLARED_PATH: /tmp/musiczh-cloudflared-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o TCPKeepAlive=yes \
             -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
-            "CLOUDFLARE_TUNNEL_TOKEN='${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}' CLOUDFLARE_ORIGIN_TOKEN='${{ secrets.CLOUDFLARE_ORIGIN_TOKEN }}' bash -s" \
+            "CLOUDFLARED_STAGED_PATH='$REMOTE_CLOUDFLARED_PATH' CLOUDFLARE_TUNNEL_TOKEN='${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}' CLOUDFLARE_ORIGIN_TOKEN='${{ secrets.CLOUDFLARE_ORIGIN_TOKEN }}' bash -s" \
             < scripts/configure-cloudflare-tunnel.sh
 
       - name: 验证专用源站拒绝匿名请求
