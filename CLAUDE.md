@@ -5,14 +5,15 @@
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
 解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
-- Cloudflare 主站：https://shiyinmp3.com（用户端已上线且全站 `noindex`；API、运营后台和 QQ 安装包迁移待后续阶段）
+- Cloudflare 主站：https://shiyinmp3.com（用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 安装包待迁移）
+- Cloudflare 运营后台：https://shiyinmp3.com/admin（与阿里云原站共用账号、API 和 SQLite）
 - 阿里云原站：https://sleepno.cn
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
-- 运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
+- 阿里云运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
 - 当前开发版本：v0.8.7（运营后台 v0.4.19，API v0.4.12）
-- 当前生产版本：Cloudflare/阿里云主站 v0.8.6 · 运营后台 v0.4.19 · API v0.4.11
-- 上线状态：Cloudflare 用户端 v0.8.6 ✅ · 阿里云用户端 v0.8.6 ✅ · 运营后台 v0.4.19 ✅ · API v0.4.11 ✅
+- 当前生产版本：Cloudflare/阿里云主站 v0.8.7 · 运营后台 v0.4.19 · API v0.4.12
+- 上线状态：Cloudflare/阿里云用户端 v0.8.7 ✅ · Cloudflare/阿里云运营后台 v0.4.19 ✅ · API v0.4.12 ✅
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 
@@ -223,6 +224,13 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.8.7 / 运营后台 v0.4.19 / API v0.4.12 · 20260828 上线
+
+- **Cloudflare API 与后台**：Worker 仅代理 `/api/*` 并把 `/admin/` 纳入同一静态部署；保留请求体、Cookie 与 Set-Cookie，清理浏览器伪造转发头，所有 API 响应强制 `no-store`
+- **阿里云 Tunnel 与同库复用**：`cloudflared` 主动出站连接专用源站，API 只对该 Host 执行恒定时间 Token 校验和可信客户端 IP 注入；旧域名链路不变，新旧域名共用同一 API、账号和 SQLite
+- **故障安全**：缺密钥、无真实 IP、上游失败和超时分别 fail closed；Tunnel 安装前备份 API `.env`、二进制和 systemd 服务，失败自动回滚；cloudflared 改由 CI 下载校验并经 SCP 上传，服务器安装前再次校验
+- **发布验证**：Worker 6/6、源站鉴权 5/5、访问控制 8/8、feature flags 6/6、public config 4/4 及三端构建通过；PR #68–#70 合并，阿里云用户端/后台 run `33031971187`、API run `33032104020`、Tunnel run `33091717867` 全部成功；Worker `2bd00bd4-ec9d-4b8a-be0e-31356f06b746` 上线；公网主站/后台/health/config 为 200，未登录管理接口 401，专用源站匿名访问 403；归档标签 `cloudflare-v0.8.7`、`api-v0.4.12`
+
 ### v0.8.6 / 运营后台 v0.4.19 / API v0.4.11 · 20260826 上线
 
 - **公开站点 IP 访问控制**：统一规则表保存精确 IPv4/IPv6 与 `allow/deny`，黑名单始终优先；白名单限制模式开启后只放行允许地址，当前 IP 自动加入、不可直接删除，拉黑需强确认并可原子恢复
@@ -230,14 +238,6 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 - **nginx 与 CI**：生产宝塔 nginx 未编译 `auth_request`，最终用内置 ngx_http_lua 的 cosocket 在 access phase 调内部判定 API；后台、管理 API、健康检查与证书验证豁免。部署改为服务器清单/SHA-256 + 回环验收，只有域名 DNS 解析失败可跳过公网 smoke
 - **SEO 宣传清理**：主站标题收敛为“拾音”，删除 canonical、description、keywords、OG/Twitter、JSON-LD、SEO noscript、sitemap 与 OG 图片；robots、HTML meta 和 `X-Robots-Tag` 三层阻止索引，平台功能文案、QQ 引导、安装包、错误提示、埋点与研发文档保持不变
 - 验证：访问控制 8/8、feature flag 6/6、public config 4/4 及既有专项通过，三端构建与桌面/窄屏后台验收通过；PR #62、#63 合并，前端 Actions run `32918201433` 与 API run `32918326481` 成功；生产 nginx 最终备份 `sleepno.cn.conf.20260826-093941`，reload 前后 `nginx -t` 通过；限制模式已开启，白名单网络的主站/API/资源/下载为 200，非白名单为 403，后台与健康检查始终 200
-
-### v0.8.5 / 运营后台 v0.4.18 / API v0.4.10 · 20260823 上线
-
-- **首页指引运营开关**：复用 `feature_flags` 增加 `homepage_guidance_visible`，默认开启；关闭后只隐藏平台支持短语、格式总览入口和 QQ 指引入口，容量限制、下载帮助、QQ 自动/失败行指引与弹窗保持不变
-- **公开与管理接口**：公开 `GET /api/config` 只暴露白名单布尔值并返回 `Cache-Control: no-store`；管理员 GET/PUT 严格校验 boolean，以原子 upsert 持久化，未授权返回 401
-- **故障安全与后台交互**：主站三态加载，接口 404、非法响应或 3 秒超时统一回退为显示；后台配置中心覆盖加载失败重试、保存锁定、失败保持原值、最新状态与更新时间，并明确“主站刷新后生效”
-- **布局与埋点边界**：副文案和入口分隔符按实际可见项生成，关闭时无孤立 `·`；受控入口不挂载时既有曝光事件自然停止，不新增事件名
-- 验证：API 6/6、主站配置 4/4 自动测试及三端构建通过；1280×720、390×667 本地开/关两态与无溢出验收通过；本地后台切换、刷新生效和 API 重启持久化通过并恢复开启；PR #60 合并提交 `db631ec33279`，Actions run `32645519173` 部署并全量校验主站/后台、server skipped，手动 run `32645812350` 部署 API 并通过 pm2/内外网健康检查；公网 `/api/config` 返回 200、`no-store` 与 `true`，生产清单为 user 0.8.5 / admin 0.4.18 且 commit 一致；归档标签 `user-v0.8.5`、`admin-v0.4.18`、`api-v0.4.10`；生产页浏览器取得正确页面标题，但 DOM/截图读取连续超时，未以接口或静态校验冒充线上视觉验收
 
 # 通用
 - 优先选择编辑而非重写整个文件

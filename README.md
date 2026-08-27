@@ -168,7 +168,7 @@ find $DST -name 'analytics-*.db' -mtime +30 -delete
 
 ## 运营后台
 
-- 访问地址：`https://sleepno.cn/admin`
+- 访问地址：`https://shiyinmp3.com/admin/`（Cloudflare）或 `https://sleepno.cn/admin`（阿里云原站）
 - 登录账号：单管理员，初始用户名/密码由后端环境变量 seed
 - 功能：
   - **概览**：PV/UV、人维度（上传 UV / 下载 UV）、件维度（上传文件总数、解密成功/失败、转码成功/失败）、PV/UV 趋势、漏斗、解密失败趋势
