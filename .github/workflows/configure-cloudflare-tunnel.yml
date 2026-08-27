@@ -34,7 +34,8 @@ jobs:
 
       - name: 安装并启动 cloudflared
         run: |
-          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o TCPKeepAlive=yes \
+            -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
             "CLOUDFLARE_TUNNEL_TOKEN='${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}' CLOUDFLARE_ORIGIN_TOKEN='${{ secrets.CLOUDFLARE_ORIGIN_TOKEN }}' bash -s" \
             < scripts/configure-cloudflare-tunnel.sh
 
@@ -54,7 +55,8 @@ jobs:
 
       - name: 输出非敏感服务状态
         run: |
-          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' '
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o TCPKeepAlive=yes \
+            -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' '
             set -e
             cloudflared --version
             systemctl is-active cloudflared-musiczh

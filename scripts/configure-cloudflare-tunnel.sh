@@ -99,7 +99,7 @@ trap rollback ERR
 
 download="$(mktemp)"
 trap 'rm -f "$download"' EXIT
-curl -fsSL --retry 3 --retry-delay 2 \
+curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 900 \
   "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/$asset" \
   -o "$download"
 printf '%s  %s\n' "$expected_sha" "$download" | sha256sum -c -
