@@ -16,7 +16,8 @@
 - Tunnel 由阿里云上的 `cloudflared` 主动出站连接，不增加公网入站端口；远程 ingress
   只允许专用源站进入 `127.0.0.1:8787`，最终规则返回 404。
 - 后台继续使用相对 `/api` 与同源 HttpOnly Cookie；没有新增账号、数据库或数据同步层。
-- QQ 安装包仍未迁移，Cloudflare 构建继续显示“暂不支持，敬请期待”。
+- QQ 安装包不纳入当前 Cloudflare 迁移计划，等待独立方案；Cloudflare 构建继续显示
+  “暂不支持，敬请期待”。
 
 ## 验收证据
 
@@ -30,6 +31,7 @@
 | 公网 API | `/api/health` 200 且 `ok: true`；`/api/config` 200 且读取现有值 `homepageGuidanceVisible: false`；全部 `no-store` |
 | 源站与会话边界 | 专用源站匿名请求 403；新域名未登录 `/api/admin/me` 返回 401 |
 | 静态入口 | 正式域名 `/` 与 `/admin/` 均返回 200 HTML |
+| `www` 别名 | 代理 A 记录已生效；首页和 `/admin/?source=redirect-check` 均返回一次 301，保留路径/查询参数后最终 200 |
 
 ## 正式发布与故障复盘
 
@@ -65,6 +67,6 @@
 - [ ] 项目主在 `https://shiyinmp3.com/admin/` 完成登录、配置写入/读回、概览查询和退出验收。
 - [ ] 通过新域名发送唯一验收埋点，并在原 SQLite/运营后台确认记录与真实客户端 IP。
 - [ ] 24 小时后复查 Tunnel、API 5xx/超时、埋点量和后台可用性。
-- [ ] 确认 Cloudflare 域名自动续费、账号 2FA 和恢复码离线保管。
-- [ ] 后续启用 R2、迁移 QQ 安装包并恢复 Cloudflare 下载开关。
-- [ ] 增加 `www.shiyinmp3.com` 到裸域名的永久重定向。
+- [ ] 确认 Cloudflare 域名自动续费；账号 2FA 和恢复码由项目主自行安排，不再作为本迭代待办。
+- [ ] QQ 安装包等待项目主确定独立方案；Cloudflare 继续保持 Toast 降级，不启用 R2。
+- [x] `www.shiyinmp3.com` 以 301 永久重定向到裸域名，并保留路径和查询参数。

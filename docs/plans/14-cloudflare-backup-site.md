@@ -5,8 +5,8 @@
 1. `shiyinmp3.com` 作为 Cloudflare 用户端、运营后台和 API 正式入口，`sleepno.cn` 继续保留阿里云原站和运营后台。
 2. 音频继续完全在浏览器内处理，不上传服务器；只有埋点、配置和运营后台请求经过 API。
 3. Cloudflare 必须继承 v0.8.6 的全站 `noindex, nofollow, noarchive` 决策，不恢复 canonical、OG、JSON-LD、sitemap 或 SEO 宣传资产。
-4. QQ 安装包暂不迁移：Cloudflare 构建的两个入口显示 Toast；阿里云常规构建继续使用既有 `/downloads/` 安装包。
-5. `/api/*` 与 `/admin/` 已接通阿里云现有 API/SQLite；R2 和 QQ 安装包仍未迁移。
+4. QQ 安装包不纳入当前 Cloudflare 迁移计划，等待独立方案；Cloudflare 构建的两个入口继续显示 Toast，阿里云常规构建保留既有 `/downloads/` 安装包。
+5. `/api/*` 与 `/admin/` 已接通阿里云现有 API/SQLite；R2 当前不启用。
 6. 阿里云原站继续使用 nginx/IP 访问控制；Cloudflare 主站公开但禁止索引，运营数据由登录和专用源站 Token 保护。
 
 ## 二、实施阶段
@@ -15,7 +15,8 @@
 
 - [x] 注册并验证 `shiyinmp3.com`，Cloudflare zone 为 Active。
 - [x] Cloudflare OAuth 账号具备 Worker、路由和证书权限。
-- [ ] 确认自动续费、2FA 和恢复码。
+- [ ] 确认域名自动续费。
+- 账号 2FA 和恢复码由项目主自行安排，不作为本项目实施待办。
 - [ ] 将数据库备份与安装包复制到阿里云以外的独立位置。
 
 ### 2. Workers Static Assets 预览站
@@ -69,9 +70,11 @@
 
 ### 5. 双域名治理与后续恢复
 
-- [ ] 增加 `www.shiyinmp3.com` 到裸域名的永久重定向。
+- [x] 增加 `www.shiyinmp3.com` 到裸域名的永久重定向：代理 A 记录指向
+  `192.0.2.0`，Single Redirect 以 301 保留路径和查询参数。
 - [ ] 两个站点保持同一主站版本与同一源代码提交，构建差异只允许出现在已登记的部署变量。
-- [ ] 后续启用 R2、迁移安装包、核对 109,617,070 字节及 SHA-256 `f1e2e2e35d1ffa6caadd8dea528c4b6120c5130e73260b3a73635d30531557cb` 后恢复 Cloudflare 下载。
+- [ ] QQ 安装包等待项目主确定独立方案；在此之前 Cloudflare 下载入口继续降级为 Toast，
+  不启用 R2，也不恢复 Cloudflare 下载开关。
 
 ## 三、文件边界
 
