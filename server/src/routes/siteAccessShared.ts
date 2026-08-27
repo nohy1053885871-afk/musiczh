@@ -1,8 +1,9 @@
 import type { Context } from 'hono'
 import { normalizeIpAddress, SiteAccessError } from '../lib/siteAccess.js'
+import { getTrustedProxyClientIp } from '../middleware/cloudflareOrigin.js'
 
 export function getTrustedClientIp(c: Context): string | null {
-  const raw = c.req.header('x-real-ip')
+  const raw = getTrustedProxyClientIp(c) ?? c.req.header('x-real-ip')
   if (!raw) return null
   try {
     return normalizeIpAddress(raw)

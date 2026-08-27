@@ -40,9 +40,28 @@
 
 ### 4. API 与运营后台
 
-- [ ] 通过 Cloudflare Tunnel 或等价私有通道转发阿里云 `/api/*`，禁止缓存并保留真实客户端信息。
-- [ ] 将运营后台静态产物接入 `/admin/`，验证登录、配置、查询和原 `analytics.db`。
-- [ ] 明确 Cloudflare 访问控制策略：保持公开、Cloudflare Access，或同步阿里云 IP 规则；实施前由项目主确认。
+- [ ] 创建远程管理的 Cloudflare Tunnel `musiczh-aliyun-api`，由阿里云服务器上的
+  `cloudflared` 以 systemd 服务主动连接 Cloudflare，只转发专用源站域名到
+  `http://127.0.0.1:8787`，不新增公网入站端口，也不依赖已失去公共 DNS 的旧域名。
+- [ ] 专用源站域名只接受 `X-Musiczh-Origin-Token` 与服务端环境变量的恒定时间比对；
+  Token 分别保存为 Cloudflare Worker Secret、GitHub Actions Secret 和服务器 `.env`，
+  不进入 git、Wrangler 明文变量、构建产物或日志。
+- [ ] Worker 仅对 `/api` 与 `/api/*` 先执行：删除浏览器传入的伪造转发头和跨域
+  `Origin`，把 Cloudflare 识别的客户端 IP 写入受信头，流式转发请求体、Cookie 与
+  `Set-Cookie`，为所有 API 响应强制 `Cache-Control: no-store`。
+- [ ] Cloudflare 构建在同一静态资产集合中追加运营后台到 `/admin/`；后台继续使用
+  `/api` 相对路径和同源 HttpOnly Cookie，不增加第二套登录，也不复制 SQLite。
+- [ ] 访问控制沿用当前口径：Cloudflare 主站公开但全站禁止索引；`/admin/` 页面可达，
+  管理数据必须登录；暂不启用 Cloudflare Access。阿里云原有 IP 规则与 nginx 不改。
+- [ ] API 代理故障时 fail closed，返回明确 502/504 且不回退 SPA；静态主站仍可完成
+  浏览器本地转换。Tunnel、API 或 Worker 任一部署失败均可单独回滚。
+- [ ] 验证新域名登录、配置读写、统计查询和埋点都落入原 `/www/wwwroot/musiczh-db/analytics.db`。
+
+已完成的上线前基础设施：Tunnel `musiczh-aliyun-api` 已创建，ID 为
+`bf7fe66e-86d3-418a-8e85-1b4f56997d98`，远程配置版本 1 只包含
+`origin.shiyinmp3.com → http://127.0.0.1:8787` 与最终 404；在服务器连接前状态为
+`inactive`。`CLOUDFLARE_TUNNEL_TOKEN`、`CLOUDFLARE_ORIGIN_TOKEN` 和 Worker
+`ORIGIN_PROXY_TOKEN` 均已写入对应密钥存储，未记录明文。
 
 ### 5. 双域名治理与后续恢复
 
@@ -58,8 +77,14 @@
 - `src/App.tsx`：向弹窗传入既有 Toast，并使 Toast 高于弹窗遮罩。
 - `wrangler.jsonc`：静态资产、SPA fallback、预览和正式 Custom Domain。
 - `public/_headers`：三个 Cloudflare 入口统一返回 `X-Robots-Tag: noindex, nofollow, noarchive`。
+- `worker/index.ts`：仅实现 Cloudflare `/api/*` 同源代理与响应缓存边界；不承载业务数据。
+- `server/src/middleware/cloudflareOrigin.ts`：专用 Tunnel 源站 Host 的密钥鉴权和受信客户端 IP 归一化。
+- `server/src/index.ts`：在 logger、CORS、限流及业务路由前挂载源站鉴权。
+- `admin/vite.config.ts`：Cloudflare 模式输出到主站 `dist/admin/`，常规构建路径保持不变。
+- `.github/workflows/configure-cloudflare-tunnel.yml`：使用既有 SSH 凭据安装/更新
+  `cloudflared` systemd 服务并写入生产密钥，包含健康检查与失败回滚。
 
-本阶段不改 `server/**`、`admin/**`、阿里云 nginx、SQLite 数据、现有访问控制规则或 R2。
+本阶段不改阿里云 nginx、SQLite schema/数据、现有访问控制规则、QQ 安装包或 R2。
 
 ## 四、验证清单
 
@@ -70,6 +95,16 @@
 - [x] 最新正式域名首页、主 bundle、Web Worker、KGM mask、LibAV JS/WASM 全部 200。
 - [x] 正式域名 HTML、robots 和响应头三层禁止索引；公网产物没有 canonical、OG、JSON-LD 或 sitemap。
 - [ ] 项目主从常用网络完成正式域名真实文件转换和 Toast 点击复验。
+- [ ] Worker 单元测试覆盖路径保留、方法/请求体、Cookie、伪造头清理、真实 IP、源站
+  401/500、超时 504、API no-store 与非 API 静态资产委托。
+- [ ] API 单元测试覆盖非 Tunnel Host 不受影响、缺密钥 fail closed、错误密钥 403、
+  正确密钥通过、未配置生产密钥 503、可信客户端 IP 覆盖。
+- [ ] Cloudflare 构建同时包含用户端和 `/admin/index.html`，且两个入口的动态资源均可解析。
+- [ ] Tunnel 至少建立 2 条活跃连接；专用源站无 Token 返回 403，经 Worker 的
+  `/api/health` 返回 200 且 `Cache-Control: no-store`。
+- [ ] 新域名登录后 `/api/admin/me`、首页配置开关读写、概览查询正常，并确认旧域名
+  现有数据仍可见；退出后 Cookie 清除且管理接口恢复 401。
+- [ ] 发送唯一验收埋点后在原 SQLite/后台查询到该记录，IP 为真实客户端而非 Tunnel/Worker 出口。
 
 ## 五、上线观测
 
@@ -80,3 +115,7 @@
 | 核心转换 | 真实文件解密、转码、普通下载 | 不依赖 API 完成 | 上线当次、24 小时 |
 | 安装包降级 | `qq_download_click` 与用户反馈 | Toast 可见，不导航到空路径 | 上线当次、7 天 |
 | 能力边界 | `/api/*`、`/admin/` | 未接通时不影响核心转换，也不宣称可用 | 每次发布 |
+| Tunnel 连通 | Tunnel status、`/api/health` | healthy，至少 2 条连接；API 200/no-store | 上线当次、24 小时 |
+| 源站隔离 | 专用源站直连 | 无 Token 403，错误 Token 403 | 上线当次、每次变更 |
+| 同库写入 | 唯一验收事件、后台查询、SQLite 最大 ID | 新域名事件只新增一次且旧数据连续 | 上线当次 |
+| 后台会话 | login、me、overview、logout | 同源 Cookie 完整，退出后 401 | 上线当次、24 小时 |

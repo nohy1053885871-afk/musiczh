@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono'
+import { getTrustedProxyClientIp } from './cloudflareOrigin.js'
 
 // 每 IP 每分钟请求上限
 const WINDOW_MS = 60_000
@@ -8,6 +9,8 @@ type Bucket = { count: number; resetAt: number }
 const buckets = new Map<string, Bucket>()
 
 function getClientIp(c: Context): string {
+  const trustedProxyIp = getTrustedProxyClientIp(c)
+  if (trustedProxyIp) return trustedProxyIp
   const xff = c.req.header('x-forwarded-for')
   if (xff) return xff.split(',')[0].trim()
   const xri = c.req.header('x-real-ip')

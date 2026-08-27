@@ -1,0 +1,62 @@
+name: Configure Cloudflare Tunnel
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: 配置阿里云 Cloudflare Tunnel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 校验生产密钥
+        env:
+          TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          ORIGIN_TOKEN: ${{ secrets.CLOUDFLARE_ORIGIN_TOKEN }}
+        run: |
+          test -n "$TUNNEL_TOKEN"
+          test -n "$ORIGIN_TOKEN"
+
+      - uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: 写入 known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: 安装并启动 cloudflared
+        run: |
+          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' \
+            "CLOUDFLARE_TUNNEL_TOKEN='${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}' CLOUDFLARE_ORIGIN_TOKEN='${{ secrets.CLOUDFLARE_ORIGIN_TOKEN }}' bash -s" \
+            < scripts/configure-cloudflare-tunnel.sh
+
+      - name: 验证专用源站拒绝匿名请求
+        run: |
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --max-time 20 https://origin.shiyinmp3.com/api/health)
+          test "$status" = '403'
+
+      - name: 验证 Tunnel 授权健康检查
+        run: |
+          curl -fsS --max-time 20 \
+            -H 'X-Musiczh-Origin-Token: ${{ secrets.CLOUDFLARE_ORIGIN_TOKEN }}' \
+            -H 'X-Musiczh-Client-IP: 192.0.2.1' \
+            https://origin.shiyinmp3.com/api/health |
+            grep -q '"ok":true'
+
+      - name: 输出非敏感服务状态
+        run: |
+          ssh -p '${{ secrets.SSH_PORT }}' '${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}' '
+            set -e
+            cloudflared --version
+            systemctl is-active cloudflared-musiczh
+            pm2 describe musiczh-api | grep -E "status|uptime" | head -n 4
+          '
