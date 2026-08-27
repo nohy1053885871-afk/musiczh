@@ -9,6 +9,17 @@
 - 后端 [server/](../server/)
 - 管理后台 [admin/](../admin/)
 
+## 0. 多域名统计边界
+
+`shiyinmp3.com` 与 `sleepno.cn` 的埋点最终写入同一个 SQLite，但浏览器存储按 Origin
+隔离，因此同一浏览器跨两个域名访问时通常会生成两个 `visitor_id` 和两套
+`session_id`。后台 UV 是数据库内 `visitor_id` 去重，不等于跨域自然人去重。
+
+当前事件只记录 pathname，没有稳定的站点 Host 维度；若未来需要按域名拆分流量，必须先
+设计可信来源字段并同步前端、Worker/后端、白名单和后台口径。当前访客来源分类还只把
+`sleepno.cn` 识别为“站内”，`shiyinmp3.com` 是待修兼容项。生产拓扑与完整边界见
+[ARCHITECTURE.md](ARCHITECTURE.md)。
+
 ---
 
 ## 1. 命名规范

@@ -1,5 +1,9 @@
 # 运营后台首页查询性能优化
 
+> `shiyinmp3.com` 与 `sleepno.cn` 的运营后台共用同一 API 和 SQLite。下列生产示例优先
+> 使用 Cloudflare 正式入口；从阿里云原站执行时只替换 Origin，数据源不变。架构边界见
+> [ARCHITECTURE.md](ARCHITECTURE.md)。
+
 ## 架构与读取策略
 
 首页统一调用 `GET /api/admin/stats/overview-bundle`，一次返回概览、漏斗、全部日趋势和设备组合数据。接口结果按规范化时间范围缓存 60 秒；相同缓存键的并发请求共用一次计算。`refresh=1` 跳过缓存并用成功结果更新缓存。
@@ -22,7 +26,7 @@
 
 ```bash
 curl -H "Authorization: Bearer $ADMIN_TOKEN" \
-  "https://sleepno.cn/api/admin/stats/overview-bundle?range=90d&refresh=1"
+  "https://shiyinmp3.com/api/admin/stats/overview-bundle?range=90d&refresh=1"
 ```
 
 低优先级执行可恢复回填：
