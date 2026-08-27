@@ -4,6 +4,7 @@
 >
 > 当前状态：Cloudflare 用户端 v0.8.7、运营后台 v0.4.19、API v0.4.12 已在
 > `shiyinmp3.com` 上线；API 与 `sleepno.cn` 共用阿里云上的同一服务和 SQLite。
+> 长期架构唯一事实源：[docs/ARCHITECTURE.md](../ARCHITECTURE.md)。
 
 ## 问题边界与实现
 
@@ -70,3 +71,4 @@
 - [ ] 确认 Cloudflare 域名自动续费；账号 2FA 和恢复码由项目主自行安排，不再作为本迭代待办。
 - [ ] QQ 安装包等待项目主确定独立方案；Cloudflare 继续保持 Toast 降级，不启用 R2。
 - [x] `www.shiyinmp3.com` 以 301 永久重定向到裸域名，并保留路径和查询参数。
+- [x] 建立双域名生产架构文档，明确登录 Cookie、访客 ID、IP 访问控制和故障单点并不共享。

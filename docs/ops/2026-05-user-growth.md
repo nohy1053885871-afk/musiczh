@@ -1,9 +1,14 @@
 # 拾音 · 用户增长方案 v1（2026-05）
 
+> **历史策略警示（2026-08-28）**：本文的 `sleepno.cn` 单域名、SEO 落地页和恢复收录
+> 假设已被后续“全站 `noindex` + Cloudflare/阿里云双入口”决策取代。本文保留作历史策略
+> 记录，不能直接作为当前执行清单。重新启动增长/SEO 前，先读
+> [生产架构](../ARCHITECTURE.md)并重新确认索引策略、主域名和跨域统计口径。
+
 > **使用说明**：这是拾音的用户增长方案沉淀文档。
 > Claude 在新会话中被询问运营 / 流量 / 增长相关话题时，**先读这份文档，再继续讨论**。
 > 顶部「📌 当前快照」可以 30 秒读完进入状态；下方按时间追加执行记录 / 调整。
-> 配套文档：[docs/ANALYTICS_SPEC.md](../ANALYTICS_SPEC.md)（埋点） · [docs/RETROSPECTIVES.md](../RETROSPECTIVES.md)（如有，长周期复盘）
+> 配套文档：[docs/ANALYTICS_SPEC.md](../ANALYTICS_SPEC.md)（埋点） · [复盘索引](../retrospectives/README.md)（长周期复盘）
 
 ---
 

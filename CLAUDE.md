@@ -5,7 +5,7 @@
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
 解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
-- Cloudflare 主站：https://shiyinmp3.com（用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 安装包待迁移）
+- Cloudflare 主站：https://shiyinmp3.com（用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 安装包等待独立方案）
 - Cloudflare 运营后台：https://shiyinmp3.com/admin（与阿里云原站共用账号、API 和 SQLite）
 - 阿里云原站：https://sleepno.cn
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
@@ -16,6 +16,7 @@
 - 上线状态：Cloudflare/阿里云用户端 v0.8.7 ✅ · Cloudflare/阿里云运营后台 v0.4.19 ✅ · API v0.4.12 ✅
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
+> 双域名生产拓扑、共享状态与故障边界的唯一事实源见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ## 技术栈
 
@@ -80,6 +81,7 @@ worker/                  # Cloudflare Worker：/api 同源代理，静态资源�
   index.ts               # Tunnel 源站代理、真实 IP、Cookie 透传、no-store/fail-closed
 
 docs/
+  ARCHITECTURE.md        # 双域名生产拓扑、共享/隔离状态、安全与故障边界（唯一事实源）
   ANALYTICS_SPEC.md      # 埋点规范文档（事件全表 + 中文描述 + 字段白名单）
 
 public/
@@ -113,6 +115,7 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 - 任何新增事件，先在 [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 事件全表登记一行（含中文描述），再在 `admin/src/lib/format.ts` 的 `EVENT_LABELS` 加映射
 - 🚨 **改了 `server/**` 的 PR 合到 main 后，必须额外手动 dispatch 后端部署**：GitHub Actions 的 deploy-server job **故意不在 push 时触发**（防坏版本 502 整站挂），条件是 `workflow_dispatch || refs/tags/v*`。merge 完跑 `gh workflow run deploy.yml --ref main -f target=server` + `gh run watch` 看 success 才算上线完成；前端 `?? 0` fallback 会把"字段缺失"伪装成"零数据"，光看 UI 不报错 ≠ 后端真的上了
 - Cloudflare `/api` 或 Tunnel 变更的生产顺序固定为：后端 API → `Configure Cloudflare Tunnel` workflow → Cloudflare Worker；禁止先把代理 Worker 指向尚未受保护或尚未连通的源站。两枚 Token 只存 GitHub/Worker/服务器密钥，绝不写入仓库或日志
+- 任何涉及域名、API、后台登录、Cookie、埋点、访问控制或部署的变更，动手前必须读 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，并按其中“双域名检查清单”验证。前端默认只使用相对 `/api`，不得把任一正式域名写成唯一 API 地址；共享 API/SQLite 不代表共享 Cookie、`visitor_id` 或接入层策略
 
 ## 项目主的隐性约定（代码/git 里看不出，两个工具都要遵守）
 
@@ -177,12 +180,13 @@ npm run dev:server   # http://localhost:8787（tsx watch，热重载）
 
 Cloudflare 用户端与运营后台共享同一 Workers Static Assets 部署；`/api/*` 由 Worker 经
 Cloudflare Tunnel 转发到上述同一 API/SQLite。Cloudflare 构建命令为
-`npm run build:cloudflare`，其中后台产物写入 `dist/admin/`。
+`npm run build:cloudflare`，其中后台产物写入 `dist/admin/`。完整 Host/路由矩阵、发布顺序
+与故障影响见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 - 服务器：阿里云 ECS，宝塔面板管理
 - 部署 zip 命名：`musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，统一落主仓根目录 `/Users/bojue/musiczh/`
 - 后端 API 用 tsx 直接跑 TS 源码，部署包不带 `node_modules`，服务器上 `npm install` 装
-- SQLite 每日 04:00 由宝塔计划任务备份到 `/www/backup/musiczh/`，保留 30 天
+- SQLite 每日 04:00 在线备份、校验并压缩到 `/www/backup/musiczh-db/`，按最近 7 份成功备份轮换
 - 后端启动时自动跑 **365 天**保留策略 cron（每日 03:00 清理 events / failures）
 
 ## 数据埋点
