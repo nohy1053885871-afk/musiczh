@@ -2,12 +2,12 @@
 
 ## 一、目标与现行边界
 
-1. `shiyinmp3.com` 作为 Cloudflare 用户端正式入口，`sleepno.cn` 继续保留阿里云原站和运营后台。
-2. Cloudflare 当前只承载用户端静态资源；音频继续完全在浏览器内处理，不上传服务器。
+1. `shiyinmp3.com` 作为 Cloudflare 用户端、运营后台和 API 正式入口，`sleepno.cn` 继续保留阿里云原站和运营后台。
+2. 音频继续完全在浏览器内处理，不上传服务器；只有埋点、配置和运营后台请求经过 API。
 3. Cloudflare 必须继承 v0.8.6 的全站 `noindex, nofollow, noarchive` 决策，不恢复 canonical、OG、JSON-LD、sitemap 或 SEO 宣传资产。
 4. QQ 安装包暂不迁移：Cloudflare 构建的两个入口显示 Toast；阿里云常规构建继续使用既有 `/downloads/` 安装包。
-5. `/api/*`、`/admin/`、SQLite 和 R2 不在本阶段迁移范围内，不得把缺失能力表述为已接通。
-6. 阿里云 v0.8.6 的 IP 访问控制位于其 nginx/API 链路，Cloudflare 静态站当前不受该白名单限制；Cloudflare 当前是公开可达但禁止索引的独立入口。
+5. `/api/*` 与 `/admin/` 已接通阿里云现有 API/SQLite；R2 和 QQ 安装包仍未迁移。
+6. 阿里云原站继续使用 nginx/IP 访问控制；Cloudflare 主站公开但禁止索引，运营数据由登录和专用源站 Token 保护。
 
 ## 二、实施阶段
 
@@ -40,28 +40,32 @@
 
 ### 4. API 与运营后台
 
-- [ ] 创建远程管理的 Cloudflare Tunnel `musiczh-aliyun-api`，由阿里云服务器上的
+- [x] 创建远程管理的 Cloudflare Tunnel `musiczh-aliyun-api`，由阿里云服务器上的
   `cloudflared` 以 systemd 服务主动连接 Cloudflare，只转发专用源站域名到
   `http://127.0.0.1:8787`，不新增公网入站端口，也不依赖已失去公共 DNS 的旧域名。
-- [ ] 专用源站域名只接受 `X-Musiczh-Origin-Token` 与服务端环境变量的恒定时间比对；
+- [x] 专用源站域名只接受 `X-Musiczh-Origin-Token` 与服务端环境变量的恒定时间比对；
   Token 分别保存为 Cloudflare Worker Secret、GitHub Actions Secret 和服务器 `.env`，
   不进入 git、Wrangler 明文变量、构建产物或日志。
-- [ ] Worker 仅对 `/api` 与 `/api/*` 先执行：删除浏览器传入的伪造转发头和跨域
+- [x] Worker 仅对 `/api` 与 `/api/*` 先执行：删除浏览器传入的伪造转发头和跨域
   `Origin`，把 Cloudflare 识别的客户端 IP 写入受信头，流式转发请求体、Cookie 与
   `Set-Cookie`，为所有 API 响应强制 `Cache-Control: no-store`。
-- [ ] Cloudflare 构建在同一静态资产集合中追加运营后台到 `/admin/`；后台继续使用
+- [x] Cloudflare 构建在同一静态资产集合中追加运营后台到 `/admin/`；后台继续使用
   `/api` 相对路径和同源 HttpOnly Cookie，不增加第二套登录，也不复制 SQLite。
-- [ ] 访问控制沿用当前口径：Cloudflare 主站公开但全站禁止索引；`/admin/` 页面可达，
+- [x] 访问控制沿用当前口径：Cloudflare 主站公开但全站禁止索引；`/admin/` 页面可达，
   管理数据必须登录；暂不启用 Cloudflare Access。阿里云原有 IP 规则与 nginx 不改。
-- [ ] API 代理故障时 fail closed，返回明确 502/504 且不回退 SPA；静态主站仍可完成
+- [x] API 代理故障时 fail closed，返回明确 502/504 且不回退 SPA；静态主站仍可完成
   浏览器本地转换。Tunnel、API 或 Worker 任一部署失败均可单独回滚。
 - [ ] 验证新域名登录、配置读写、统计查询和埋点都落入原 `/www/wwwroot/musiczh-db/analytics.db`。
 
-已完成的上线前基础设施：Tunnel `musiczh-aliyun-api` 已创建，ID 为
+生产基础设施：Tunnel `musiczh-aliyun-api` 已创建并运行，ID 为
 `bf7fe66e-86d3-418a-8e85-1b4f56997d98`，远程配置版本 1 只包含
-`origin.shiyinmp3.com → http://127.0.0.1:8787` 与最终 404；在服务器连接前状态为
-`inactive`。`CLOUDFLARE_TUNNEL_TOKEN`、`CLOUDFLARE_ORIGIN_TOKEN` 和 Worker
+`origin.shiyinmp3.com → http://127.0.0.1:8787` 与最终 404。`CLOUDFLARE_TUNNEL_TOKEN`、`CLOUDFLARE_ORIGIN_TOKEN` 和 Worker
 `ORIGIN_PROXY_TOKEN` 均已写入对应密钥存储，未记录明文。
+
+第四阶段发布固化：PR #68–#70 已合并；API run `33032104020`、Tunnel run
+`33091717867` 均成功。最终 Worker 版本为
+`2bd00bd4-ec9d-4b8a-be0e-31356f06b746`，正式域名 `/`、`/admin/`、`/api/health`
+均为 200，专用源站匿名访问为 403。
 
 ### 5. 双域名治理与后续恢复
 
@@ -95,13 +99,13 @@
 - [x] 最新正式域名首页、主 bundle、Web Worker、KGM mask、LibAV JS/WASM 全部 200。
 - [x] 正式域名 HTML、robots 和响应头三层禁止索引；公网产物没有 canonical、OG、JSON-LD 或 sitemap。
 - [ ] 项目主从常用网络完成正式域名真实文件转换和 Toast 点击复验。
-- [ ] Worker 单元测试覆盖路径保留、方法/请求体、Cookie、伪造头清理、真实 IP、源站
+- [x] Worker 单元测试覆盖路径保留、方法/请求体、Cookie、伪造头清理、真实 IP、源站
   401/500、超时 504、API no-store 与非 API 静态资产委托。
-- [ ] API 单元测试覆盖非 Tunnel Host 不受影响、缺密钥 fail closed、错误密钥 403、
+- [x] API 单元测试覆盖非 Tunnel Host 不受影响、缺密钥 fail closed、错误密钥 403、
   正确密钥通过、未配置生产密钥 503、可信客户端 IP 覆盖。
-- [ ] Cloudflare 构建同时包含用户端和 `/admin/index.html`，且两个入口的动态资源均可解析。
-- [ ] Tunnel 至少建立 2 条活跃连接；专用源站无 Token 返回 403，经 Worker 的
-  `/api/health` 返回 200 且 `Cache-Control: no-store`。
+- [x] Cloudflare 构建同时包含用户端和 `/admin/index.html`，且两个入口的动态资源均可解析。
+- [x] 专用源站无 Token 返回 403，经 Worker 的 `/api/health` 返回 200 且 `Cache-Control: no-store`。
+- [ ] 从 Cloudflare 控制台复核 Tunnel 活跃连接数量。
 - [ ] 新域名登录后 `/api/admin/me`、首页配置开关读写、概览查询正常，并确认旧域名
   现有数据仍可见；退出后 Cookie 清除且管理接口恢复 401。
 - [ ] 发送唯一验收埋点后在原 SQLite/后台查询到该记录，IP 为真实客户端而非 Tunnel/Worker 出口。
@@ -114,7 +118,7 @@
 | 搜索索引停止 | HTML、robots、`X-Robots-Tag` | 三层均保持 noindex/noarchive | 上线当次、24 小时 |
 | 核心转换 | 真实文件解密、转码、普通下载 | 不依赖 API 完成 | 上线当次、24 小时 |
 | 安装包降级 | `qq_download_click` 与用户反馈 | Toast 可见，不导航到空路径 | 上线当次、7 天 |
-| 能力边界 | `/api/*`、`/admin/` | 未接通时不影响核心转换，也不宣称可用 | 每次发布 |
+| 能力边界 | `/api/*`、`/admin/` | 已接通；故障时静态转换仍可用，API 不回退 SPA | 每次发布 |
 | Tunnel 连通 | Tunnel status、`/api/health` | healthy，至少 2 条连接；API 200/no-store | 上线当次、24 小时 |
 | 源站隔离 | 专用源站直连 | 无 Token 403，错误 Token 403 | 上线当次、每次变更 |
 | 同库写入 | 唯一验收事件、后台查询、SQLite 最大 ID | 新域名事件只新增一次且旧数据连续 | 上线当次 |

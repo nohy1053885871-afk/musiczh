@@ -10,6 +10,7 @@
 
 | # | 主题 | 日期 | 文件 |
 |---|---|---|---|
+| #15 | Cloudflare API、运营后台与阿里云 Tunnel 上线 | 2026-08-28 | [15-cloudflare-api-admin-tunnel-20260828.md](15-cloudflare-api-admin-tunnel-20260828.md) |
 | #14 | Cloudflare 正式域名与双构建上线 | 2026-08-27 | [14-cloudflare-formal-launch-20260827.md](14-cloudflare-formal-launch-20260827.md) |
 | #13 | v0.8.6 IP 访问控制与 SEO 宣传清理（本地验收） | 2026-08-26 | [13-v0.8.6-site-access-seo-cleanup-20260826.md](13-v0.8.6-site-access-seo-cleanup-20260826.md) |
 | #12 | v0.8.5 首页指引运营开关（本地验收） | 2026-08-23 | [12-v0.8.5-homepage-guidance-flag-20260823.md](12-v0.8.5-homepage-guidance-flag-20260823.md) |
