@@ -53,7 +53,7 @@ export function OverviewPage() {
             站点 PV / UV、人维度、件维度核心 8 指标
           </Text>
         </div>
-        <Space>
+        <Space wrap size={[8, 8]}>
           <AppRangePicker value={range} onChange={setRange} />
           <Button icon={<ReloadOutlined />} onClick={() => void loadBundle(true)} loading={loading}>刷新</Button>
         </Space>

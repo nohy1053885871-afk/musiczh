@@ -23,26 +23,28 @@ function createDb(path = ':memory:') {
 
 function seed(db: Database.Database) {
   const insert = db.prepare(
-    `INSERT INTO events (ts,event,visitor_id,session_id,page,ua,ip,app_ver,props)
-     VALUES (@ts,@event,@visitor_id,@session_id,'/',@ua,'127.0.0.1','test',@props)`,
+    `INSERT INTO events (ts,event,visitor_id,session_id,page,site_host,ua,ip,app_ver,props)
+     VALUES (@ts,@event,@visitor_id,@session_id,'/',@site_host,@ua,'127.0.0.1','test',@props)`,
   )
   const base = dayBucket(Date.now()) - 3 * DAY_MS
   const add = (
     day: number, offset: number, event: string, visitor: string,
-    props: Record<string, unknown> = {}, ua = UA_DESKTOP,
+    props: Record<string, unknown> = {}, ua = UA_DESKTOP, siteHost: string | null = null,
   ) => insert.run({
     ts: base + day * DAY_MS + offset,
     event, visitor_id: visitor, session_id: `${visitor}-session`, ua,
+    site_host: siteHost,
     props: Object.keys(props).length ? JSON.stringify(props) : null,
   })
 
-  add(0, 1_000, 'pageview', 'visitor-a')
+  add(0, 1_000, 'pageview', 'visitor-a', {}, UA_DESKTOP, 'sleepno.cn')
+  add(0, 1_500, 'pageview', 'visitor-legacy')
   add(0, 2_000, 'upload_attempt', 'visitor-a', { file_id: 'file-success', file_ext: 'ncm' })
   add(0, 3_000, 'decrypt_fail', 'visitor-a', { file_id: 'file-success' })
   add(1, 1_000, 'decrypt_done', 'visitor-a', { file_id: 'file-success', source: 'ncm' }, UA_MOBILE)
   add(1, 2_000, 'download_done', 'visitor-a', { file_id: 'file-success' }, UA_MOBILE)
 
-  add(1, 3_000, 'pageview', 'visitor-b', {}, UA_MOBILE)
+  add(1, 3_000, 'pageview', 'visitor-b', {}, UA_MOBILE, 'shiyinmp3.com')
   add(1, 4_000, 'upload_attempt', 'visitor-b', { file_id: 'file-abandon', file_ext: 'flac' }, UA_MOBILE)
   add(1, 5_000, 'transcode_abandon', 'visitor-b', { file_id: 'file-abandon' }, UA_MOBILE)
   add(2, 1_000, 'upload_attempt', 'visitor-b', { file_id: 'file-pending', file_ext: 'ogg' })
@@ -71,6 +73,13 @@ test('rollup preserves raw overview, funnel, timeseries and device results', () 
   assert.equal(rollup.overview.abandoned_files, 1)
   assert.equal(rollup.overview.pending_files, 1)
   assert.equal(rollup.overview.dismissed_files, 1)
+  assert.equal(rollup.overview.pv, 3)
+  assert.equal(rollup.overview.uv, 3)
+  assert.equal(rollup.traffic.overall.pv.reduce((sum, point) => sum + point.v, 0), 3)
+  assert.equal(rollup.traffic.sites['sleepno.cn'].pv.reduce((sum, point) => sum + point.v, 0), 1)
+  assert.equal(rollup.traffic.sites['sleepno.cn'].uv.reduce((sum, point) => sum + point.v, 0), 1)
+  assert.equal(rollup.traffic.sites['shiyinmp3.com'].pv.reduce((sum, point) => sum + point.v, 0), 1)
+  assert.equal(rollup.traffic.sites['shiyinmp3.com'].uv.reduce((sum, point) => sum + point.v, 0), 1)
 
   const partialRequest = {
     from: range.from + 1_500,

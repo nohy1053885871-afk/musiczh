@@ -15,17 +15,25 @@ db.pragma('foreign_keys = ON')
 const schemaSQL = readFileSync(resolve(__dirname, 'schema.sql'), 'utf8')
 db.exec(schemaSQL)
 
-// v0.4.1 迁移：从 props 中抽出 file_id 作 VIRTUAL 生成列 + 索引
-// ALTER TABLE ADD COLUMN 在已存在时抛 duplicate column，包 try/catch 实现幂等
-// 生成列 VIRTUAL 不占存储，按需 json_extract，旧数据自动落 NULL（前端识别为 legacy 显示「-」）
-try {
-  db.exec(
-    "ALTER TABLE events ADD COLUMN file_id TEXT GENERATED ALWAYS AS (json_extract(props,'$.file_id')) VIRTUAL",
-  )
-} catch (err) {
-  const msg = err instanceof Error ? err.message : String(err)
-  if (!/duplicate column name/i.test(msg)) throw err
+function addColumn(sql: string) {
+  try {
+    db.exec(sql)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (!/duplicate column name/i.test(msg)) throw err
+  }
 }
+
+// ALTER TABLE ADD COLUMN 在已存在时抛 duplicate column，统一包裹为幂等迁移。
+// file_id 为 VIRTUAL 生成列，不占存储；旧数据自然为 NULL。
+addColumn(
+  "ALTER TABLE events ADD COLUMN file_id TEXT GENERATED ALWAYS AS (json_extract(props,'$.file_id')) VIRTUAL",
+)
+addColumn('ALTER TABLE events ADD COLUMN site_host TEXT')
+addColumn('ALTER TABLE overview_daily_metrics ADD COLUMN pv_sleepno_cn INTEGER NOT NULL DEFAULT 0')
+addColumn('ALTER TABLE overview_daily_metrics ADD COLUMN pv_shiyinmp3_com INTEGER NOT NULL DEFAULT 0')
+addColumn('ALTER TABLE overview_daily_visitors ADD COLUMN has_pageview_sleepno_cn INTEGER NOT NULL DEFAULT 0')
+addColumn('ALTER TABLE overview_daily_visitors ADD COLUMN has_pageview_shiyinmp3_com INTEGER NOT NULL DEFAULT 0')
 db.exec(
   'CREATE INDEX IF NOT EXISTS idx_events_file_id ON events(file_id) WHERE file_id IS NOT NULL',
 )

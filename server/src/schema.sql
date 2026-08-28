@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS events (
   visitor_id  TEXT    NOT NULL,                  -- 前端生成的匿名 UUID（localStorage）
   session_id  TEXT    NOT NULL,                  -- 会话 ID（30 分钟无活动重置）
   page        TEXT,                              -- pathname
+  site_host   TEXT,                              -- 事件发生页面的 hostname；旧数据为 NULL
   ua          TEXT,                              -- 完整 User-Agent
   ip          TEXT,                              -- 客户端 IP（来自 X-Forwarded-For / X-Real-IP）
   app_ver     TEXT,                              -- 主站版本（package.json.version）
@@ -45,6 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_failures_stage_ts ON failures(stage, ts);
 CREATE TABLE IF NOT EXISTS overview_daily_metrics (
   day                       INTEGER PRIMARY KEY,
   pv                        INTEGER NOT NULL DEFAULT 0,
+  pv_sleepno_cn             INTEGER NOT NULL DEFAULT 0,
+  pv_shiyinmp3_com          INTEGER NOT NULL DEFAULT 0,
   upload_files              INTEGER NOT NULL DEFAULT 0,
   upload_files_legacy       INTEGER NOT NULL DEFAULT 0,
   upload_reject             INTEGER NOT NULL DEFAULT 0,
@@ -71,6 +74,8 @@ CREATE TABLE IF NOT EXISTS overview_daily_visitors (
   device_type  TEXT    NOT NULL,
   has_ua       INTEGER NOT NULL DEFAULT 0,
   has_pageview INTEGER NOT NULL DEFAULT 0,
+  has_pageview_sleepno_cn    INTEGER NOT NULL DEFAULT 0,
+  has_pageview_shiyinmp3_com INTEGER NOT NULL DEFAULT 0,
   has_upload   INTEGER NOT NULL DEFAULT 0,
   has_convert  INTEGER NOT NULL DEFAULT 0,
   has_download INTEGER NOT NULL DEFAULT 0,

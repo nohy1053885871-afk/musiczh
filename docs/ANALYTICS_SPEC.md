@@ -15,10 +15,11 @@
 隔离，因此同一浏览器跨两个域名访问时通常会生成两个 `visitor_id` 和两套
 `session_id`。后台 UV 是数据库内 `visitor_id` 去重，不等于跨域自然人去重。
 
-当前事件只记录 pathname，没有稳定的站点 Host 维度；若未来需要按域名拆分流量，必须先
-设计可信来源字段并同步前端、Worker/后端、白名单和后台口径。当前访客来源分类还只把
-`sleepno.cn` 识别为“站内”，`shiyinmp3.com` 是待修兼容项。生产拓扑与完整边界见
-[ARCHITECTURE.md](ARCHITECTURE.md)。
+v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；API 优先用受信接入链路
+识别出的 Host 校正正式域名归属。后台首页可分别查看 `sleepno.cn`、`shiyinmp3.com` 与
+整体 PV/UV。更早的历史事件没有可信 Host，保持空值并只计入整体流量，不回填猜测值。
+当前访客来源分类仍只把 `sleepno.cn` 识别为“站内”，`shiyinmp3.com` 是待修兼容项。
+生产拓扑与完整边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ---
 
@@ -57,6 +58,7 @@
 | `visitor_id` | 浏览器维度 UUID（首次访问生成，存 `localStorage._sleepno_vid`） |
 | `session_id` | 会话 ID（30 分钟无活动重置） |
 | `page` | `location.pathname` |
+| `site_host` | **v0.8.8 起新增** · 当前页面 `location.hostname`；API 以受信 Cloudflare 转发 Host 或直接请求 Host 校正两个正式域名，旧事件允许为空 |
 | `app_ver` | 主站版本（来自 `package.json.version`，由 vite.config 注入） |
 | `ua` | 完整 User-Agent（后端补） |
 | `ip`  | 客户端 IP（后端从 `X-Forwarded-For` / `X-Real-IP` 取） |
@@ -115,7 +117,7 @@
 
 | 事件名 | 中文描述 | 触发位置（文件 : 行） | 主要字段 | 备注 |
 |---|---|---|---|---|
-| `pageview` | 主站 - 首屏访问 | [src/main.tsx](../src/main.tsx) `analytics.pageview()` | `page` | SDK 启动后调用一次 |
+| `pageview` | 主站 - 首屏访问 | [src/main.tsx](../src/main.tsx) `analytics.pageview()` | `page, site_host` | SDK 启动后调用一次；`site_host` 为所有事件共有字段 |
 | `upload_zone_click` | 主站 - 上传区 - 点击（含还没选择文件的纯点击） | [src/App.tsx](../src/App.tsx) `DropZone.onClick` | — | label 任意点击都会触发，配合 `upload_pick` 一起看 |
 | `upload_zone_view` | 主站 - 上传区 - 曝光 | [src/App.tsx](../src/App.tsx) `DropZone` ref | — | session 内只触发一次 |
 | `upload_drop` | 主站 - 上传区 - 拖拽文件松手 | [src/App.tsx](../src/App.tsx) `DropZone.onDrop` | `count, total_size` | 批量动作事件，文件级请看 `upload_attempt` |

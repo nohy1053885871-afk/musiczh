@@ -12,7 +12,13 @@ type MainRow = {
 }
 
 type StateRow = { success: number; failed: number; abandoned: number; pending: number }
-type TrendRow = Record<OverviewMetric, number> & { day: number }
+type TrendRow = Record<OverviewMetric, number> & {
+  day: number
+  pv_sleepno_cn: number
+  uv_sleepno_cn: number
+  pv_shiyinmp3_com: number
+  uv_shiyinmp3_com: number
+}
 type RawStatements = {
   main: Database.Statement; mainMax: Database.Statement
   states: Database.Statement; statesMax: Database.Statement
@@ -84,6 +90,12 @@ function buildTrendSql(withMaxId: boolean): string {
   return `SELECT ${DAY_BUCKET_SQL} AS day,
     SUM(event = 'pageview') AS pv,
     COUNT(DISTINCT CASE WHEN event = 'pageview' THEN visitor_id END) AS uv,
+    SUM(event = 'pageview' AND site_host = 'sleepno.cn') AS pv_sleepno_cn,
+    COUNT(DISTINCT CASE WHEN event = 'pageview' AND site_host = 'sleepno.cn'
+      THEN visitor_id END) AS uv_sleepno_cn,
+    SUM(event = 'pageview' AND site_host = 'shiyinmp3.com') AS pv_shiyinmp3_com,
+    COUNT(DISTINCT CASE WHEN event = 'pageview' AND site_host = 'shiyinmp3.com'
+      THEN visitor_id END) AS uv_shiyinmp3_com,
     COUNT(DISTINCT CASE WHEN event IN (${UPLOAD_EVENTS}) THEN visitor_id END) AS upload_uv,
     COUNT(DISTINCT CASE WHEN event IN (${DOWNLOAD_EVENTS}) THEN visitor_id END) AS download_uv,
     SUM(event IN ('upload_attempt','upload_reject')) AS upload_files,
@@ -167,6 +179,19 @@ export function computeRawBundle(db: Database.Database, request: BundleRequest):
       .map((metric) => [metric, trendRows.map((row) => ({ day: row.day, v: n(row[metric as OverviewMetric]) }))]),
   ) as OverviewBundle['timeseries']
   const trendMs = performance.now() - trendStarted
+  const traffic = {
+    overall: { pv: timeseries.pv, uv: timeseries.uv },
+    sites: {
+      'sleepno.cn': {
+        pv: trendRows.map((row) => ({ day: row.day, v: n(row.pv_sleepno_cn) })),
+        uv: trendRows.map((row) => ({ day: row.day, v: n(row.uv_sleepno_cn) })),
+      },
+      'shiyinmp3.com': {
+        pv: trendRows.map((row) => ({ day: row.day, v: n(row.pv_shiyinmp3_com) })),
+        uv: trendRows.map((row) => ({ day: row.day, v: n(row.uv_shiyinmp3_com) })),
+      },
+    },
+  }
 
   const deviceStarted = performance.now()
   const deviceRows = (withMaxId ? statements.devicesMax : statements.devices).all(...params) as Array<{ visitor_id: string; ua: string }>
@@ -196,6 +221,6 @@ export function computeRawBundle(db: Database.Database, request: BundleRequest):
   return {
     range: request.range, from: request.from, to: request.to,
     generated_at: Date.now(), data_source: 'raw', rollup_lag_ms: null,
-    overview, funnel, timeseries, devices: { combinations },
+    overview, funnel, timeseries, traffic, devices: { combinations },
   }
 }

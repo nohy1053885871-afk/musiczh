@@ -3,10 +3,11 @@ import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
-import { Button, Card, Col, Empty, Row, Segmented, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Col, Empty, Row, Segmented, Space, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type {
   DeviceCombination, FunnelResp, FunnelStep, OverviewBundleResp, OverviewMetricKey,
+  TrafficBreakdown,
 } from '../../lib/api'
 import { DataTableCard } from '../../components/biz/DataTableCard'
 import { DownloadCSVButton } from '../../components/biz/DownloadCSVButton'
@@ -20,6 +21,7 @@ type DeviceDimension = 'browser' | 'os' | 'device_type'
 type DeviceFilter = { dim: DeviceDimension; value: string } | null
 type DeviceRow = { dimension: string; name: string; n: number; pct: string }
 type SeriesMap = Partial<Record<MetricKey, Array<{ day: number; v: number }>>>
+type TrafficScope = 'overall' | 'sleepno.cn' | 'shiyinmp3.com'
 
 const FUNNEL_COLORS = ['#1677FF', '#722ED1', '#13C2C2', '#52C41A']
 const METRIC_OPTIONS: { v: MetricKey; label: string; color: string }[] = [
@@ -31,6 +33,15 @@ const METRIC_OPTIONS: { v: MetricKey; label: string; color: string }[] = [
   { v: 'decrypt_done', label: '解密成功', color: '#389E0D' },
   { v: 'decrypt_fail', label: '解密失败', color: '#F5222D' },
   { v: 'transcode_fail', label: '转码失败', color: '#FA541C' },
+]
+const TRAFFIC_OPTIONS: Array<{
+  value: TrafficScope
+  label: string
+  color: string
+}> = [
+  { value: 'overall', label: '整体流量', color: '#1677FF' },
+  { value: 'sleepno.cn', label: 'sleepno.cn', color: '#722ED1' },
+  { value: 'shiyinmp3.com', label: 'shiyinmp3.com', color: '#08979C' },
 ]
 const DIM_LABEL: Record<DeviceDimension, string> = {
   browser: '浏览器', os: '操作系统', device_type: '设备类型',
@@ -48,6 +59,9 @@ export function OverviewDetails({ bundle, loading }: {
   loading: boolean
 }) {
   const [funnelDim, setFunnelDim] = useState<FunnelDim>('user')
+  const [selectedTraffic, setSelectedTraffic] = useState<TrafficScope[]>(
+    TRAFFIC_OPTIONS.map((option) => option.value),
+  )
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>(['pv', 'uv'])
   const [deviceFilter, setDeviceFilter] = useState<DeviceFilter>(null)
   const timeseries = bundle?.timeseries
@@ -58,6 +72,15 @@ export function OverviewDetails({ bundle, loading }: {
     () => mergeMultiSeries(selectedMetrics, timeseries ?? {}, METRIC_OPTIONS),
     [selectedMetrics, timeseries],
   )
+  const trafficSeries = useMemo(
+    () => mergeTrafficSeries(selectedTraffic, bundle?.traffic),
+    [selectedTraffic, bundle?.traffic],
+  )
+  const toggleTraffic = (scope: TrafficScope) => {
+    setSelectedTraffic((current) => current.includes(scope)
+      ? current.filter((item) => item !== scope)
+      : [...current, scope])
+  }
   const toggleMetric = (metric: MetricKey) => {
     setSelectedMetrics((current) => current.includes(metric)
       ? current.filter((item) => item !== metric)
@@ -69,19 +92,50 @@ export function OverviewDetails({ bundle, loading }: {
 
   return (
     <>
-      <Card title="PV / UV 趋势">
-        <div style={{ width: '100%', height: 240 }}>
-          <ResponsiveContainer>
-            <LineChart data={mergeSeries(timeseries?.pv, timeseries?.uv, ['PV', 'UV'])}>
-              <CartesianGrid stroke="rgba(0,0,0,0.06)" />
-              <XAxis dataKey="day" tickFormatter={formatDay} fontSize={11} />
-              <YAxis fontSize={11} allowDecimals={false} />
-              <Tooltip labelFormatter={(value) => formatDay(value as number)} />
-              <Legend />
-              <Line type="monotone" dataKey="PV" stroke="#1677FF" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="UV" stroke="#52C41A" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+      <Card title="PV / UV 趋势" extra={(
+        <Text type="secondary" style={{ fontSize: 12 }}>实线 PV · 虚线 UV</Text>
+      )}>
+        <Space wrap size={[8, 8]} style={{ marginBottom: 8 }}>
+          {TRAFFIC_OPTIONS.map((option) => (
+            <Tag.CheckableTag
+              key={option.value}
+              checked={selectedTraffic.includes(option.value)}
+              onChange={() => toggleTraffic(option.value)}
+              style={selectedTraffic.includes(option.value)
+                ? { background: option.color, color: '#fff' }
+                : undefined}
+            >
+              {option.label}
+            </Tag.CheckableTag>
+          ))}
+        </Space>
+        <div style={{ marginBottom: 12 }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            分域曲线仅统计带 site_host 的新埋点；历史流量保留在整体曲线中，不回溯猜测域名。
+          </Text>
+        </div>
+        <div style={{ width: '100%', height: 260 }}>
+          {bundle && !bundle.traffic ? (
+            <Alert type="warning" showIcon message="后端尚未返回分域流量数据，请先更新 API" />
+          ) : selectedTraffic.length === 0 ? <Empty description="请选择至少一个流量标签" /> : (
+            <ResponsiveContainer>
+              <LineChart data={trafficSeries}>
+                <CartesianGrid stroke="rgba(0,0,0,0.06)" />
+                <XAxis dataKey="day" tickFormatter={formatDay} fontSize={11} />
+                <YAxis fontSize={11} allowDecimals={false} />
+                <Tooltip labelFormatter={(value) => formatDay(value as number)} />
+                {TRAFFIC_OPTIONS.filter((option) => selectedTraffic.includes(option.value))
+                  .flatMap((option) => [
+                    <Line key={`${option.value}-pv`} type="monotone"
+                      dataKey={trafficDataKey(option.value, 'pv')} name={`${option.label} PV`}
+                      stroke={option.color} strokeWidth={2} dot={false} />,
+                    <Line key={`${option.value}-uv`} type="monotone"
+                      dataKey={trafficDataKey(option.value, 'uv')} name={`${option.label} UV`}
+                      stroke={option.color} strokeWidth={2} strokeDasharray="6 4" dot={false} />,
+                  ])}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </Card>
 
@@ -216,16 +270,29 @@ function funnelStepsOf(funnel: FunnelResp | null, dimension: FunnelDim) {
   }))
 }
 
-function mergeSeries(a: Array<{ day: number; v: number }> | undefined,
-  b: Array<{ day: number; v: number }> | undefined, keys: [string, string]) {
+function mergeTrafficSeries(scopes: TrafficScope[], traffic: TrafficBreakdown | undefined) {
   const rows = new Map<number, { day: number; [key: string]: number }>()
-  for (const point of a ?? []) rows.set(point.day, { day: point.day, [keys[0]]: point.v, [keys[1]]: 0 })
-  for (const point of b ?? []) {
-    const row = rows.get(point.day) ?? { day: point.day, [keys[0]]: 0, [keys[1]]: 0 }
-    row[keys[1]] = point.v
-    rows.set(point.day, row)
+  for (const scope of scopes) {
+    const series = scope === 'overall' ? traffic?.overall : traffic?.sites[scope]
+    for (const metric of ['pv', 'uv'] as const) {
+      for (const point of series?.[metric] ?? []) {
+        const row = rows.get(point.day) ?? { day: point.day }
+        row[trafficDataKey(scope, metric)] = point.v
+        rows.set(point.day, row)
+      }
+    }
   }
-  return [...rows.values()].sort((aRow, bRow) => aRow.day - bRow.day)
+  return [...rows.values()].sort((aRow, bRow) => aRow.day - bRow.day).map((row) => {
+    for (const scope of scopes) {
+      row[trafficDataKey(scope, 'pv')] ??= 0
+      row[trafficDataKey(scope, 'uv')] ??= 0
+    }
+    return row
+  })
+}
+
+function trafficDataKey(scope: TrafficScope, metric: 'pv' | 'uv') {
+  return `${scope.replace(/[^a-z0-9]+/g, '_')}_${metric}`
 }
 
 function mergeMultiSeries(metrics: MetricKey[], byMetric: SeriesMap,

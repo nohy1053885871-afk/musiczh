@@ -25,6 +25,7 @@ export function compareOverviewBundles(raw: OverviewBundle, rollup: OverviewBund
   check('funnel.user.steps', raw.funnel.user.steps, rollup.funnel.user.steps)
   check('funnel.file.steps', raw.funnel.file.steps, rollup.funnel.file.steps)
   check('timeseries', raw.timeseries, rollup.timeseries)
+  check('traffic', raw.traffic, rollup.traffic)
   check('devices.combinations', stableCombinations(raw), stableCombinations(rollup))
   return mismatches
 }

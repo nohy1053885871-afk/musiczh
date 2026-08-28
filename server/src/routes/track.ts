@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import db from '../db.js'
 import { getClientIp } from '../middleware/ratelimit.js'
+import { getTrustedProxyClientIp } from '../middleware/cloudflareOrigin.js'
+import { resolveEventSiteHost } from '../lib/siteHost.js'
 
 // 业务字段白名单（与 docs/ANALYTICS_SPEC.md 保持一致）
 const ALLOWED_PROPS = new Set([
@@ -47,6 +49,7 @@ const EventSchema = z.object({
   visitor_id: z.string().min(8).max(64),
   session_id: z.string().min(4).max(64),
   page: z.string().max(256).optional(),
+  site_host: z.string().min(1).max(253).optional(),
   app_ver: z.string().max(32).optional(),
   props: z.record(z.unknown()).optional(),
   failure: FailureSchema.optional(),
@@ -57,8 +60,10 @@ const PayloadSchema = z.object({
 })
 
 const insertEvent = db.prepare(`
-  INSERT INTO events (ts, event, visitor_id, session_id, page, ua, ip, app_ver, props)
-  VALUES (@ts, @event, @visitor_id, @session_id, @page, @ua, @ip, @app_ver, @props)
+  INSERT INTO events
+    (ts, event, visitor_id, session_id, page, site_host, ua, ip, app_ver, props)
+  VALUES
+    (@ts, @event, @visitor_id, @session_id, @page, @site_host, @ua, @ip, @app_ver, @props)
 `)
 const insertFailure = db.prepare(`
   INSERT INTO failures (ts, visitor_id, stage, error_code, error_msg, error_stack,
@@ -97,6 +102,7 @@ trackRouter.post('/', async (c) => {
 
   const ua = c.req.header('user-agent') ?? null
   const ip = getClientIp(c)
+  const trustForwardedHost = getTrustedProxyClientIp(c) !== null
 
   const rows = parsed.data.events.map((ev) => {
     // props 白名单过滤
@@ -112,6 +118,12 @@ trackRouter.post('/', async (c) => {
       visitor_id: ev.visitor_id,
       session_id: ev.session_id,
       page: ev.page ?? null,
+      site_host: resolveEventSiteHost({
+        requestHost: c.req.header('host'),
+        forwardedHost: c.req.header('x-forwarded-host'),
+        trustForwardedHost,
+        reportedHost: ev.site_host,
+      }),
       ua,
       ip,
       app_ver: ev.app_ver ?? null,
