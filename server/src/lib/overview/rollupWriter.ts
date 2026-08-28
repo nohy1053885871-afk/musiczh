@@ -8,6 +8,7 @@ export type RollupEventRow = {
   ts: number
   event: string
   visitor_id: string
+  site_host: string | null
   ua: string | null
   props: string | null
   file_id: string | null
@@ -16,6 +17,8 @@ export type RollupEventRow = {
 export type DailyMetrics = {
   day: number
   pv: number
+  pv_sleepno_cn: number
+  pv_shiyinmp3_com: number
   upload_files: number
   upload_files_legacy: number
   upload_reject: number
@@ -41,6 +44,8 @@ export type DailyVisitor = {
   device_type: string
   has_ua: number
   has_pageview: number
+  has_pageview_sleepno_cn: number
+  has_pageview_shiyinmp3_com: number
   has_upload: number
   has_convert: number
   has_download: number
@@ -50,7 +55,8 @@ type FileUpdate = { file_id: string; upload_ts: number | null; status: string; u
 type FileUpload = { upload_event_id: number; file_id: string; upload_ts: number }
 
 const METRIC_COLUMNS = [
-  'pv', 'upload_files', 'upload_files_legacy', 'upload_reject', 'dismissed_files',
+  'pv', 'pv_sleepno_cn', 'pv_shiyinmp3_com',
+  'upload_files', 'upload_files_legacy', 'upload_reject', 'dismissed_files',
   'decrypt_done', 'decrypt_fail', 'transcode_done', 'transcode_fail',
   'raw_transcode_done', 'raw_transcode_fail', 'decrypt_abandon', 'transcode_abandon',
   'legacy_files', 'download_done',
@@ -63,7 +69,8 @@ const DOWNLOAD_EVENTS = new Set([
 
 function emptyMetrics(day: number): DailyMetrics {
   return {
-    day, pv: 0, upload_files: 0, upload_files_legacy: 0, upload_reject: 0,
+    day, pv: 0, pv_sleepno_cn: 0, pv_shiyinmp3_com: 0,
+    upload_files: 0, upload_files_legacy: 0, upload_reject: 0,
     dismissed_files: 0, decrypt_done: 0, decrypt_fail: 0, transcode_done: 0,
     transcode_fail: 0, raw_transcode_done: 0, raw_transcode_fail: 0,
     decrypt_abandon: 0, transcode_abandon: 0, legacy_files: 0, download_done: 0,
@@ -105,7 +112,11 @@ export function aggregateRollupRows(rows: RollupEventRow[]) {
     const metric = metrics.get(day) ?? emptyMetrics(day)
     metrics.set(day, metric)
 
-    if (row.event === 'pageview') metric.pv += 1
+    if (row.event === 'pageview') {
+      metric.pv += 1
+      if (row.site_host === 'sleepno.cn') metric.pv_sleepno_cn += 1
+      if (row.site_host === 'shiyinmp3.com') metric.pv_shiyinmp3_com += 1
+    }
     if (row.event === 'upload_attempt' || row.event === 'upload_reject') metric.upload_files += 1
     if (row.event === 'upload_drop' || row.event === 'upload_pick') {
       const count = Number(props.count)
@@ -136,7 +147,8 @@ export function aggregateRollupRows(rows: RollupEventRow[]) {
       day, visitor_id: row.visitor_id, last_ts: row.ua ? row.ts : 0,
       browser: parsed.browser, os: parsed.os, device_type: parsed.device_type,
       has_ua: row.ua ? 1 : 0,
-      has_pageview: 0, has_upload: 0, has_convert: 0, has_download: 0,
+      has_pageview: 0, has_pageview_sleepno_cn: 0, has_pageview_shiyinmp3_com: 0,
+      has_upload: 0, has_convert: 0, has_download: 0,
     }
     if (row.ua && row.ts >= visitor.last_ts) {
       visitor.last_ts = row.ts
@@ -145,7 +157,11 @@ export function aggregateRollupRows(rows: RollupEventRow[]) {
       visitor.device_type = parsed.device_type
       visitor.has_ua = 1
     }
-    if (row.event === 'pageview') visitor.has_pageview = 1
+    if (row.event === 'pageview') {
+      visitor.has_pageview = 1
+      if (row.site_host === 'sleepno.cn') visitor.has_pageview_sleepno_cn = 1
+      if (row.site_host === 'shiyinmp3.com') visitor.has_pageview_shiyinmp3_com = 1
+    }
     if (UPLOAD_EVENTS.has(row.event)) visitor.has_upload = 1
     if (row.event === 'decrypt_done' || (row.event === 'transcode_done' && props.source == null)) {
       visitor.has_convert = 1
@@ -203,7 +219,7 @@ export function processRollupBatch(
     ? [state.last_event_id, batchSize]
     : [state.last_event_id, options.maxEventId, batchSize]
   const rows = db.prepare(
-    `SELECT id, ts, event, visitor_id, ua, props, file_id
+    `SELECT id, ts, event, visitor_id, site_host, ua, props, file_id
        FROM events WHERE id > ? ${maxClause} ORDER BY id LIMIT ?`,
   ).all(...params) as RollupEventRow[]
 
@@ -225,9 +241,11 @@ export function processRollupBatch(
   const upsertVisitor = db.prepare(
     `INSERT INTO overview_daily_visitors
        (day, visitor_id, last_ts, browser, os, device_type, has_ua,
-        has_pageview, has_upload, has_convert, has_download)
+        has_pageview, has_pageview_sleepno_cn, has_pageview_shiyinmp3_com,
+        has_upload, has_convert, has_download)
      VALUES (@day, @visitor_id, @last_ts, @browser, @os, @device_type, @has_ua,
-             @has_pageview, @has_upload, @has_convert, @has_download)
+             @has_pageview, @has_pageview_sleepno_cn, @has_pageview_shiyinmp3_com,
+             @has_upload, @has_convert, @has_download)
      ON CONFLICT(day, visitor_id) DO UPDATE SET
        browser = CASE WHEN excluded.last_ts >= last_ts THEN excluded.browser ELSE browser END,
        os = CASE WHEN excluded.last_ts >= last_ts THEN excluded.os ELSE os END,
@@ -235,6 +253,8 @@ export function processRollupBatch(
        last_ts = MAX(last_ts, excluded.last_ts),
        has_ua = MAX(has_ua, excluded.has_ua),
        has_pageview = MAX(has_pageview, excluded.has_pageview),
+       has_pageview_sleepno_cn = MAX(has_pageview_sleepno_cn, excluded.has_pageview_sleepno_cn),
+       has_pageview_shiyinmp3_com = MAX(has_pageview_shiyinmp3_com, excluded.has_pageview_shiyinmp3_com),
        has_upload = MAX(has_upload, excluded.has_upload),
        has_convert = MAX(has_convert, excluded.has_convert),
        has_download = MAX(has_download, excluded.has_download)`,

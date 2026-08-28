@@ -11,7 +11,7 @@
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
 - 阿里云运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.7（运营后台 v0.4.19，API v0.4.12）
+- 当前开发版本：v0.8.8（运营后台 v0.4.20，API v0.4.13）
 - 当前生产版本：Cloudflare/阿里云主站 v0.8.7 · 运营后台 v0.4.19 · API v0.4.12
 - 上线状态：Cloudflare/阿里云用户端 v0.8.7 ✅ · Cloudflare/阿里云运营后台 v0.4.19 ✅ · API v0.4.12 ✅
 

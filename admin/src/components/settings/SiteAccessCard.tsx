@@ -46,7 +46,7 @@ function errorCopy(error: unknown): string {
   switch (apiErrorCode(error)) {
     case 'duplicate_ip': return '该 IP 已在访问规则中，请直接移动现有规则'
     case 'invalid_ip': return '请输入不带端口或网段的精确 IPv4 / IPv6 地址'
-    case 'current_ip_not_allowed': return '当前 IP 不在白名单，无法开启限制模式'
+    case 'current_ip_not_allowed': return '当前 IP 不在 sleepno.cn 白名单，无法开启限制模式'
     case 'current_ip_unavailable': return '服务器未能识别当前 IP，无法执行该操作'
     case 'current_ip_protected': return '当前 IP 不能直接删除'
     case 'reserved_ip': return '服务器回环地址由系统保留，不能配置访问规则'
@@ -129,7 +129,7 @@ export function SiteAccessCard() {
           rule: activeRule,
           note: note.trim() || null,
         }),
-        activeRule === 'allow' ? '已加入白名单' : '已加入黑名单',
+        activeRule === 'allow' ? '已加入 sleepno.cn 白名单' : '已加入 sleepno.cn 黑名单',
       )
       setAddress('')
       setNote('')
@@ -142,7 +142,7 @@ export function SiteAccessCard() {
     const save = () => run(
       'mode',
       () => api.updateSiteAccessMode(enabled),
-      enabled ? '白名单限制模式已开启' : '白名单限制模式已关闭；黑名单仍然生效',
+      enabled ? 'sleepno.cn 白名单限制模式已开启' : 'sleepno.cn 白名单限制模式已关闭；黑名单仍然生效',
     ).catch(() => undefined)
     if (!enabled) {
       void save()
@@ -150,7 +150,7 @@ export function SiteAccessCard() {
     }
     modal.confirm({
       title: '确认开启白名单限制模式？',
-      content: '开启后，公开主站只允许白名单 IP；黑名单仍始终拒绝。运营后台和健康检查不受影响。',
+      content: '开启后，仅 sleepno.cn 的公开主站允许白名单 IP；shiyinmp3.com 不受此配置影响。sleepno.cn 的运营后台和健康检查仍不受限制。',
       okText: '确认开启',
       cancelText: '取消',
       onOk: save,
@@ -165,10 +165,10 @@ export function SiteAccessCard() {
         ? isCurrent ? '确认禁止当前 IP？' : '确认移入黑名单？'
         : '确认恢复访问？',
       content: nextRule === 'deny' && isCurrent
-        ? '公开主站会立即对当前网络返回 403；运营后台仍可访问，可在这里恢复。'
+        ? 'sleepno.cn 公开主站会立即对当前网络返回 403；运营后台仍可访问，可在这里恢复。'
         : nextRule === 'deny'
-          ? `${rule.address} 将立即无法访问公开主站。`
-          : `${rule.address} 将移回白名单；是否能访问还取决于白名单限制模式。`,
+          ? `${rule.address} 将立即无法访问 sleepno.cn 公开主站。`
+          : `${rule.address} 将移回 sleepno.cn 白名单；是否能访问还取决于白名单限制模式。`,
       okText: nextRule === 'deny' ? '确认禁止' : '恢复访问',
       okButtonProps: { danger: nextRule === 'deny' },
       cancelText: '取消',
@@ -178,7 +178,7 @@ export function SiteAccessCard() {
           rule: nextRule,
           confirmCurrentIp: isCurrent && nextRule === 'deny',
         }),
-        nextRule === 'deny' ? '已移入黑名单' : '已移入白名单',
+        nextRule === 'deny' ? '已移入 sleepno.cn 黑名单' : '已移入 sleepno.cn 白名单',
       ).catch(() => undefined),
     })
   }
@@ -251,7 +251,7 @@ export function SiteAccessCard() {
   ]
 
   return (
-    <Card title="公开站点访问控制" loading={loading}>
+    <Card title="公开站点访问控制（仅 sleepno.cn）" loading={loading}>
       {loadError && (
         <Alert type="error" showIcon message="访问配置加载失败" description="当前状态未知，为避免误操作已禁用控制。" action={<Button size="small" onClick={() => void load()}>重试</Button>} />
       )}
@@ -261,12 +261,12 @@ export function SiteAccessCard() {
           <Alert
             type={state.enabled ? 'warning' : 'info'}
             showIcon
-            message={state.enabled ? '白名单限制模式已开启' : '白名单限制模式未开启'}
-            description="黑名单始终生效，不受白名单限制开关影响。运营后台与健康检查不在限制范围内。"
+            message={state.enabled ? 'sleepno.cn 白名单限制模式已开启' : 'sleepno.cn 白名单限制模式未开启'}
+            description="本配置仅限制 sleepno.cn；shiyinmp3.com 当前不受白名单和黑名单规则影响。sleepno.cn 的运营后台与健康检查仍不受限制。"
           />
           <Space size="middle" wrap>
             <Switch checked={state.enabled} loading={busy === 'mode'} disabled={busy !== null} checkedChildren="限制" unCheckedChildren="开放" onChange={changeMode} />
-            <Text>{state.enabled ? '公开站点仅允许白名单' : '公开站点默认开放'}</Text>
+            <Text>{state.enabled ? 'sleepno.cn 仅允许白名单' : 'sleepno.cn 默认开放'}</Text>
             <Text type="secondary" style={{ fontSize: 12 }}>更新于 {formatTime(state.updatedAt)}</Text>
           </Space>
           <Space size="small" wrap>

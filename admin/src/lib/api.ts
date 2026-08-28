@@ -338,6 +338,19 @@ export type DeviceCombination = {
   n: number
 }
 
+export type TrafficSeries = {
+  pv: Array<{ day: number; v: number }>
+  uv: Array<{ day: number; v: number }>
+}
+
+export type TrafficBreakdown = {
+  overall: TrafficSeries
+  sites: {
+    'sleepno.cn': TrafficSeries
+    'shiyinmp3.com': TrafficSeries
+  }
+}
+
 export type OverviewBundleResp = {
   range: string
   from: number
@@ -348,6 +361,7 @@ export type OverviewBundleResp = {
   overview: OverviewResp
   funnel: FunnelResp
   timeseries: Record<OverviewMetricKey, Array<{ day: number; v: number }>>
+  traffic: TrafficBreakdown
   devices: { combinations: DeviceCombination[] }
 }
 

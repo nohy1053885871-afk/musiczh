@@ -99,8 +99,9 @@ fallback。API 代理失败必须返回明确的 502/503/504，不能回退成 `
 - 主站 SDK 使用相对地址 `/api/track`，事件由当前域名的同源 API 入口送入同一 SQLite。
 - `visitor_id` 存在 `localStorage._sleepno_vid`，`session_id` 和重试队列也按 Origin
   隔离。上线双域名后，后台汇总的总 UV 是“各域名浏览器 ID 的并集”，不是自然人去重。
-- 当前事件没有独立的 `site_host` 字段，`page` 只记录 pathname。若未来需要按域名拆分数据，
-  应先设计并登记来源字段或由可信接入层补充，不能从现有记录稳定反推。
+- v0.8.8 起事件带独立 `site_host` 公共字段，API 以受信接入层 Host 校正两个正式域名；
+  首页可展示整体、`sleepno.cn` 和 `shiyinmp3.com` 的 PV/UV。更早历史事件保持空值，
+  只计入整体流量，不能稳定反推域名。
 - `document.referrer` 仍会随 `pageview` 上报。当前后台“站内”来源分类只识别
   `sleepno.cn`；来自 `shiyinmp3.com` 的站内跳转可能被归到“外部网站”。这是已知兼容债，
   应在下一次后端功能发布前修正并补测试。
@@ -215,7 +216,7 @@ dispatch 后端部署。实际命令、Secret 名和恢复步骤以本地 `DEPLO
 | 项目 | 当前影响 | 下次处理触发点 |
 |---|---|---|
 | Cloudflare 没有可读取的 `.deploy-manifest.json` | 公网只能核对资源，不能独立确认发布 commit | 下次改 Cloudflare 发布链路时补 manifest 或等价版本元数据 |
-| 事件没有 `site_host` | 同库数据不能稳定按正式域名拆分 | 出现分域统计需求时先设计可信字段和历史口径 |
+| 历史事件没有 `site_host` | v0.8.8 前流量只能计入整体曲线，不能回溯拆分 | 保持空值，不按域名上线时间或 referrer 猜测回填 |
 | “站内来源”只识别 `sleepno.cn` | 新域名 referrer 可能被归为“外部网站” | 下一次后端功能发布前修复并补测试 |
 | `www` Redirect Rule 和 Tunnel ingress 是控制台状态 | 仅从 git 无法完整重建 | 每次域名/路由变更后导出或人工复核并记录证据 |
 | QQ 安装包只在阿里云入口可用 | Cloudflare 用户看到降级 Toast | 项目主确定独立方案后单独设计和迁移 |

@@ -2,6 +2,8 @@
 // 设计与字段规范见 docs/ANALYTICS_SPEC.md
 // 隐私底线：仅上报元数据（含完整 file.name 与 file.size），严禁读取或上传文件二进制内容
 
+import { currentSiteHost } from './analytics-context'
+
 const TRACK_URL = '/api/track'
 const VID_KEY = '_sleepno_vid'
 const SESS_KEY = '_sleepno_sess'
@@ -39,6 +41,7 @@ type EventEnvelope = {
   visitor_id: string
   session_id: string
   page: string
+  site_host: string
   app_ver: string
   props?: Props
   failure?: FailurePayload
@@ -142,6 +145,7 @@ function envelope(event: string, props?: Props, failure?: FailurePayload): Event
     visitor_id: getVisitorId(),
     session_id: getSession(),
     page: typeof location !== 'undefined' ? location.pathname : '/',
+    site_host: currentSiteHost(),
     app_ver: APP_VER,
     props,
     failure,
