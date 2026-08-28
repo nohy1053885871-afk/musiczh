@@ -95,6 +95,10 @@ npm run build:cloudflare # Cloudflare 用户端 + dist/admin/ + /api Worker
 和同一份 SQLite，但登录 Cookie、浏览器访客 ID、静态部署和接入层访问控制互相独立。
 完整边界见 [生产架构](docs/ARCHITECTURE.md)。
 
+两个正式域名默认属于同一个发布单元：普通“上线/发布”必须从同一提交更新两边，并保持
+产品功能、交互、文案、版本和 API 行为一致；只有项目主明确指定时才允许单域名例外。
+两边都部署并验收通过后，发布才算完成。
+
 ### 服务器目录布局
 
 | 路径 | 内容 |
