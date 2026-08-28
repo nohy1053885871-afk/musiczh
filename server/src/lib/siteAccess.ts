@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import db from '../db.js'
 
 export const SITE_ACCESS_RESTRICTED_KEY = 'site_access_restricted'
+export const SITE_ACCESS_RESTRICTED_MESSAGE_KEY = 'site_access_restricted_message'
 
 export type SiteAccessRuleKind = 'allow' | 'deny'
 
@@ -21,6 +22,12 @@ export type SiteAccessSnapshot = {
   updatedAt: number | null
   allowedIps: SiteAccessRule[]
   blockedIps: SiteAccessRule[]
+  restrictedPage: RestrictedPageConfig
+}
+
+export type RestrictedPageConfig = {
+  message: string | null
+  updatedAt: number | null
 }
 
 export type RulePatch = {
@@ -75,6 +82,13 @@ export function normalizeOptionalNote(note: string | null | undefined): string |
   return normalized.length > 0 ? normalized : null
 }
 
+export function normalizeRestrictedMessage(message: string | null | undefined): string | null {
+  if (message === null || message === undefined) return null
+  const normalized = message.trim()
+  if (normalized.length > 200) throw new SiteAccessError('invalid_restricted_message')
+  return normalized.length > 0 ? normalized : null
+}
+
 export function isLoopbackIp(address: string): boolean {
   return address === '127.0.0.1' || address === '::1'
 }
@@ -114,6 +128,22 @@ export function createSiteAccessStore(database: Database.Database) {
     }
   }
 
+  const getRestrictedPageConfig = (): RestrictedPageConfig => {
+    const row = database
+      .prepare(
+        `SELECT value, updated_at FROM feature_flags
+         WHERE key = ?`,
+      )
+      .get(SITE_ACCESS_RESTRICTED_MESSAGE_KEY) as
+      { value: string; updated_at: number } | undefined
+    let message: string | null = null
+    try { message = normalizeRestrictedMessage(row?.value) } catch { /* invalid DB value stays hidden */ }
+    return {
+      message,
+      updatedAt: row?.updated_at ?? null,
+    }
+  }
+
   const snapshot = (currentIp: string | null): SiteAccessSnapshot => {
     const rows = database
       .prepare(
@@ -138,6 +168,7 @@ export function createSiteAccessStore(database: Database.Database) {
       currentIp,
       allowedIps: rules.filter((rule) => rule.rule === 'allow'),
       blockedIps: rules.filter((rule) => rule.rule === 'deny'),
+      restrictedPage: getRestrictedPageConfig(),
     }
   }
 
@@ -240,6 +271,23 @@ export function createSiteAccessStore(database: Database.Database) {
     return snapshot(currentIp)
   }
 
+  const saveRestrictedPage = database.prepare(
+    `INSERT INTO feature_flags (key, value, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET
+       value = excluded.value,
+       updated_at = excluded.updated_at`,
+  )
+
+  const setRestrictedPageConfig = (
+    messageInput: string | null,
+    currentIp: string | null,
+  ): SiteAccessSnapshot => {
+    const message = normalizeRestrictedMessage(messageInput)
+    saveRestrictedPage.run(SITE_ACCESS_RESTRICTED_MESSAGE_KEY, message ?? '', Date.now())
+    return snapshot(currentIp)
+  }
+
   const isAllowed = (addressInput: string | null): boolean => {
     if (!addressInput) return false
     const address = normalizeIpAddress(addressInput)
@@ -258,6 +306,8 @@ export function createSiteAccessStore(database: Database.Database) {
     deleteRule,
     setMode,
     isAllowed,
+    getRestrictedPageConfig,
+    setRestrictedPageConfig,
   }
 }
 

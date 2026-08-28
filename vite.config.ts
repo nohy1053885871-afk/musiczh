@@ -32,7 +32,11 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy: {
-        '/api': 'http://127.0.0.1:8787',
+        // 本地并行验收可覆盖 API 端口，并固定一个文档专用测试 IP 供受限页指标验收。
+        '/api': {
+          target: `http://127.0.0.1:${process.env.USER_API_PORT ?? 8787}`,
+          headers: { 'X-Real-IP': '192.0.2.20' },
+        },
       },
     },
   }

@@ -149,7 +149,12 @@ VALUES (
   'false',
   CAST(strftime('%s', 'now') AS INTEGER) * 1000
 );
-
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
+  'site_access_restricted_message',
+  '',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+);
 -- 公开站点 IP 访问规则。同一规范化地址只能属于白名单或黑名单之一。
 CREATE TABLE IF NOT EXISTS site_access_ip_rules (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,3 +166,16 @@ CREATE TABLE IF NOT EXISTS site_access_ip_rules (
 );
 CREATE INDEX IF NOT EXISTS idx_site_access_ip_rules_rule
   ON site_access_ip_rules(rule);
+
+-- 受限页独立服务端埋点。不得写入通用 events，以免污染主站 UV / 设备 / 访客口径。
+CREATE TABLE IF NOT EXISTS site_access_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts         INTEGER NOT NULL,
+  event      TEXT NOT NULL CHECK (event = 'restricted_page_view'),
+  ip         TEXT,
+  ua         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_site_access_events_event_ts
+  ON site_access_events(event, ts);
+CREATE INDEX IF NOT EXISTS idx_site_access_events_ts
+  ON site_access_events(ts);

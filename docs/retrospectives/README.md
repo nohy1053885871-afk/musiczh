@@ -10,6 +10,7 @@
 
 | # | 主题 | 日期 | 文件 |
 |---|---|---|---|
+| #16 | v0.8.9 受限页辅助文案与独立曝光埋点 | 2026-08-29 | [16-v0.8.9-restricted-page-assist-20260829.md](16-v0.8.9-restricted-page-assist-20260829.md) |
 | #15 | Cloudflare API、运营后台与阿里云 Tunnel 上线 | 2026-08-28 | [15-cloudflare-api-admin-tunnel-20260828.md](15-cloudflare-api-admin-tunnel-20260828.md) |
 | #14 | Cloudflare 正式域名与双构建上线 | 2026-08-27 | [14-cloudflare-formal-launch-20260827.md](14-cloudflare-formal-launch-20260827.md) |
 | #13 | v0.8.6 IP 访问控制与 SEO 宣传清理（本地验收） | 2026-08-26 | [13-v0.8.6-site-access-seo-cleanup-20260826.md](13-v0.8.6-site-access-seo-cleanup-20260826.md) |

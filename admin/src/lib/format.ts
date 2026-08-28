@@ -1,6 +1,7 @@
 // 事件名 → 中文描述（与 docs/ANALYTICS_SPEC.md 保持一致）
 export const EVENT_LABELS: Record<string, string> = {
   pageview: '主站 - 首屏访问',
+  restricted_page_view: '受限页 - 页面访问',
 
   upload_zone_click: '主站 - 上传区 - 点击（含还没选择文件的点击）',
   upload_zone_view:  '主站 - 上传区 - 曝光（首次进入视口）',

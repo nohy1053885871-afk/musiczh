@@ -39,11 +39,16 @@ export function OverviewPage() {
   }, [rq])
 
   useEffect(() => {
-    void loadBundle(false)
-    return () => requestRef.current?.abort()
+    const timer = window.setTimeout(() => { void loadBundle(false) }, 0)
+    return () => {
+      window.clearTimeout(timer)
+      requestRef.current?.abort()
+    }
   }, [loadBundle])
 
   const overview = bundle?.overview ?? null
+  const siteAccess = bundle?.site_access ?? null
+  const siteAccessUnavailable = bundle !== null && bundle.site_access === undefined
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
@@ -315,6 +320,28 @@ export function OverviewPage() {
       </Row>
 
       <OverviewDetails bundle={bundle} loading={loading} />
+
+      <Card
+        title="受限页访问"
+        extra={<Text type="secondary" style={{ fontSize: 12 }}>独立服务端口径，不计入主站 PV / UV</Text>}
+      >
+        {siteAccessUnavailable && (
+          <Alert
+            type="warning"
+            showIcon
+            message="受限页指标接口不可用，请确认 API v0.4.14 已部署"
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        <Row gutter={[16, 16]}>
+          <Col xs={12} md={12}>
+            <Statistic title="受限页曝光（PV）" value={siteAccess?.views ?? '-'} />
+          </Col>
+          <Col xs={12} md={12}>
+            <Statistic title="受限 IP 数" value={siteAccess?.uniqueIps ?? '-'} />
+          </Col>
+        </Row>
+      </Card>
     </div>
   )
 }
