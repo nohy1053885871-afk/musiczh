@@ -98,7 +98,7 @@
 - CI run `33247803403`、阿里云前端 run `33247855431`、Cloudflare 校验 run `33247855479`、API run `33247879529`、首次 Tunnel 配置 run `33247932526` 全部成功。
 - 初始 Cloudflare Worker 版本为 `78ed84ba-510d-4898-a0ba-5c6d3ce9ca3f`；源站密钥轮换后的 Worker Secret 版本为 `8ccc0b87-30d8-41cd-b7a1-5d50874d548d`，对应部署 ID `895f9fd2-25bc-475b-970b-b33627008344`。
 - 项目主批准立即轮换 Tunnel Token 与源站 Token，并接受切换期间 API 短暂不可用。Tunnel Token 第一次刷新后的安装 run `33255895241`、`33256173214` 失败并自动回滚；第二枚权威 Token 已确认能建立 QUIC 连接，但 run `33256811148` 暴露 `systemctl enable --now` 不会重启已运行服务。生产已显式重启恢复，源站 Token 配置 run `33257123548` 成功，最终 Tunnel 状态为 `healthy`。
-- 部署脚本已改为 `systemctl enable` 后显式 `systemctl restart`，避免更新 Token 时旧进程继续持有旧配置；修复后的 workflow 分支复验将在发布收尾 PR 内补记。
+- 部署脚本已改为 `systemctl enable` 后显式 `systemctl restart`，避免更新 Token 时旧进程继续持有旧配置；修复后的分支 workflow run `33257912598` 在 40 秒内完成安装、重启、匿名 403、授权健康检查与服务状态检查，全部成功。
 - 最终生产 smoke：双域名 `/api/health` 为 200，双域名 `/api/config` 为 200、`Cache-Control: no-store` 且 `homepageAnnouncement: null`；`origin.shiyinmp3.com` 匿名健康检查为 403。
 - 发布后收尾检查一度发现 `sleepno.cn` 公告被开启；已在不改正文的前提下把两个域名开关原子设为关闭并从公网复验。为该两行配置修改启动的临时在线备份面对 5.4GB 数据库造成额外负载，停止并删除不完整副本后服务恢复；正式每日备份未修改。
 - 生产浏览器交互验收因应用安全策略拒绝导航而未完成；本地桌面/窄屏视觉、生产静态版本清单、双域名 API 与源站保护均已验证，不把后者冒充线上视觉验收。
