@@ -1,6 +1,6 @@
 {
   "name": "musiczh-server",
-  "version": "0.4.14",
+  "version": "0.4.15",
   "description": "拾音运营后台 - 后端 API（Hono + SQLite）",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "test:overview": "tsx --test src/lib/overview/*.test.ts",
     "test:feature-flags": "tsx --test src/lib/featureFlags.test.ts src/routes/featureFlags.test.ts",
     "test:site-access": "tsx --test src/routes/siteAccess.test.ts src/routes/restrictedPage.test.ts",
-    "test:site-host": "tsx --test src/lib/siteHost.test.ts",
+    "test:site-host": "tsx --test src/lib/siteHost.test.ts src/lib/channel.test.ts",
     "test:cloudflare-origin": "tsx --test src/middleware/cloudflareOrigin.test.ts"
   },
   "dependencies": {

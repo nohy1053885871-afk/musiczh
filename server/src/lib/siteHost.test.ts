@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { normalizeSiteHost, resolveEventSiteHost } from './siteHost.js'
+import {
+  normalizeSiteHost,
+  resolveEventSiteHost,
+  resolveHomepageAnnouncementSiteHost,
+} from './siteHost.js'
 
 test('normalizes host names and ports', () => {
   assert.equal(normalizeSiteHost(' ShiyinMP3.com:443 '), 'shiyinmp3.com')
@@ -39,4 +43,42 @@ test('keeps a non-production reported host for local diagnostics', () => {
     trustForwardedHost: false,
     reportedHost: 'localhost',
   }), 'localhost')
+})
+
+test('resolves homepage announcement host from direct and trusted ingress', () => {
+  assert.equal(resolveHomepageAnnouncementSiteHost({
+    requestHost: 'sleepno.cn',
+    forwardedHost: null,
+    trustForwardedHost: false,
+  }), 'sleepno.cn')
+  assert.equal(resolveHomepageAnnouncementSiteHost({
+    requestHost: 'origin.shiyinmp3.com',
+    forwardedHost: 'shiyinmp3.com',
+    trustForwardedHost: true,
+  }), 'shiyinmp3.com')
+})
+
+test('maps Cloudflare aliases and keeps unknown production hosts closed', () => {
+  for (const alias of [
+    'www.shiyinmp3.com',
+    'preview.shiyinmp3.com',
+    'shiyinmp3.musiczh.workers.dev',
+  ]) {
+    assert.equal(resolveHomepageAnnouncementSiteHost({
+      requestHost: alias,
+      forwardedHost: null,
+      trustForwardedHost: false,
+    }), 'shiyinmp3.com')
+  }
+  assert.equal(resolveHomepageAnnouncementSiteHost({
+    requestHost: 'unknown.example',
+    forwardedHost: null,
+    trustForwardedHost: false,
+  }), null)
+  assert.equal(resolveHomepageAnnouncementSiteHost({
+    requestHost: 'localhost:8787',
+    forwardedHost: null,
+    trustForwardedHost: false,
+    allowLocalFallback: true,
+  }), 'shiyinmp3.com')
 })

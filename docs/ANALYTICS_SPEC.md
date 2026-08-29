@@ -18,7 +18,7 @@
 v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；API 优先用受信接入链路
 识别出的 Host 校正正式域名归属。后台首页可分别查看 `sleepno.cn`、`shiyinmp3.com` 与
 整体 PV/UV。更早的历史事件没有可信 Host，保持空值并只计入整体流量，不回填猜测值。
-当前访客来源分类仍只把 `sleepno.cn` 识别为“站内”，`shiyinmp3.com` 是待修兼容项。
+访客来源分类同时把 `sleepno.cn`、`shiyinmp3.com` 及其子域名识别为“站内”。
 生产拓扑与完整边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ---
@@ -170,6 +170,9 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 | `download_help_entry_view` / `download_help_entry_click` | **v0.8.3** 主站 - 拖拽区下方下载帮助入口 | [src/components/download-help.tsx](../src/components/download-help.tsx) `DownloadHelp` | — | 常驻入口“下载后找不到文件？”；曝光沿用 session 内去重规则 |
 | `download_help_view` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 曝光 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) mount | — | 内容覆盖下载保存位置、连续下载权限和 ZIP 兜底 |
 | `download_help_close` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 关闭 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) 关闭 | `action: 'button' \| 'close_x' \| 'esc' \| 'overlay'` | 四种关闭路径共用事件；组件内部去重，单次打开只上报一次关闭 |
+| `homepage_announcement_view` | **v0.8.10** 主站 - 首页公告曝光 | [src/components/homepage-announcement.tsx](../src/components/homepage-announcement.tsx) 公告容器 | — | 仅当前域名有启用公告、且当前浏览器未关闭这一版本时挂载 |
+| `homepage_announcement_action_view` / `homepage_announcement_action_click` | **v0.8.10** 主站 - 首页公告行动点 | [src/components/homepage-announcement.tsx](../src/components/homepage-announcement.tsx) 可选 CTA | — | 仅公告配置包含行动点时挂载；链接地址不进入埋点 props |
+| `homepage_announcement_close_view` / `homepage_announcement_close_click` | **v0.8.10** 主站 - 首页公告关闭按钮 | [src/components/homepage-announcement.tsx](../src/components/homepage-announcement.tsx) 关闭按钮 | — | 关闭后按当前域名和 `updatedAt` 在浏览器本地记录；公告更新后重新显示 |
 | `support_matrix_entry_view` / `support_matrix_entry_click` | **v0.6.0** 主站 - 拖拽区下方「查看全部格式」入口 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixEntry` | — | **v0.8.5 起**受 `homepage_guidance_visible` 控制；关闭时组件不挂载，因此不产生入口曝光/点击 |
 | `support_matrix_view` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 曝光 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` mount | — | |
 | `support_matrix_dismiss` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 关闭 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` close | — | |
