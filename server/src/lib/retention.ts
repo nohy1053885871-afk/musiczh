@@ -7,16 +7,26 @@ function getRetentionDays(): number {
   return Number.isFinite(v) && v > 0 ? Math.floor(v) : 365
 }
 
-export function runRetention(): { events_deleted: number; failures_deleted: number } {
+export function runRetention(): {
+  events_deleted: number
+  failures_deleted: number
+  site_access_events_deleted: number
+} {
   const days = getRetentionDays()
   const cutoff = Date.now() - days * ONE_DAY_MS
   const e = db.prepare('DELETE FROM events WHERE ts < ?').run(cutoff)
   const f = db.prepare('DELETE FROM failures WHERE ts < ?').run(cutoff)
+  const s = db.prepare('DELETE FROM site_access_events WHERE ts < ?').run(cutoff)
   console.log(
     `[retention] cutoff=${new Date(cutoff).toISOString()} (${days}d), ` +
-    `events deleted=${e.changes}, failures deleted=${f.changes}`,
+    `events deleted=${e.changes}, failures deleted=${f.changes}, ` +
+    `site access events deleted=${s.changes}`,
   )
-  return { events_deleted: e.changes as number, failures_deleted: f.changes as number }
+  return {
+    events_deleted: e.changes as number,
+    failures_deleted: f.changes as number,
+    site_access_events_deleted: s.changes as number,
+  }
 }
 
 // 计算"下一个 03:00"的延迟毫秒数

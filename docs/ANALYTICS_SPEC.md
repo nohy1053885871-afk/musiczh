@@ -63,6 +63,10 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 | `ua` | 完整 User-Agent（后端补） |
 | `ip`  | 客户端 IP（后端从 `X-Forwarded-For` / `X-Real-IP` 取） |
 
+`restricted_page_view` 是例外：403 受限页无法加载主站 SDK，因此由
+`/api/restricted-page` 服务端记录到独立 `site_access_events` 表，只保存 `ts/event/ip/ua`。
+该事件不伪造 `visitor_id/session_id`，也不进入主站 PV、UV、设备分布、访客日志或 overview rollup。
+
 ---
 
 ## 3. 业务字段白名单（写在 `props` 里）
@@ -118,6 +122,7 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 | 事件名 | 中文描述 | 触发位置（文件 : 行） | 主要字段 | 备注 |
 |---|---|---|---|---|
 | `pageview` | 主站 - 首屏访问 | [src/main.tsx](../src/main.tsx) `analytics.pageview()` | `page, site_host` | SDK 启动后调用一次；`site_host` 为所有事件共有字段 |
+| `restricted_page_view` | 受限页 - 页面访问 | [server/src/routes/publicRestrictedPage.ts](../server/src/routes/publicRestrictedPage.ts) `GET /api/restricted-page` | 服务端 `ip, ua` | 受限页内联脚本读取公开辅助文案时记录；独立表口径，不计入主站 PV / UV |
 | `upload_zone_click` | 主站 - 上传区 - 点击（含还没选择文件的纯点击） | [src/App.tsx](../src/App.tsx) `DropZone.onClick` | — | label 任意点击都会触发，配合 `upload_pick` 一起看 |
 | `upload_zone_view` | 主站 - 上传区 - 曝光 | [src/App.tsx](../src/App.tsx) `DropZone` ref | — | session 内只触发一次 |
 | `upload_drop` | 主站 - 上传区 - 拖拽文件松手 | [src/App.tsx](../src/App.tsx) `DropZone.onDrop` | `count, total_size` | 批量动作事件，文件级请看 `upload_attempt` |

@@ -14,7 +14,7 @@
         display: grid;
         place-items: center;
         padding: 24px;
-        background: #eceae6;
+        background: radial-gradient(ellipse 140% 100% at 50% -10%, #f0eee9 0%, #eceae6 40%, #e4e2dc 100%);
         color: #1c1a18;
         font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
       }
@@ -28,12 +28,35 @@
       }
       h1 { margin: 0 0 10px; font-size: 22px; font-weight: 500; }
       p { margin: 0; color: #6a6460; font-size: 14px; line-height: 1.7; }
+      .lead {
+        margin-top: 18px;
+        padding-top: 16px;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 2px 0 rgba(0,0,0,.04);
+      }
+      .lead p { color: #918a84; font-size: 13px; line-height: 1.65; }
     </style>
   </head>
   <body>
     <main>
       <h1>访问受限</h1>
       <p>当前网络地址不在允许访问范围内。</p>
+      <section id="lead" class="lead" hidden aria-live="polite">
+        <p id="lead-message"></p>
+      </section>
     </main>
+    <script>
+      (() => {
+        const lead = document.getElementById('lead')
+        const message = document.getElementById('lead-message')
+        fetch('/api/restricted-page', { cache: 'no-store', credentials: 'same-origin' })
+          .then((response) => response.ok ? response.json() : Promise.reject())
+          .then((config) => {
+            if (typeof config.message !== 'string' || !config.message.trim()) return
+            message.textContent = config.message
+            lead.hidden = false
+          })
+          .catch(() => {})
+      })()
+    </script>
   </body>
 </html>

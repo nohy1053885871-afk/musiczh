@@ -32,6 +32,7 @@ access_by_lua_block {
 
     if uri == "/__site_access_check"
         or uri == "/api/health"
+        or uri == "/api/restricted-page"
         or uri == "/api/admin"
         or uri:sub(1, 11) == "/api/admin/"
         or uri == "/admin"

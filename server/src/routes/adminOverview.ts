@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { getOverviewBundle } from '../lib/overview/client.js'
 import { requireAdmin } from '../middleware/auth.js'
 import { parseTimeRange } from '../lib/timeRange.js'
+import { siteAccessAnalyticsStore } from '../lib/siteAccessAnalytics.js'
 
 const adminOverview = new Hono()
 adminOverview.use('*', requireAdmin)
@@ -20,7 +21,10 @@ adminOverview.get('/overview-bundle', async (c) => {
       { cacheKey, refresh },
     )
     const serializeStarted = performance.now()
-    const body = JSON.stringify(bundle)
+    const body = JSON.stringify({
+      ...bundle,
+      site_access: siteAccessAnalyticsStore.summarize(from, to),
+    })
     console.log(JSON.stringify({
       type: 'overview_bundle_serialize', key: cacheKey,
       serialization_ms: Math.round(performance.now() - serializeStarted),

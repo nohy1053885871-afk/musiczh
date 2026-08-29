@@ -32,6 +32,9 @@ const UpdateRuleSchema = z
   })
 
 const UpdateModeSchema = z.object({ enabled: z.boolean() }).strict()
+const UpdateRestrictedPageSchema = z.object({
+  message: z.string().max(200).nullable(),
+}).strict()
 
 async function parseBody(c: Context) {
   try {
@@ -121,6 +124,23 @@ export function createAdminSiteAccessRouter(
     }
     try {
       return c.json(store.setMode(parsed.data.enabled, getTrustedClientIp(c)))
+    } catch (error) {
+      return siteAccessErrorResponse(c, error)
+    }
+  })
+
+  router.put('/restricted-page', async (c) => {
+    const input = await parseBody(c)
+    if (!input.ok) return c.json({ error: 'invalid_json' }, 400)
+    const parsed = UpdateRestrictedPageSchema.safeParse(input.body)
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_payload', detail: parsed.error.issues }, 400)
+    }
+    try {
+      return c.json(store.setRestrictedPageConfig(
+        parsed.data.message,
+        getTrustedClientIp(c),
+      ))
     } catch (error) {
       return siteAccessErrorResponse(c, error)
     }

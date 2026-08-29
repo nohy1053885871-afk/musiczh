@@ -15,6 +15,7 @@ export function getTrustedClientIp(c: Context): string | null {
 export function siteAccessErrorResponse(c: Context, error: unknown) {
   if (!(error instanceof SiteAccessError)) throw error
   const status = error.code === 'rule_not_found' ? 404 :
-    error.code === 'invalid_ip' ? 400 : 409
+    error.code === 'invalid_ip' ||
+    error.code === 'invalid_restricted_message' ? 400 : 409
   return c.json({ error: error.code }, status)
 }

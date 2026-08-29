@@ -7,6 +7,14 @@
 
 ---
 
+## v0.8.6 / 运营后台 v0.4.19 / API v0.4.11 · 20260826 上线
+
+- **公开站点 IP 访问控制**：统一规则表保存精确 IPv4/IPv6 与 `allow/deny`，黑名单始终优先；白名单限制模式开启后只放行允许地址，当前 IP 自动加入、不可直接删除，拉黑需强确认并可原子恢复
+- **后台配置中心**：新增独立访问控制卡片，包含当前 IP、限制模式、允许/禁止双列表、备注、新增、编辑、原子移动、删除、错误重试和小屏横向滚动；首页指引开关保持独立
+- **nginx 与 CI**：生产宝塔 nginx 未编译 `auth_request`，最终用内置 ngx_http_lua 的 cosocket 在 access phase 调内部判定 API；后台、管理 API、健康检查与证书验证豁免。部署改为服务器清单/SHA-256 + 回环验收，只有域名 DNS 解析失败可跳过公网 smoke
+- **SEO 宣传清理**：主站标题收敛为“拾音”，删除 canonical、description、keywords、OG/Twitter、JSON-LD、SEO noscript、sitemap 与 OG 图片；robots、HTML meta 和 `X-Robots-Tag` 三层阻止索引，平台功能文案、QQ 引导、安装包、错误提示、埋点与研发文档保持不变
+- 验证：访问控制 8/8、feature flag 6/6、public config 4/4 及既有专项通过，三端构建与桌面/窄屏后台验收通过；PR #62、#63 合并，前端 Actions run `32918201433` 与 API run `32918326481` 成功；生产 nginx 最终备份 `sleepno.cn.conf.20260826-093941`，reload 前后 `nginx -t` 通过；限制模式已开启，白名单网络的主站/API/资源/下载为 200，非白名单为 403，后台与健康检查始终 200
+
 ## v0.8.5 / 运营后台 v0.4.18 / API v0.4.10 · 20260823 上线
 
 - **首页指引运营开关**：复用 `feature_flags` 增加 `homepage_guidance_visible`，默认开启；关闭后只隐藏平台支持短语、格式总览入口和 QQ 指引入口，容量限制、下载帮助、QQ 自动/失败行指引与弹窗保持不变

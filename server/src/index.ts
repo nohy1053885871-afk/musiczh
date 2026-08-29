@@ -17,6 +17,7 @@ import adminFeatureFlags from './routes/adminFeatureFlags.js'
 import publicConfig from './routes/publicConfig.js'
 import adminSiteAccess from './routes/adminSiteAccess.js'
 import internalSiteAccess from './routes/internalSiteAccess.js'
+import publicRestrictedPage from './routes/publicRestrictedPage.js'
 import { startOverviewRollupTimer } from './lib/overview/client.js'
 import { rateLimit } from './middleware/ratelimit.js'
 import { cloudflareOriginGate } from './middleware/cloudflareOrigin.js'
@@ -55,6 +56,10 @@ app.use(
 
 app.get('/api/health', (c) => c.json({ ok: true, ts: Date.now() }))
 app.route('/api/config', publicConfig)
+
+// 受限页读取辅助文案并记录曝光；生产 nginx 仅豁免这个精确路径。
+app.use('/api/restricted-page', rateLimit)
+app.route('/api/restricted-page', publicRestrictedPage)
 
 // 公开埋点入口（带限流）
 app.use('/api/track', rateLimit)

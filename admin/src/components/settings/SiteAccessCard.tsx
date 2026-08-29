@@ -50,6 +50,7 @@ function errorCopy(error: unknown): string {
     case 'current_ip_unavailable': return '服务器未能识别当前 IP，无法执行该操作'
     case 'current_ip_protected': return '当前 IP 不能直接删除'
     case 'reserved_ip': return '服务器回环地址由系统保留，不能配置访问规则'
+    case 'invalid_restricted_message': return '辅助提示文案最多 200 个字符'
     default: return '操作失败，服务器状态未改变'
   }
 }
@@ -64,6 +65,7 @@ export function SiteAccessCard() {
   const [activeRule, setActiveRule] = useState<IpRuleKind>('allow')
   const [address, setAddress] = useState('')
   const [note, setNote] = useState('')
+  const [restrictedMessage, setRestrictedMessage] = useState('')
   const [editState, setEditState] = useState<EditState>(null)
 
   const load = useCallback(async () => {
@@ -71,10 +73,14 @@ export function SiteAccessCard() {
     setLoadError(false)
     setFeedback(null)
     try {
-      setState(await api.ensureCurrentIpRule())
+      const next = await api.ensureCurrentIpRule()
+      setState(next)
+      setRestrictedMessage(next.restrictedPage?.message ?? '')
     } catch (error) {
       try {
-        setState(await api.siteAccess())
+        const next = await api.siteAccess()
+        setState(next)
+        setRestrictedMessage(next.restrictedPage?.message ?? '')
         setFeedback({ type: 'error', message: errorCopy(error) })
       } catch {
         setState(null)
@@ -197,6 +203,20 @@ export function SiteAccessCard() {
     }
   }
 
+  const saveRestrictedPage = async () => {
+    try {
+      await run(
+        'restricted-page',
+        () => api.updateRestrictedPage({
+          message: restrictedMessage.trim() || null,
+        }),
+        '受限页辅助文案已更新',
+      )
+    } catch {
+      // run 已保留表单输入和服务端状态。
+    }
+  }
+
   const columns: ColumnsType<SiteAccessIpRule> = [
     {
       title: 'IP 地址', dataIndex: 'address', width: 250,
@@ -274,6 +294,40 @@ export function SiteAccessCard() {
             {state.currentIp ? <Text code copyable>{state.currentIp}</Text> : <Text type="danger">未识别</Text>}
             {currentRule && <Tag color={currentRule.rule === 'deny' ? 'error' : 'processing'}>{currentRule.rule === 'deny' ? '黑名单' : '白名单'}</Tag>}
           </Space>
+          <Card size="small" title="受限页辅助文案">
+            {state.restrictedPage === undefined && (
+              <Alert
+                type="warning"
+                showIcon
+                message="当前 API 尚未提供受限页配置，请先部署 API v0.4.14"
+                style={{ marginBottom: 16 }}
+              />
+            )}
+            <Form layout="vertical" onFinish={() => void saveRestrictedPage()}>
+              <Form.Item
+                label="辅助提示文案"
+                extra="文案为空时，受限页只显示原有访问限制说明。"
+              >
+                <Input.TextArea
+                  value={restrictedMessage}
+                  rows={3}
+                  maxLength={200}
+                  showCount
+                  placeholder="例如：关注我们的小红书，获取拾音最新地址。"
+                  disabled={busy !== null || state.restrictedPage === undefined}
+                  onChange={(event) => setRestrictedMessage(event.target.value)}
+                />
+              </Form.Item>
+              <Space size="middle" wrap>
+                <Button type="primary" htmlType="submit" loading={busy === 'restricted-page'} disabled={busy !== null || state.restrictedPage === undefined}>
+                  保存辅助文案
+                </Button>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  更新于 {formatTime(state.restrictedPage?.updatedAt ?? null)}
+                </Text>
+              </Space>
+            </Form>
+          </Card>
           <Form layout="inline" style={{ rowGap: 8 }} onFinish={() => void addRule()}>
             <Form.Item><Input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="精确 IPv4 / IPv6" style={{ width: 240 }} disabled={busy !== null} /></Form.Item>
             <Form.Item><Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="备注（可选）" maxLength={64} style={{ width: 180 }} disabled={busy !== null} /></Form.Item>
