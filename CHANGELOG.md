@@ -7,6 +7,13 @@
 
 ---
 
+## v0.8.7 / 运营后台 v0.4.19 / API v0.4.12 · 20260828 上线
+
+- **Cloudflare API 与后台**：Worker 仅代理 `/api/*` 并把 `/admin/` 纳入同一静态部署；保留请求体、Cookie 与 Set-Cookie，清理浏览器伪造转发头，所有 API 响应强制 `no-store`
+- **阿里云 Tunnel 与同库复用**：`cloudflared` 主动出站连接专用源站，API 只对该 Host 执行恒定时间 Token 校验和可信客户端 IP 注入；旧域名链路不变，新旧域名共用同一 API、账号和 SQLite
+- **故障安全**：缺密钥、无真实 IP、上游失败和超时分别 fail closed；Tunnel 安装前备份 API `.env`、二进制和 systemd 服务，失败自动回滚；cloudflared 改由 CI 下载校验并经 SCP 上传，服务器安装前再次校验
+- **发布验证**：Worker 6/6、源站鉴权 5/5、访问控制 8/8、feature flags 6/6、public config 4/4 及三端构建通过；PR #68–#70 合并，阿里云用户端/后台 run `33031971187`、API run `33032104020`、Tunnel run `33091717867` 全部成功；Worker `2bd00bd4-ec9d-4b8a-be0e-31356f06b746` 上线；公网主站/后台/health/config 为 200，未登录管理接口 401，专用源站匿名访问 403；归档标签 `cloudflare-v0.8.7`、`api-v0.4.12`
+
 ## v0.8.6 / 运营后台 v0.4.19 / API v0.4.11 · 20260826 上线
 
 - **公开站点 IP 访问控制**：统一规则表保存精确 IPv4/IPv6 与 `allow/deny`，黑名单始终优先；白名单限制模式开启后只放行允许地址，当前 IP 自动加入、不可直接删除，拉黑需强确认并可原子恢复
