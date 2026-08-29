@@ -12,8 +12,8 @@
 - 阿里云运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
 - 当前开发版本：v0.8.9（运营后台 v0.4.21，API v0.4.14）
-- 当前生产版本：Cloudflare/阿里云主站 v0.8.8 · 运营后台 v0.4.20 · API v0.4.13
-- 上线状态：Cloudflare/阿里云用户端 v0.8.8 ✅ · Cloudflare/阿里云运营后台 v0.4.20 ✅ · API v0.4.13 ✅
+- 当前生产版本：Cloudflare/阿里云主站 v0.8.9 · 运营后台 v0.4.21 · API v0.4.14
+- 上线状态：Cloudflare/阿里云用户端 v0.8.9 ✅ · Cloudflare/阿里云运营后台 v0.4.21 ✅ · API v0.4.14 ✅
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 > 双域名生产拓扑、共享状态与故障边界的唯一事实源见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -234,19 +234,19 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.8.9 / 运营后台 v0.4.21 / API v0.4.14 · 20260829 上线
+
+- **受限页辅助文案**：`sleepno.cn` 的 403 页面新增可配置纯文本提示，配置为空时隐藏；最终按项目主复核删除按钮、链接配置、跳转接口和点击指标，提示使用 13px、`#918A84` 的低对比度辅助层级
+- **独立曝光口径**：公开 `/api/restricted-page` 读取文案并记录 `restricted_page_view`；事件进入独立 `site_access_events`，不伪造访客/会话标识，也不污染主站 PV/UV、分域趋势、设备和访客日志
+- **运营后台闭环**：配置中心只保留 200 字纯文本文案；首页最后新增“受限页访问”卡片，按当前时间范围展示 PV 与去重 IP；两个后台继续读取同一 API/SQLite
+- 验证：专项与回归 41/41、三端及 Cloudflare 构建、Wrangler dry-run、桌面/窄屏视觉验收通过；PR #76 合并提交 `f02877b516f4`，CI run `33226326487`、阿里云前端 run `33226388354`、API run `33226414612` 成功；Cloudflare Worker `33f7cdbf-9649-40f5-a17f-75af8db53638`；生产静态文件哈希、双域名首页/后台/API、源站匿名 403、Nginx 配置与独立埋点均通过；归档标签 `user-v0.8.9`、`admin-v0.4.21`、`api-v0.4.14`、`cloudflare-v0.8.9`。生产白名单规则保留但限制开关当前关闭，辅助文案为空，启用后的真实非白名单页面待运营配置后复验
+
 ### v0.8.8 / 运营后台 v0.4.20 / API v0.4.13 · 20260828 上线
 
 - **双域名埋点归因**：SDK 为新事件统一注入 `site_host`，API 以受信 Cloudflare 转发 Host 或直接请求 Host 校正正式域名；历史事件保持空值，不按上线时间或 referrer 猜测回填
 - **整体与分域趋势**：运营后台首页保留整体 PV/UV，同时增加 `sleepno.cn` 与 `shiyinmp3.com` 两组可独立切换的 PV/UV 曲线；同一标签共用颜色，PV 实线、UV 虚线
 - **访问控制边界**：配置中心关键文案明确 IP 规则只作用于 `sleepno.cn`；Cloudflare 正式入口继续公开，两个入口仍共用 API、账号和 SQLite
 - 验证：SDK、Host、overview raw/rollup、访问控制、Cloudflare 源站鉴权与 Worker 专项共 38/38 通过；PR #75 合并提交 `8956588a5d19`，阿里云前端 run `33170157193`、API run `33170308298` 成功；生产清单为 user 0.8.8 / admin 0.4.20 且 commit 一致；Cloudflare Worker 版本 `ce44e739-dbfb-4411-ab7c-7bdc015a051b`；两域名主站、后台与 API 健康检查通过
-
-### v0.8.7 / 运营后台 v0.4.19 / API v0.4.12 · 20260828 上线
-
-- **Cloudflare API 与后台**：Worker 仅代理 `/api/*` 并把 `/admin/` 纳入同一静态部署；保留请求体、Cookie 与 Set-Cookie，清理浏览器伪造转发头，所有 API 响应强制 `no-store`
-- **阿里云 Tunnel 与同库复用**：`cloudflared` 主动出站连接专用源站，API 只对该 Host 执行恒定时间 Token 校验和可信客户端 IP 注入；旧域名链路不变，新旧域名共用同一 API、账号和 SQLite
-- **故障安全**：缺密钥、无真实 IP、上游失败和超时分别 fail closed；Tunnel 安装前备份 API `.env`、二进制和 systemd 服务，失败自动回滚；cloudflared 改由 CI 下载校验并经 SCP 上传，服务器安装前再次校验
-- **发布验证**：Worker 6/6、源站鉴权 5/5、访问控制 8/8、feature flags 6/6、public config 4/4 及三端构建通过；PR #68–#70 合并，阿里云用户端/后台 run `33031971187`、API run `33032104020`、Tunnel run `33091717867` 全部成功；Worker `2bd00bd4-ec9d-4b8a-be0e-31356f06b746` 上线；公网主站/后台/health/config 为 200，未登录管理接口 401，专用源站匿名访问 403；归档标签 `cloudflare-v0.8.7`、`api-v0.4.12`
 
 # 通用
 - 优先选择编辑而非重写整个文件
