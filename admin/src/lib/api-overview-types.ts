@@ -3,6 +3,26 @@ export type HomepageGuidanceFlag = {
   updatedAt: number | null
 }
 
+export type HomepageAnnouncementSite = 'sleepno.cn' | 'shiyinmp3.com'
+
+export type HomepageAnnouncementConfig = {
+  siteHost: HomepageAnnouncementSite
+  enabled: boolean
+  message: string
+  actionLabel: string | null
+  actionUrl: string | null
+  updatedAt: number | null
+}
+
+export type HomepageAnnouncementInput = Pick<
+  HomepageAnnouncementConfig,
+  'enabled' | 'message' | 'actionLabel' | 'actionUrl'
+>
+
+export type HomepageAnnouncementsResponse = {
+  announcements: HomepageAnnouncementConfig[]
+}
+
 export type IpRuleKind = 'allow' | 'deny'
 
 export type SiteAccessIpRule = {

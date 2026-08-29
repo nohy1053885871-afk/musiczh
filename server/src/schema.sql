@@ -155,6 +155,18 @@ VALUES (
   '',
   CAST(strftime('%s', 'now') AS INTEGER) * 1000
 );
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
+  'homepage_announcement_sleepno_cn',
+  '{"enabled":false,"message":"","actionLabel":null,"actionUrl":null}',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+);
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
+  'homepage_announcement_shiyinmp3_com',
+  '{"enabled":false,"message":"","actionLabel":null,"actionUrl":null}',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+);
 -- 公开站点 IP 访问规则。同一规范化地址只能属于白名单或黑名单之一。
 CREATE TABLE IF NOT EXISTS site_access_ip_rules (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,

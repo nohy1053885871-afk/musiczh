@@ -7,6 +7,10 @@ import type {
   FormatDistributionResp,
   FunnelResp,
   HomepageGuidanceFlag,
+  HomepageAnnouncementInput,
+  HomepageAnnouncementSite,
+  HomepageAnnouncementConfig,
+  HomepageAnnouncementsResponse,
   OverviewBundleResp,
   OverviewResp,
   PerfResp,
@@ -90,6 +94,17 @@ export const api = {
     request<HomepageGuidanceFlag>('/admin/feature-flags/homepage-guidance', {
       method: 'PUT', body: JSON.stringify({ enabled }),
     }),
+  homepageAnnouncements: () =>
+    request<HomepageAnnouncementsResponse>(
+      '/admin/feature-flags/homepage-announcements',
+    ),
+  updateHomepageAnnouncement: (
+    siteHost: HomepageAnnouncementSite,
+    input: HomepageAnnouncementInput,
+  ) => request<HomepageAnnouncementConfig>(
+    `/admin/feature-flags/homepage-announcements/${encodeURIComponent(siteHost)}`,
+    { method: 'PUT', body: JSON.stringify(input) },
+  ),
   siteAccess: () => request<SiteAccessSnapshot>('/admin/site-access'),
   ensureCurrentIpRule: () =>
     request<SiteAccessSnapshot>('/admin/site-access/ip-rules/current', { method: 'POST' }),

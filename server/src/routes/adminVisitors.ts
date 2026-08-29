@@ -4,6 +4,7 @@ import db from '../db.js'
 import { requireAdmin } from '../middleware/auth.js'
 import { parseUA } from '../lib/ua.js'
 import { parseTimeRange } from '../lib/timeRange.js'
+import { classifyChannel } from '../lib/channel.js'
 
 const adminVisitors = new Hono()
 adminVisitors.use('*', requireAdmin)
@@ -28,16 +29,6 @@ type RawRow = {
   ip: string | null
   first_page: string | null
   referrer: string | null
-}
-
-function classifyChannel(referrer: string | null): string {
-  if (!referrer) return '直接访问'
-  let host = ''
-  try { host = new URL(referrer).hostname.toLowerCase() } catch { return '其他' }
-  if (host.endsWith('sleepno.cn')) return '站内'
-  if (/(google|baidu|bing|sogou|so\.com|duckduckgo|yandex|yahoo)\./i.test(host)) return '搜索引擎'
-  if (/(weibo|twitter|x\.com|facebook|qq\.com|wx|reddit|mp\.weixin|zhihu|douyin|bilibili)/i.test(host)) return '社交'
-  return '外部网站'
 }
 
 adminVisitors.get('/', (c) => {

@@ -44,11 +44,12 @@ import {
   SupportMatrixModal,
 } from './components/support-matrix'
 import { DownloadHelp } from './components/download-help'
+import { HomepageAnnouncement } from './components/homepage-announcement'
 import {
   detectBrowserCompatibility,
   type BrowserCompatibility,
 } from './lib/browser-compat'
-import { useHomepageGuidanceVisible } from './lib/public-config'
+import { usePublicConfig } from './lib/public-config'
 
 const LazyBrowserCompatModal = lazy(() =>
   import('./components/browser-compat-modal').then((module) => ({
@@ -878,7 +879,8 @@ function ClearAllButton({ onConfirm }: { onConfirm: () => void }) {
 // ── App ────────────────────────────────────────────────────────────────────
 function App() {
   const [files, setFiles] = useState<TrackedFile[]>([])
-  const homepageGuidanceVisible = useHomepageGuidanceVisible()
+  const publicConfig = usePublicConfig()
+  const homepageGuidanceVisible = publicConfig?.homepageGuidanceVisible ?? null
   const browserCompatPreview =
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).get('preview') === 'browser-compat'
@@ -1714,6 +1716,13 @@ function App() {
       </div>
 
       <div className="relative max-w-5xl mx-auto px-5 sm:px-8 pt-8 pb-16">
+        {publicConfig?.homepageAnnouncement && (
+          <HomepageAnnouncement
+            key={`${publicConfig.homepageAnnouncement.siteHost}:${publicConfig.homepageAnnouncement.updatedAt}`}
+            announcement={publicConfig.homepageAnnouncement}
+          />
+        )}
+
         {/* Hero: vinyl left, drop zone right */}
         <section className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 sm:gap-12 items-stretch mb-8 sm:mb-12">
           <div className="flex justify-center md:justify-start items-center">
