@@ -210,7 +210,8 @@ if [ "$unauthorized" != '403' ]; then
 fi
 
 systemctl daemon-reload
-systemctl enable --now cloudflared-musiczh
+systemctl enable cloudflared-musiczh
+systemctl restart cloudflared-musiczh
 for attempt in $(seq 1 30); do
   if systemctl is-active --quiet cloudflared-musiczh; then
     echo "[tunnel] cloudflared service active at attempt $attempt"

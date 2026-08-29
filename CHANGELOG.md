@@ -7,6 +7,13 @@
 
 ---
 
+## v0.8.8 / 运营后台 v0.4.20 / API v0.4.13 · 20260828 上线
+
+- **双域名埋点归因**：SDK 为新事件统一注入 `site_host`，API 以受信 Cloudflare 转发 Host 或直接请求 Host 校正正式域名；历史事件保持空值，不按上线时间或 referrer 猜测回填
+- **整体与分域趋势**：运营后台首页保留整体 PV/UV，同时增加 `sleepno.cn` 与 `shiyinmp3.com` 两组可独立切换的 PV/UV 曲线；同一标签共用颜色，PV 实线、UV 虚线
+- **访问控制边界**：配置中心关键文案明确 IP 规则只作用于 `sleepno.cn`；Cloudflare 正式入口继续公开，两个入口仍共用 API、账号和 SQLite
+- 验证：SDK、Host、overview raw/rollup、访问控制、Cloudflare 源站鉴权与 Worker 专项共 38/38 通过；PR #75 合并提交 `8956588a5d19`，阿里云前端 run `33170157193`、API run `33170308298` 成功；生产清单为 user 0.8.8 / admin v0.4.20 且 commit 一致；Cloudflare Worker 版本 `ce44e739-dbfb-4411-ab7c-7bdc015a051b`；两域名主站、后台与 API 健康检查通过
+
 ## v0.8.7 / 运营后台 v0.4.19 / API v0.4.12 · 20260828 上线
 
 - **Cloudflare API 与后台**：Worker 仅代理 `/api/*` 并把 `/admin/` 纳入同一静态部署；保留请求体、Cookie 与 Set-Cookie，清理浏览器伪造转发头，所有 API 响应强制 `no-store`
