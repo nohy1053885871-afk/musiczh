@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   featureFlagStore,
   isSafeHomepageAnnouncementUrl,
+  isSafeQqInstallerUrl,
   type FeatureFlagStore,
 } from '../lib/featureFlags.js'
 import { isTrackedSiteHost } from '../lib/siteHost.js'
@@ -52,6 +53,21 @@ const UpdateHomepageAnnouncementSchema = z
     actionLabel: value.actionLabel?.trim() || null,
     actionUrl: value.actionUrl?.trim() || null,
   }))
+
+const UpdateQqInstallerLinkSchema = z
+  .object({ url: z.string().max(2048).nullable() })
+  .strict()
+  .superRefine((value, context) => {
+    const url = value.url?.trim() || null
+    if (url && !isSafeQqInstallerUrl(url)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['url'],
+        message: 'invalid_qq_installer_url',
+      })
+    }
+  })
+  .transform((value) => ({ url: value.url?.trim() || null }))
 
 export function createAdminFeatureFlagsRouter(
   store: FeatureFlagStore = featureFlagStore,
@@ -106,6 +122,32 @@ export function createAdminFeatureFlagsRouter(
       )
     }
     return c.json(store.setHomepageAnnouncement(siteHost, parsed.data))
+  })
+
+  router.get('/qq-installer-links', (c) => {
+    return c.json({ links: store.listQqInstallerLinks() })
+  })
+
+  router.put('/qq-installer-links/:siteHost', async (c) => {
+    const siteHost = c.req.param('siteHost').trim().toLowerCase()
+    if (!isTrackedSiteHost(siteHost)) {
+      return c.json({ error: 'invalid_site_host' }, 400)
+    }
+
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'invalid_json' }, 400)
+    }
+    const parsed = UpdateQqInstallerLinkSchema.safeParse(body)
+    if (!parsed.success) {
+      return c.json(
+        { error: 'invalid_payload', detail: parsed.error.issues },
+        400,
+      )
+    }
+    return c.json(store.setQqInstallerLink(siteHost, parsed.data))
   })
 
   return router

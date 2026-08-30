@@ -59,6 +59,10 @@ jobs:
           npm --prefix admin ci
       - name: Worker 单元测试
         run: npm run test:cloudflare-proxy
+      - name: 主站运行时配置与 QQ 下载目标测试
+        run: |
+          npm run test:public-config
+          npm run test:qq-installer
       - name: Cloudflare 双前端构建
         run: npm run build:cloudflare
       - name: Wrangler dry-run
@@ -68,10 +72,7 @@ jobs:
           test -f dist/index.html
           test -f dist/admin/index.html
           grep -R -q '暂不支持，敬请期待' dist/assets
-          if grep -R -q '/downloads/qq-music-v19.51-windows.zip' dist/assets; then
-            echo '[cloudflare] installer path leaked into Cloudflare bundle' >&2
-            exit 1
-          fi
+          grep -R -q 'qqInstallerUrl' dist/assets
 
   protected-origin:
     name: Tunnel 源站鉴权
@@ -87,6 +88,8 @@ jobs:
         run: npm --prefix server ci
       - name: TypeScript 构建
         run: npm run build:server
+      - name: 运行时配置测试
+        run: npm --prefix server run test:feature-flags
       - name: 源站鉴权测试
         run: npm --prefix server run test:cloudflare-origin
       - name: 访问控制回归

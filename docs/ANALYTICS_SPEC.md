@@ -97,7 +97,7 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 | `last_progress` | number | **v0.4.1 起新增** · `*_abandon` 中止事件的最近一次 progress 值（0-1），辅助定位中止发生在哪一段 |
 | `stage` | string | **v0.4.1 起新增** · `*_abandon` 中止事件的阶段，`decrypt` / `transcode` |
 | `trigger` | string | **v0.6.0 起新增** · QQ 引导弹窗触发来源：`entry` / `failure` / `auto` / `matrix`。`qq_guide_view` / `qq_guide_dismiss` / `qq_download_click` 都带，用来评估各入口的转化效率 |
-| `sha256` | string | **v0.6.0 起新增** · QQ 安装包文件的 SHA-256（小写 hex，长度 64），仅 `qq_download_click` 携带。用于追踪服务器上的安装包是否被替换/篡改 |
+| `sha256` | string | **v0.6.0 起新增** · 自托管 QQ 安装包文件的 SHA-256（小写 hex，长度 64），仅走同源 ZIP 的 `qq_download_click` 携带。**v0.8.11 起**外部网盘跳转与不可用点击不携带，避免把本地安装包哈希错误归因给外部文件 |
 | `encoder` | string | **v0.6.2 起新增** · 转码编码器标识，命名约定 `<encoder>-<mode>-<param>`。当前枚举值：`wasm-lame-v2`（默认，LAME VBR -V 2，平均 ~190 kbps）；规划值 `wasm-lame-v0`（VBR -V 0，~245 kbps，公认透明）、`wasm-lame-cbr-192` / `wasm-lame-cbr-320`（CBR 模式，未启用）。`transcode_start` / `transcode_done` 携带 |
 | `output_size` | number | **v0.6.2 起新增** · 转码产物 MP3 的字节数；配合 file_size（源大小）和 sourceDuration 可推算平均码率分布。仅 `transcode_done` 携带 |
 | `has_cover` | boolean | **v0.6.3 起新增** · 转码 / 解密产物是否含封面。`transcode_done` 表示 FLAC/OGG/M4A 原文件能不能解出可写入 MP3 的 cover；`decrypt_done` 仍是原始解密产物的内嵌口径，XM 外层封面 URL 写入 M4A `covr` 的结果由 `cover_backfill_done/fail` 表示 |
@@ -166,7 +166,7 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 | `qq_guide_entry_view` / `qq_guide_entry_click` | **v0.6.0** 主站 - 拖拽区下方 QQ 引导入口 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideEntry` | — | **v0.8.5 起**受 `homepage_guidance_visible` 控制；关闭时组件不挂载，因此不产生入口曝光/点击。失败行和自动唤起仍可产生后续弹窗事件 |
 | `qq_guide_view` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 曝光 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` mount | `trigger: 'entry' \| 'failure' \| 'auto' \| 'matrix'` | 触发来源：entry=拖拽区入口点击；failure=QMC_NEW_VERSION_UNSUPPORTED 失败行 CTA；auto=首次拖入 QMC 文件且 localStorage 未标记；matrix=从平台/格式总览弹窗跳来 |
 | `qq_guide_dismiss` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 关闭 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` close | `trigger` | 与对应 `qq_guide_view` 组队 |
-| `qq_download_click` | **v0.6.0** 主站 - QQ 使用说明弹窗 - 下载旧版安装包按钮 | [src/components/qq-guide.tsx](../src/components/qq-guide.tsx) `QqGuideModal` CTA | `trigger, sha256?` | `sha256` 用于追踪安装包版本一致性 |
+| `qq_download_click` | **v0.6.0** 主站 - QQ 使用说明 / 支持矩阵 - 下载旧版客户端按钮 | [src/lib/qq-installer.ts](../src/lib/qq-installer.ts) 两个入口的统一处理函数 | `trigger, sha256?` | `sha256` 只在走自托管同源 ZIP 时存在；**v0.8.11 起**外部网盘跳转和不可用点击仅带 `trigger`，链接地址不进入埋点 |
 | `download_help_entry_view` / `download_help_entry_click` | **v0.8.3** 主站 - 拖拽区下方下载帮助入口 | [src/components/download-help.tsx](../src/components/download-help.tsx) `DownloadHelp` | — | 常驻入口“下载后找不到文件？”；曝光沿用 session 内去重规则 |
 | `download_help_view` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 曝光 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) mount | — | 内容覆盖下载保存位置、连续下载权限和 ZIP 兜底 |
 | `download_help_close` | **v0.8.3** 主站 - 下载文件位置帮助弹窗 - 关闭 | [src/components/download-help-modal.tsx](../src/components/download-help-modal.tsx) 关闭 | `action: 'button' \| 'close_x' \| 'esc' \| 'overlay'` | 四种关闭路径共用事件；组件内部去重，单次打开只上报一次关闭 |

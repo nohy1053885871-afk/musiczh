@@ -105,10 +105,12 @@ export function SupportMatrixEntry({ onOpen }: { onOpen: () => void }) {
 
 // ── 主 Modal ──────────────────────────────────────────────────────────────
 export function SupportMatrixModal({
+  qqInstallerUrl,
   onClose,
   onJumpToQqGuide,
   onNotify,
 }: {
+  qqInstallerUrl: string | null
   onClose: () => void
   /** 点击 QQ 行内联按钮：关闭本弹窗 + 打开 QqGuideModal（trigger='matrix'） */
   onJumpToQqGuide: (trigger: QqGuideTrigger) => void
@@ -129,7 +131,7 @@ export function SupportMatrixModal({
   }
 
   const onDownload = () => {
-    requestQqInstallerDownload('matrix', onNotify)
+    requestQqInstallerDownload('matrix', qqInstallerUrl, onNotify)
   }
 
   return (

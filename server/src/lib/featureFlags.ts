@@ -10,6 +10,10 @@ export const HOMEPAGE_ANNOUNCEMENT_KEYS: Record<TrackedSiteHost, string> = {
   'sleepno.cn': 'homepage_announcement_sleepno_cn',
   'shiyinmp3.com': 'homepage_announcement_shiyinmp3_com',
 }
+export const QQ_INSTALLER_LINK_KEYS: Record<TrackedSiteHost, string> = {
+  'sleepno.cn': 'qq_installer_link_sleepno_cn',
+  'shiyinmp3.com': 'qq_installer_link_shiyinmp3_com',
+}
 
 export type HomepageGuidanceFlag = {
   enabled: boolean
@@ -30,6 +34,14 @@ export type HomepageAnnouncementInput = Pick<
   'enabled' | 'message' | 'actionLabel' | 'actionUrl'
 >
 
+export type QqInstallerLinkConfig = {
+  siteHost: TrackedSiteHost
+  url: string | null
+  updatedAt: number | null
+}
+
+export type QqInstallerLinkInput = Pick<QqInstallerLinkConfig, 'url'>
+
 export type FeatureFlagStore = {
   getHomepageGuidance: () => HomepageGuidanceFlag
   setHomepageGuidance: (enabled: boolean) => HomepageGuidanceFlag
@@ -41,6 +53,12 @@ export type FeatureFlagStore = {
     siteHost: TrackedSiteHost,
     input: HomepageAnnouncementInput,
   ) => HomepageAnnouncementConfig
+  getQqInstallerLink: (siteHost: TrackedSiteHost) => QqInstallerLinkConfig
+  listQqInstallerLinks: () => QqInstallerLinkConfig[]
+  setQqInstallerLink: (
+    siteHost: TrackedSiteHost,
+    input: QqInstallerLinkInput,
+  ) => QqInstallerLinkConfig
 }
 
 type FeatureFlagDatabase = Pick<Database.Database, 'prepare'>
@@ -68,6 +86,24 @@ export function isSafeHomepageAnnouncementUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+export function isSafeQqInstallerUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function parseQqInstallerLinkValue(raw: string | undefined): string | null {
+  const value = raw?.trim() ?? ''
+  if (
+    value.length === 0 ||
+    value.length > 2048 ||
+    !isSafeQqInstallerUrl(value)
+  ) return null
+  return value
 }
 
 function parseHomepageAnnouncementValue(
@@ -125,6 +161,21 @@ export function createFeatureFlagStore(
     return {
       siteHost,
       ...parseHomepageAnnouncementValue(row?.value),
+      updatedAt: row?.updated_at ?? null,
+    }
+  }
+
+  const getQqInstallerLink = (
+    siteHost: TrackedSiteHost,
+  ): QqInstallerLinkConfig => {
+    const row = database
+      .prepare('SELECT value, updated_at FROM feature_flags WHERE key = ?')
+      .get(QQ_INSTALLER_LINK_KEYS[siteHost]) as
+      | { value: string; updated_at: number }
+      | undefined
+    return {
+      siteHost,
+      url: parseQqInstallerLinkValue(row?.value),
       updatedAt: row?.updated_at ?? null,
     }
   }
@@ -191,6 +242,33 @@ export function createFeatureFlagStore(
           updatedAt,
         )
       return { siteHost, ...normalized, updatedAt }
+    },
+
+    getQqInstallerLink,
+
+    listQqInstallerLinks() {
+      return TRACKED_SITE_HOSTS.map(getQqInstallerLink)
+    },
+
+    setQqInstallerLink(siteHost, input) {
+      const previous = getQqInstallerLink(siteHost)
+      const updatedAt = Math.max(Date.now(), (previous.updatedAt ?? 0) + 1)
+      const candidate = input.url?.trim() || null
+      const url = candidate &&
+        candidate.length <= 2048 &&
+        isSafeQqInstallerUrl(candidate)
+        ? candidate
+        : null
+      database
+        .prepare(
+          `INSERT INTO feature_flags (key, value, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET
+             value = excluded.value,
+             updated_at = excluded.updated_at`,
+        )
+        .run(QQ_INSTALLER_LINK_KEYS[siteHost], url ?? '', updatedAt)
+      return { siteHost, url, updatedAt }
     },
   }
 }

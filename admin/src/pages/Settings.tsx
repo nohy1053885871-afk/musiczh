@@ -13,6 +13,7 @@ import {
 } from '../lib/api'
 import { SiteAccessCard } from '../components/settings/SiteAccessCard'
 import { HomepageAnnouncementsCard } from '../components/settings/HomepageAnnouncementsCard'
+import { QqInstallerLinksCard } from '../components/settings/QqInstallerLinksCard'
 
 const { Title, Text } = Typography
 
@@ -93,6 +94,8 @@ export function SettingsPage() {
       </div>
 
       <HomepageAnnouncementsCard />
+
+      <QqInstallerLinksCard />
 
       <SiteAccessCard />
 

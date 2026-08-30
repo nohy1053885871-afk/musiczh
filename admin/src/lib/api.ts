@@ -15,6 +15,10 @@ import type {
   OverviewResp,
   PerfResp,
   PerfTimeseriesResp,
+  QqInstallerLinkConfig,
+  QqInstallerLinkInput,
+  QqInstallerLinksResponse,
+  QqInstallerLinkSite,
   RestrictedPageConfigInput,
   SiteAccessSnapshot,
   TimeseriesResp,
@@ -103,6 +107,17 @@ export const api = {
     input: HomepageAnnouncementInput,
   ) => request<HomepageAnnouncementConfig>(
     `/admin/feature-flags/homepage-announcements/${encodeURIComponent(siteHost)}`,
+    { method: 'PUT', body: JSON.stringify(input) },
+  ),
+  qqInstallerLinks: () =>
+    request<QqInstallerLinksResponse>(
+      '/admin/feature-flags/qq-installer-links',
+    ),
+  updateQqInstallerLink: (
+    siteHost: QqInstallerLinkSite,
+    input: QqInstallerLinkInput,
+  ) => request<QqInstallerLinkConfig>(
+    `/admin/feature-flags/qq-installer-links/${encodeURIComponent(siteHost)}`,
     { method: 'PUT', body: JSON.stringify(input) },
   ),
   siteAccess: () => request<SiteAccessSnapshot>('/admin/site-access'),

@@ -1,6 +1,6 @@
 {
   "name": "musiczh-server",
-  "version": "0.4.15",
+  "version": "0.4.16",
   "description": "拾音运营后台 - 后端 API（Hono + SQLite）",
   "private": true,
   "type": "module",

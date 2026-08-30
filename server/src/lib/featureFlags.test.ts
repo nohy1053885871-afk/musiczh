@@ -136,3 +136,53 @@ test('公告配置 JSON 非法时失败安全为关闭且隐藏危险行动点',
   })
   database.close()
 })
+
+test('QQ 安装包链接默认为空、按域名独立保存并可清空', () => {
+  const database = new Database(':memory:')
+  database.exec(CREATE_TABLE_SQL)
+  const store = createFeatureFlagStore(database)
+
+  assert.deepEqual(store.listQqInstallerLinks(), [
+    { siteHost: 'sleepno.cn', url: null, updatedAt: null },
+    { siteHost: 'shiyinmp3.com', url: null, updatedAt: null },
+  ])
+
+  const url = 'https://pan.example.com/s/qq-v19-51'
+  const saved = store.setQqInstallerLink('shiyinmp3.com', { url })
+  assert.equal(saved.url, url)
+  assert.equal(typeof saved.updatedAt, 'number')
+  assert.equal(store.getQqInstallerLink('sleepno.cn').url, null)
+
+  const cleared = store.setQqInstallerLink('shiyinmp3.com', { url: null })
+  assert.equal(cleared.url, null)
+  assert.ok((cleared.updatedAt as number) > (saved.updatedAt as number))
+  database.close()
+})
+
+test('QQ 安装包链接从数据库读取时拒绝非 HTTPS 和超长值', () => {
+  const database = new Database(':memory:')
+  database.exec(CREATE_TABLE_SQL)
+  database.prepare('INSERT INTO feature_flags VALUES (?, ?, ?)').run(
+    'qq_installer_link_sleepno_cn',
+    'http://pan.example.com/file',
+    123,
+  )
+  database.prepare('INSERT INTO feature_flags VALUES (?, ?, ?)').run(
+    'qq_installer_link_shiyinmp3_com',
+    `https://pan.example.com/${'a'.repeat(2048)}`,
+    456,
+  )
+  const store = createFeatureFlagStore(database)
+
+  assert.deepEqual(store.getQqInstallerLink('sleepno.cn'), {
+    siteHost: 'sleepno.cn',
+    url: null,
+    updatedAt: 123,
+  })
+  assert.deepEqual(store.getQqInstallerLink('shiyinmp3.com'), {
+    siteHost: 'shiyinmp3.com',
+    url: null,
+    updatedAt: 456,
+  })
+  database.close()
+})
