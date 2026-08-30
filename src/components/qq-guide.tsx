@@ -139,10 +139,12 @@ export function QqWhyCta({ onOpen }: { onOpen: (trigger: QqGuideTrigger) => void
 // ── 模块 2：QqGuideModal ─────────────────────────────────────────────────
 export function QqGuideModal({
   trigger,
+  qqInstallerUrl,
   onClose,
   onNotify,
 }: {
   trigger: QqGuideTrigger
+  qqInstallerUrl: string | null
   onClose: () => void
   onNotify: (message: string) => void
 }) {
@@ -161,7 +163,7 @@ export function QqGuideModal({
   }
 
   const onDownload = () => {
-    requestQqInstallerDownload(trigger, onNotify)
+    requestQqInstallerDownload(trigger, qqInstallerUrl, onNotify)
   }
 
   return (

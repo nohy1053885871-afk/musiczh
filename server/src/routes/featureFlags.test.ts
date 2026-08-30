@@ -42,6 +42,7 @@ test('公开配置只返回允许公开的字段并禁止缓存', async () => {
   assert.deepEqual(body, {
     homepageGuidanceVisible: true,
     homepageAnnouncement: null,
+    qqInstallerUrl: null,
   })
   database.close()
 })
@@ -102,6 +103,7 @@ test('管理员可写入并读回首页指引状态', async () => {
   assert.deepEqual(await publicRead.json(), {
     homepageGuidanceVisible: false,
     homepageAnnouncement: null,
+    qqInstallerUrl: null,
   })
   database.close()
 })
@@ -151,6 +153,7 @@ test('管理员可分别保存两个域名公告，公开接口只返回当前 H
       action: { label: '查看详情', href: '/notice' },
       updatedAt: savedSleepno.updatedAt,
     },
+    qqInstallerUrl: null,
   })
 
   const cloudflarePublic = await app.request('/api/config', {
@@ -159,7 +162,94 @@ test('管理员可分别保存两个域名公告，公开接口只返回当前 H
   assert.deepEqual(await cloudflarePublic.json(), {
     homepageGuidanceVisible: true,
     homepageAnnouncement: null,
+    qqInstallerUrl: null,
   })
+  database.close()
+})
+
+test('管理员可独立配置两个域名的 QQ 安装包 HTTPS 跳转链接', async () => {
+  const { app, database } = createTestApp()
+  const cookie = await adminCookie()
+  const headers = { 'Content-Type': 'application/json', Cookie: cookie }
+  const url = 'https://pan.example.com/s/qq-v19-51'
+
+  const save = await app.request(
+    '/api/admin/feature-flags/qq-installer-links/shiyinmp3.com',
+    { method: 'PUT', headers, body: JSON.stringify({ url: ` ${url} ` }) },
+  )
+  assert.equal(save.status, 200)
+  const saved = await save.json() as {
+    siteHost: string
+    url: string | null
+    updatedAt: number
+  }
+  assert.equal(saved.siteHost, 'shiyinmp3.com')
+  assert.equal(saved.url, url)
+  assert.equal(typeof saved.updatedAt, 'number')
+
+  const list = await app.request(
+    '/api/admin/feature-flags/qq-installer-links',
+    { headers },
+  )
+  assert.equal(list.status, 200)
+  assert.deepEqual(await list.json(), {
+    links: [
+      { siteHost: 'sleepno.cn', url: null, updatedAt: null },
+      {
+        siteHost: 'shiyinmp3.com',
+        url,
+        updatedAt: saved.updatedAt,
+      },
+    ],
+  })
+
+  const cloudflarePublic = await app.request('/api/config', {
+    headers: { Host: 'shiyinmp3.com' },
+  })
+  assert.equal((await cloudflarePublic.json() as { qqInstallerUrl: string }).qqInstallerUrl, url)
+
+  const sleepnoPublic = await app.request('/api/config', {
+    headers: { Host: 'sleepno.cn' },
+  })
+  assert.equal((await sleepnoPublic.json() as { qqInstallerUrl: string | null }).qqInstallerUrl, null)
+
+  const clear = await app.request(
+    '/api/admin/feature-flags/qq-installer-links/shiyinmp3.com',
+    { method: 'PUT', headers, body: JSON.stringify({ url: '  ' }) },
+  )
+  assert.equal(clear.status, 200)
+  assert.equal((await clear.json() as { url: string | null }).url, null)
+  database.close()
+})
+
+test('QQ 安装包链接管理接口拒绝未知域名、非 HTTPS、非法 JSON 和多余字段', async () => {
+  const { app, database } = createTestApp()
+  const cookie = await adminCookie()
+  const headers = { 'Content-Type': 'application/json', Cookie: cookie }
+  const basePath = '/api/admin/feature-flags/qq-installer-links/'
+
+  const unknown = await app.request(`${basePath}unknown.example`, {
+    method: 'PUT', headers, body: JSON.stringify({ url: null }),
+  })
+  assert.equal(unknown.status, 400)
+
+  for (const body of [
+    { url: 'http://pan.example.com/file' },
+    { url: '//pan.example.com/file' },
+    { url: 'javascript:alert(1)' },
+    { url: '/downloads/file.zip' },
+    { url: 'https://pan.example.com/file', extra: true },
+  ]) {
+    const response = await app.request(`${basePath}shiyinmp3.com`, {
+      method: 'PUT', headers, body: JSON.stringify(body),
+    })
+    assert.equal(response.status, 400)
+  }
+
+  const invalidJson = await app.request(`${basePath}shiyinmp3.com`, {
+    method: 'PUT', headers, body: '{',
+  })
+  assert.equal(invalidJson.status, 400)
   database.close()
 })
 

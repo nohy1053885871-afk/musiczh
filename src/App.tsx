@@ -881,6 +881,7 @@ function App() {
   const [files, setFiles] = useState<TrackedFile[]>([])
   const publicConfig = usePublicConfig()
   const homepageGuidanceVisible = publicConfig?.homepageGuidanceVisible ?? null
+  const qqInstallerUrl = publicConfig?.qqInstallerUrl ?? null
   const browserCompatPreview =
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).get('preview') === 'browser-compat'
@@ -2043,12 +2044,14 @@ function App() {
       {qqGuide.open && (
         <QqGuideModal
           trigger={qqGuide.trigger}
+          qqInstallerUrl={qqInstallerUrl}
           onClose={() => setQqGuide((g) => ({ ...g, open: false }))}
           onNotify={notify}
         />
       )}
       {matrixOpen && (
         <SupportMatrixModal
+          qqInstallerUrl={qqInstallerUrl}
           onClose={() => setMatrixOpen(false)}
           onJumpToQqGuide={openQqGuide}
           onNotify={notify}

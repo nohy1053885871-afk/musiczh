@@ -22,6 +22,9 @@ export function createPublicConfigRouter(
     const announcement = siteHost
       ? store.getHomepageAnnouncement(siteHost)
       : null
+    const qqInstallerLink = siteHost
+      ? store.getQqInstallerLink(siteHost)
+      : null
     c.header('Cache-Control', 'no-store')
     return c.json({
       homepageGuidanceVisible: enabled,
@@ -40,6 +43,7 @@ export function createPublicConfigRouter(
               updatedAt: announcement.updatedAt,
             }
           : null,
+      qqInstallerUrl: qqInstallerLink?.url ?? null,
     })
   })
 

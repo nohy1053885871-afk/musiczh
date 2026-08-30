@@ -23,6 +23,20 @@ export type HomepageAnnouncementsResponse = {
   announcements: HomepageAnnouncementConfig[]
 }
 
+export type QqInstallerLinkSite = HomepageAnnouncementSite
+
+export type QqInstallerLinkConfig = {
+  siteHost: QqInstallerLinkSite
+  url: string | null
+  updatedAt: number | null
+}
+
+export type QqInstallerLinkInput = Pick<QqInstallerLinkConfig, 'url'>
+
+export type QqInstallerLinksResponse = {
+  links: QqInstallerLinkConfig[]
+}
+
 export type IpRuleKind = 'allow' | 'deny'
 
 export type SiteAccessIpRule = {

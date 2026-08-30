@@ -17,6 +17,7 @@ export type PublicHomepageAnnouncement = {
 export type PublicConfig = {
   homepageGuidanceVisible: boolean
   homepageAnnouncement: PublicHomepageAnnouncement | null
+  qqInstallerUrl: string | null
 }
 
 type FetchPublicConfigOptions = {
@@ -27,6 +28,7 @@ type FetchPublicConfigOptions = {
 const DEFAULT_PUBLIC_CONFIG: PublicConfig = {
   homepageGuidanceVisible: DEFAULT_HOMEPAGE_GUIDANCE_VISIBLE,
   homepageAnnouncement: null,
+  qqInstallerUrl: null,
 }
 
 function safeActionUrl(value: string): boolean {
@@ -82,6 +84,17 @@ function parseHomepageAnnouncement(
   }
 }
 
+function parseQqInstallerUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2048) {
+    return null
+  }
+  try {
+    return new URL(value).protocol === 'https:' ? value : null
+  } catch {
+    return null
+  }
+}
+
 export async function fetchPublicConfig({
   fetchImpl = fetch,
   timeoutMs = CONFIG_TIMEOUT_MS,
@@ -107,6 +120,7 @@ export async function fetchPublicConfig({
       homepageAnnouncement: parseHomepageAnnouncement(
         config.homepageAnnouncement,
       ),
+      qqInstallerUrl: parseQqInstallerUrl(config.qqInstallerUrl),
     }
   } catch {
     return DEFAULT_PUBLIC_CONFIG

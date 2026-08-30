@@ -1,7 +1,7 @@
 {
   "name": "musiczh",
   "private": true,
-  "version": "0.8.10",
+  "version": "0.8.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,7 @@
     "test:browser-compat": "tsx --test src/lib/browser-compat.test.ts",
     "test:analytics-context": "tsx --test src/lib/analytics-context.test.ts",
     "test:public-config": "tsx --test src/lib/public-config.test.ts src/lib/announcement-dismissal.test.ts",
+    "test:qq-installer": "tsx --test src/lib/qq-installer.test.ts",
     "test:cloudflare-proxy": "tsx --test worker/index.test.ts",
     "preview": "vite preview",
     "dev:server": "npm --prefix server run dev",

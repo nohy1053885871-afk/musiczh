@@ -43,6 +43,7 @@ test('公开配置解析当前域名公告和可选行动点', async () => {
       action: { label: '查看详情', href: '/notice' },
       updatedAt: 123,
     },
+    qqInstallerUrl: null,
   })
 })
 
@@ -53,7 +54,35 @@ test('旧 API 缺少公告字段时保持现有指引并隐藏公告', async () 
   assert.deepEqual(result, {
     homepageGuidanceVisible: false,
     homepageAnnouncement: null,
+    qqInstallerUrl: null,
   })
+})
+
+test('公开配置只接受完整 HTTPS QQ 安装包跳转链接', async () => {
+  const url = 'https://pan.example.com/s/qq-v19-51'
+  const valid = await fetchPublicConfig({
+    fetchImpl: async () => jsonResponse({
+      homepageGuidanceVisible: true,
+      qqInstallerUrl: url,
+    }),
+  })
+  assert.equal(valid.qqInstallerUrl, url)
+
+  for (const qqInstallerUrl of [
+    'http://pan.example.com/file',
+    '//pan.example.com/file',
+    'javascript:alert(1)',
+    '/downloads/file.zip',
+    123,
+  ]) {
+    const result = await fetchPublicConfig({
+      fetchImpl: async () => jsonResponse({
+        homepageGuidanceVisible: true,
+        qqInstallerUrl,
+      }),
+    })
+    assert.equal(result.qqInstallerUrl, null)
+  }
 })
 
 test('公开配置丢弃危险行动点但保留合法纯文本公告', async () => {
@@ -98,6 +127,7 @@ test('公开配置 404 时回退为显示', async () => {
   assert.deepEqual(result, {
     homepageGuidanceVisible: true,
     homepageAnnouncement: null,
+    qqInstallerUrl: null,
   })
 })
 

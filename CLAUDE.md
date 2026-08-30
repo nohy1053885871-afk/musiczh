@@ -5,13 +5,13 @@
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
 解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
-- Cloudflare 主站：https://shiyinmp3.com（用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 安装包等待独立方案）
+- Cloudflare 主站：https://shiyinmp3.com（用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；v0.8.11 开发版已接入按域名配置的外部网盘链接，尚未发布和写入真实链接）
 - Cloudflare 运营后台：https://shiyinmp3.com/admin（与阿里云原站共用账号、API 和 SQLite）
 - 阿里云原站：https://sleepno.cn
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
 - 阿里云运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.10（运营后台 v0.4.22，API v0.4.15）
+- 当前开发版本：v0.8.11（运营后台 v0.4.23，API v0.4.16）
 - 当前生产版本：Cloudflare/阿里云主站 v0.8.10 · 运营后台 v0.4.22 · API v0.4.15
 - 上线状态：Cloudflare/阿里云用户端 v0.8.10 ✅ · Cloudflare/阿里云运营后台 v0.4.22 ✅ · API v0.4.15 ✅
 
@@ -133,7 +133,7 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 - **前端改动给本地测试链接**：需要用户验证时主动起 dev server 把 localhost 链接发过去，**发之前自己先打开确认能进**。
 - **两段式发布**：改完默认只起 dev 让用户本地验证；用户明确说「上线/发布」后，才一口气跑 commit→PR→merge→tag→CI→smoke 全链路。
 - **部署 zip 落主仓根目录** `/Users/bojue/musiczh/`，命名 `musiczh-{user,admin,api}-vX.Y.Z-YYYYMMDD.zip`，不要留在 worktree 内。
-- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.15，与主站 v0.8.2 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
+- **运营后台（`admin/`）与主站解耦**：版本号独立编号（当前开发版 v0.4.23，与主站 v0.8.11 无关）；技术/设计栈可自由引入 antd 等成熟组件库，**不必**沿用主站暖色拟物风。本地测试 admin 默认 seed 账号 `admin/admin123`。
 - **工程原则·校验输出而非只校验输入**：解密/解析代码必须校验产物 magic，权威信号（真实字节）优先于元数据；偏移/解析失败用 magic 锚定自愈，绝不放乱码产物下游。
 - **迭代复盘**：`docs/retrospectives/` 每版一个文件（`NN-版本-日期.md`）+ README 索引；新迭代起手先读最新一篇的 action items。较大功能的发布计划里必须列「上线观测指标」（验证什么 / 看哪个事件 / 期望趋势 / 评估窗口）。
 - **较大运营/流量/SEO 需求**：先读 `docs/ops/2026-05-user-growth.md`。
