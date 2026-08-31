@@ -10,6 +10,7 @@
 
 | # | 主题 | 日期 | 文件 |
 |---|---|---|---|
+| #18 | v0.8.11 QQ 旧版客户端外部链接阶段一 | 2026-08-31 | [18-v0.8.11-qq-installer-external-link-20260831.md](18-v0.8.11-qq-installer-external-link-20260831.md) |
 | #17 | v0.8.10 首页双域名公告与生产密钥轮换 | 2026-08-29 | [17-v0.8.10-homepage-announcements-20260829.md](17-v0.8.10-homepage-announcements-20260829.md) |
 | #16 | v0.8.9 受限页辅助文案与独立曝光埋点 | 2026-08-29 | [16-v0.8.9-restricted-page-assist-20260829.md](16-v0.8.9-restricted-page-assist-20260829.md) |
 | #15 | Cloudflare API、运营后台与阿里云 Tunnel 上线 | 2026-08-28 | [15-cloudflare-api-admin-tunnel-20260828.md](15-cloudflare-api-admin-tunnel-20260828.md) |
