@@ -19,6 +19,9 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 识别出的 Host 校正正式域名归属。后台首页可分别查看 `sleepno.cn`、`shiyinmp3.com` 与
 整体 PV/UV。更早的历史事件没有可信 Host，保持空值并只计入整体流量，不回填猜测值。
 访客来源分类同时把 `sleepno.cn`、`shiyinmp3.com` 及其子域名识别为“站内”。
+v0.8.12 起，旧域临时 307 会给目标 URL 追加 `migration_source=sleepno`；目标主域记录一次
+`pageview.props.migration_source` 后立即从地址栏清除该参数。该字段可由访问者自行伪造，
+只用于迁移趋势观察，权威跳转请求量仍以 `sleepno.cn` nginx 307 日志为准。
 生产拓扑与完整边界见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ---
@@ -90,6 +93,7 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 | `action` | string | 通用枚举（如对话框 confirm/cancel） |
 | `status` | string | 文件当时状态 |
 | `referrer` | string | 来源 URL（仅 `pageview` 自动从 `document.referrer` 采集，用于访客日志渠道分析）|
+| `migration_source` | string | **v0.8.12 起新增** · 旧域临时跳转到目标主域时固定为 `sleepno`，仅随目标主域首次 `pageview` 上报；属于可伪造的运营归因，不作为安全或计费信号 |
 | `reject_reason` | string | 上传被拒原因：`FORMAT_UNSUPPORTED` / `SIZE_EXCEEDED` / `QUEUE_FULL` / `LARGE_BATCH_DISMISSED`。`QUEUE_FULL` **v0.5.0 起不再产生**（50 上限改为性能警告弹窗，枚举值保留兼容历史数据）。`LARGE_BATCH_DISMISSED` **v0.5.2 起新增**——用户在 ≥50 文件警告弹窗里选「重新选择」或按 ESC 关闭、pending files 被丢弃时由 `onLargeBatchReselect` 补发，让旧/新口径自洽（修复 v0.5.0-v0.5.1 期间「旧 > 新」anomaly）。**运营后台 v0.4.8 起**在状态分类中独立为 `user_dismissed`（"主动取消"），不再计入"被拒"/"上传失败"口径；`reject_reason` 字段值本身保持不变 |
 | `download_kind` | string | 下载方式：`single` / `all_separate` / `zip` |
 | `file_id` | string | **v0.4.1 起新增** · 文件级 UUID v4，由 `addFiles` 用 `crypto.randomUUID()` 生成；贯穿 `upload_attempt → decrypt_*/transcode_*` 全链路，用来在后端关联出 `pipeline_status`。v0.4.1 之前的事件无此字段，运营后台显示「-（历史数据）」 |
@@ -121,7 +125,7 @@ v0.8.8 起，SDK 为每条新事件自动注入顶层公共字段 `site_host`；
 
 | 事件名 | 中文描述 | 触发位置（文件 : 行） | 主要字段 | 备注 |
 |---|---|---|---|---|
-| `pageview` | 主站 - 首屏访问 | [src/main.tsx](../src/main.tsx) `analytics.pageview()` | `page, site_host` | SDK 启动后调用一次；`site_host` 为所有事件共有字段 |
+| `pageview` | 主站 - 首屏访问 | [src/main.tsx](../src/main.tsx) `analytics.pageview()` | `page, site_host, migration_source?` | SDK 启动后调用一次；`site_host` 为所有事件共有字段；旧域 307 落地时可带一次 `migration_source='sleepno'` |
 | `restricted_page_view` | 受限页 - 页面访问 | [server/src/routes/publicRestrictedPage.ts](../server/src/routes/publicRestrictedPage.ts) `GET /api/restricted-page` | 服务端 `ip, ua` | 受限页内联脚本读取公开辅助文案时记录；独立表口径，不计入主站 PV / UV |
 | `upload_zone_click` | 主站 - 上传区 - 点击（含还没选择文件的纯点击） | [src/App.tsx](../src/App.tsx) `DropZone.onClick` | — | label 任意点击都会触发，配合 `upload_pick` 一起看 |
 | `upload_zone_view` | 主站 - 上传区 - 曝光 | [src/App.tsx](../src/App.tsx) `DropZone` ref | — | session 内只触发一次 |

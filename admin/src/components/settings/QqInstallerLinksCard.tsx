@@ -21,12 +21,12 @@ type Drafts = Partial<Record<QqInstallerLinkSite, string>>
 type Feedback = { type: 'success' | 'error'; message: string }
 
 const SITE_LABELS: Record<QqInstallerLinkSite, string> = {
-  'sleepno.cn': '阿里云原站',
-  'shiyinmp3.com': 'Cloudflare 主站',
+  'sleepno.cn': '迁移期旧域',
+  'shiyinmp3.com': '目标主域',
 }
 
 const EMPTY_LINK_COPY: Record<QqInstallerLinkSite, string> = {
-  'sleepno.cn': '留空时继续使用服务器现有的同源 ZIP，不改变当前用户体验。',
+  'sleepno.cn': '迁移期留空时继续使用服务器现有的同源 ZIP，不改变当前用户体验。',
   'shiyinmp3.com': '留空时不跳转，并显示“暂不支持，敬请期待”。',
 }
 
@@ -176,8 +176,8 @@ export function QqInstallerLinksCard() {
           <Alert
             type="info"
             showIcon
-            message="先灰度 Cloudflare 主站，阿里云原站暂不切换"
-            description="第一阶段只保存 shiyinmp3.com 的网盘地址。观察稳定并再次确认后，再给 sleepno.cn 保存同一地址。"
+            message="目标主域已使用外部链接，旧域仍处于迁移兼容期"
+            description="sleepno.cn 当前继续使用同源 ZIP。只有完成观察且项目主再次确认后，才保存外部链接并另行移除自托管回退。"
           />
           {feedback && (
             <Alert

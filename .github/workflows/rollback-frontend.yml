@@ -72,7 +72,13 @@ jobs:
           REMOTE
 
       - name: 验证用户端
-        run: node scripts/smoke-static-deploy.mjs https://sleepno.cn/
+        run: |
+          bash scripts/smoke-restricted-user-deploy.sh \
+            '${{ secrets.SSH_PORT }}' \
+            '${{ secrets.SSH_USER }}' \
+            '${{ secrets.SSH_HOST }}' \
+            /www/wwwroot/musiczh \
+            https://sleepno.cn/
 
   rollback-admin:
     name: 回滚运营后台

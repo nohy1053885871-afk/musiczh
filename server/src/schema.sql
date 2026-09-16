@@ -145,6 +145,12 @@ VALUES (
 );
 INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
 VALUES (
+  'legacy_domain_redirect_enabled',
+  'false',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+);
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
   'site_access_restricted',
   'false',
   CAST(strftime('%s', 'now') AS INTEGER) * 1000

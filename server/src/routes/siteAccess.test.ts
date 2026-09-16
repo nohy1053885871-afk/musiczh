@@ -13,7 +13,11 @@ import {
 } from '../lib/siteAccess.js'
 import { signAdminToken } from '../middleware/auth.js'
 import { createAdminSiteAccessRouter } from './adminSiteAccess.js'
-import { createInternalSiteAccessRouter } from './internalSiteAccess.js'
+import {
+  createInternalSiteAccessRouter,
+  LEGACY_DOMAIN_REDIRECT_ORIGIN,
+  shouldRedirectLegacyDomainRequest,
+} from './internalSiteAccess.js'
 
 process.env.JWT_SECRET = 'site-access-test-secret-at-least-32-characters'
 
@@ -242,6 +246,74 @@ test('黑名单始终优先，白名单模式只额外拒绝未配置地址', as
   assert.equal((await check(CURRENT_IP)).status, 204)
   assert.equal((await check('192.0.2.55')).status, 403)
   assert.equal((await check(OTHER_IP)).status, 403)
+  database.close()
+})
+
+test('旧域跳转只覆盖普通页面 GET/HEAD，并精确豁免兼容路径', () => {
+  for (const [method, uri] of [
+    ['GET', '/'],
+    ['HEAD', '/guide/ncm?a=1'],
+    ['GET', '/nested/page?source=test'],
+  ]) {
+    assert.equal(shouldRedirectLegacyDomainRequest(method, uri), true)
+  }
+
+  for (const [method, uri] of [
+    ['POST', '/'],
+    ['GET', undefined],
+    ['GET', '//attacker.example/path'],
+    ['GET', '/admin'],
+    ['GET', '/admin/settings'],
+    ['GET', '/api/track'],
+    ['GET', '/assets/index.js'],
+    ['GET', '/downloads/client.zip'],
+    ['GET', '/libav/decoder.wasm'],
+    ['GET', '/licenses/license.txt'],
+    ['GET', '/.well-known/acme-challenge/token'],
+    ['GET', '/.deploy-manifest.json'],
+    ['GET', '/favicon.svg'],
+    ['GET', '/icons.svg'],
+    ['GET', '/kgm-v2-mask.bin'],
+    ['GET', '/restricted.html'],
+    ['GET', '/robots.txt'],
+  ] as const) {
+    assert.equal(shouldRedirectLegacyDomainRequest(method, uri), false)
+  }
+
+  assert.equal(
+    shouldRedirectLegacyDomainRequest('GET', '/administrator'),
+    true,
+  )
+})
+
+test('内部判定在开关开启时返回 307，同时保留后台、API 与回环恢复路径', async () => {
+  const database = new Database(':memory:')
+  database.exec(CREATE_TABLES_SQL)
+  const store = createSiteAccessStore(database)
+  const app = new Hono()
+  app.route('/internal/site-access-check', createInternalSiteAccessRouter(
+    store,
+    { getLegacyDomainRedirect: () => ({ enabled: true, updatedAt: 123 }) },
+  ))
+
+  const check = (uri: string, ip = CURRENT_IP) => app.request(
+    '/internal/site-access-check',
+    {
+      headers: {
+        'X-Real-IP': ip,
+        'X-Original-Method': 'GET',
+        'X-Original-URI': uri,
+      },
+    },
+  )
+
+  const redirected = await check('/guide/ncm?a=1')
+  assert.equal(redirected.status, 307)
+  assert.equal(redirected.headers.get('Location'), LEGACY_DOMAIN_REDIRECT_ORIGIN)
+  assert.equal(redirected.headers.get('Cache-Control'), 'no-store')
+  assert.equal((await check('/admin/settings')).status, 204)
+  assert.equal((await check('/api/health')).status, 204)
+  assert.equal((await check('/', '127.0.0.1')).status, 204)
   database.close()
 })
 

@@ -3,6 +3,8 @@ export type HomepageGuidanceFlag = {
   updatedAt: number | null
 }
 
+export type LegacyDomainRedirectFlag = HomepageGuidanceFlag
+
 export type HomepageAnnouncementSite = 'sleepno.cn' | 'shiyinmp3.com'
 
 export type HomepageAnnouncementConfig = {

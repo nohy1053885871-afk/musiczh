@@ -4,10 +4,11 @@
 喜马拉雅 XM，以及原始 FLAC/OGG/M4A 转 MP3。
 所有文件都在浏览器本地处理，不上传任何服务器。**永久免费，永无广告**。
 
-🎵 Cloudflare 主站：[https://shiyinmp3.com](https://shiyinmp3.com) · 阿里云原站：[https://sleepno.cn](https://sleepno.cn)
+🎵 目标主域：[https://shiyinmp3.com](https://shiyinmp3.com) · 迁移期旧域：[https://sleepno.cn](https://sleepno.cn)
 
 > 项目背景与技术栈见 [CLAUDE.md](CLAUDE.md)。
 > 生产双域名拓扑与共享边界见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+> 主域迁移阶段与未来退役待办见 [docs/plans/19-primary-domain-migration.md](docs/plans/19-primary-domain-migration.md)。
 > 数据埋点规范见 [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md)。
 
 ---
@@ -89,15 +90,17 @@ npm run build:cloudflare # Cloudflare 用户端 + dist/admin/ + /api Worker
 
 ## 生产部署（Cloudflare + 阿里云 ECS）
 
-`shiyinmp3.com` 的用户端与 `/admin/` 静态资源由 Cloudflare Workers Static Assets
-承载；同域 `/api/*` 由 Worker 经 Cloudflare Tunnel 转发到阿里云本机 API。
-`sleepno.cn` 继续使用 nginx 静态目录并直接反代同一 API。两边共用管理员账号、功能开关
-和同一份 SQLite，但登录 Cookie、浏览器访客 ID、静态部署和接入层访问控制互相独立。
-完整边界见 [生产架构](docs/ARCHITECTURE.md)。
+`shiyinmp3.com` 是长期目标主域：用户端与 `/admin/` 静态资源由 Cloudflare Workers
+Static Assets 承载，同域 `/api/*` 由 Worker 经 Cloudflare Tunnel 转发到阿里云本机 API。
+`sleepno.cn` 是迁移期旧域，当前仍使用 nginx 静态目录并直接反代同一 API。两边共用管理员
+账号、功能开关和同一份 SQLite，但登录 Cookie、浏览器访客 ID、静态部署和接入层访问控制
+互相独立。完整边界见 [生产架构](docs/ARCHITECTURE.md)。
 
-两个正式域名默认属于同一个发布单元：普通“上线/发布”必须从同一提交更新两边，并保持
-产品功能、交互、文案、版本和 API 行为一致；只有项目主明确指定时才允许单域名例外。
-两边都部署并验收通过后，发布才算完成。
+当前迁移阶段两个域名仍属于同一个发布单元：普通“上线/发布”必须从同一提交更新两边，并
+保持产品功能、交互、文案、版本和 API 行为一致；只有项目主明确指定时才允许单域名例外。
+两边都部署并验收通过后，发布才算完成。未来的迁移提示、临时跳转、永久 301 和运行能力
+退役不会按日期自动执行，必须依据真实业务数据由项目主逐阶段确认，详见
+[主域迁移计划](docs/plans/19-primary-domain-migration.md)。
 
 ### 服务器目录布局
 
@@ -125,7 +128,7 @@ pm2 save
 pm2 startup                          # 让宝塔/系统开机自启 pm2
 ```
 
-### 阿里云原站 nginx 配置（宝塔站点 → 配置文件）
+### 迁移期旧域 nginx 配置（宝塔站点 → 配置文件）
 
 生产 `sleepno.cn` 还包含动态 IP 访问控制、后台豁免、下载目录和 `noindex` 响应头，不能用
 一个普通 `/api/` 反代片段覆盖。可复制模板见
@@ -157,13 +160,13 @@ gzip 与 manifest 流程，保留最近 7 份成功备份。禁止恢复旧的�
 
 ## 运营后台
 
-- 访问地址：`https://shiyinmp3.com/admin/`（Cloudflare）或 `https://sleepno.cn/admin`（阿里云原站）
+- 访问地址：日常使用 `https://shiyinmp3.com/admin/`；`https://sleepno.cn/admin` 保留为迁移期应急入口
 - 登录账号：单管理员，初始用户名/密码由后端环境变量 seed
 - 功能：
   - **概览**：PV/UV、人维度（上传 UV / 下载 UV）、件维度（上传文件总数、解密成功/失败、转码成功/失败）、PV/UV 趋势、漏斗、解密失败趋势
   - **按钮埋点**：每个按钮的曝光/点击 PV/UV，以及对应 CTR
   - **失败日志**：解密 / 转码失败列表 + 详情抽屉，提供「复制 JSON 给 Claude 排查」按钮
-  - **配置中心**：首页指引开关与阿里云原站 IP 访问规则
+  - **配置中心**：旧域临时跳转、首页指引、双域独立公告/QQ 链接，以及迁移期旧域 IP 访问规则
 
 ---
 

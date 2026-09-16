@@ -26,8 +26,8 @@ type Drafts = Partial<Record<HomepageAnnouncementSite, Draft>>
 type Feedback = { type: 'success' | 'error'; message: string }
 
 const SITE_LABELS: Record<HomepageAnnouncementSite, string> = {
-  'sleepno.cn': '阿里云原站',
-  'shiyinmp3.com': 'Cloudflare 主站',
+  'sleepno.cn': '迁移期旧域',
+  'shiyinmp3.com': '目标主域',
 }
 
 function toDraft(config: HomepageAnnouncementConfig): Draft {
@@ -240,8 +240,8 @@ export function HomepageAnnouncementsCard() {
           <Alert
             type="info"
             showIcon
-            message="两个域名共用后台和数据库，但公告内容互相独立"
-            description="分别切换域名标签保存。关闭按钮只隐藏访客当前看到的版本；再次保存会生成新版本并重新显示。"
+            message="当前为过渡期双域配置"
+            description="shiyinmp3.com 是目标主域，sleepno.cn 是迁移中的旧域；两边共用后台和数据库，但公告内容独立。迁移阶段由项目主根据业务数据决定，不会自动切换。"
           />
           {feedback && (
             <Alert

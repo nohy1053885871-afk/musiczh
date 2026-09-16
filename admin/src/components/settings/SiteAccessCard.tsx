@@ -271,7 +271,7 @@ export function SiteAccessCard() {
   ]
 
   return (
-    <Card title="公开站点访问控制（仅 sleepno.cn）" loading={loading}>
+    <Card title="迁移期旧域访问控制（仅 sleepno.cn）" loading={loading}>
       {loadError && (
         <Alert type="error" showIcon message="访问配置加载失败" description="当前状态未知，为避免误操作已禁用控制。" action={<Button size="small" onClick={() => void load()}>重试</Button>} />
       )}
@@ -282,7 +282,7 @@ export function SiteAccessCard() {
             type={state.enabled ? 'warning' : 'info'}
             showIcon
             message={state.enabled ? 'sleepno.cn 白名单限制模式已开启' : 'sleepno.cn 白名单限制模式未开启'}
-            description="本配置仅限制 sleepno.cn；shiyinmp3.com 当前不受白名单和黑名单规则影响。sleepno.cn 的运营后台与健康检查仍不受限制。"
+            description="本配置只服务迁移期旧域 sleepno.cn，不是双域或全站紧急开关；目标主域 shiyinmp3.com 不受这些规则影响。sleepno.cn 的运营后台与健康检查仍不受限制。"
           />
           <Space size="middle" wrap>
             <Switch checked={state.enabled} loading={busy === 'mode'} disabled={busy !== null} checkedChildren="限制" unCheckedChildren="开放" onChange={changeMode} />
