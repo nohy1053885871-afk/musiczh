@@ -12,8 +12,8 @@
 - 旧域应急运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
 - 当前开发版本：v0.8.12（运营后台 v0.4.24，API v0.4.17）
-- 当前生产版本：Cloudflare/阿里云主站 v0.8.11 · 运营后台 v0.4.23 · API v0.4.16
-- 上线状态：Cloudflare/阿里云用户端 v0.8.11 ✅ · Cloudflare/阿里云运营后台 v0.4.23 ✅ · API v0.4.16 ✅
+- 当前生产版本：Cloudflare/阿里云主站 v0.8.12 · 运营后台 v0.4.24 · API v0.4.17
+- 上线状态：Cloudflare/阿里云用户端 v0.8.12 ✅ · Cloudflare/阿里云运营后台 v0.4.24 ✅ · API v0.4.17 ✅
 
 > 部署 / 升级 / 运维步骤见本地 [DEPLOY.md](DEPLOY.md)（不进 git）。
 > 双域名生产拓扑、共享状态与故障边界的唯一事实源见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -240,19 +240,19 @@ iOS 6 软拟物复古风（Light Skeuomorphic），详见 [DESIGN_SPEC.md](DESIG
 
 > 更早的历史版本归档在 [CHANGELOG.md](CHANGELOG.md)，按需 Read。写新版本时：本节累计到 3 个就把最旧的一段挪进 CHANGELOG.md，保持本节常驻只 2 个版本。
 
+### v0.8.12 / 运营后台 v0.4.24 / API v0.4.17 · 20260917 上线
+
+- **旧域临时跳转能力**：运营后台新增默认关闭的高风险开关；开启需二次确认，目标固定为 `https://shiyinmp3.com`，仅处理 `sleepno.cn` 普通页面 GET/HEAD 并保留路径和查询参数，后台、API、静态资源、下载与证书路径继续兼容
+- **失败安全与归因**：缺行、非法值或数据库异常均不启用跳转；目标主域只在首个 `pageview` 记录 `migration_source='sleepno'` 后清理地址栏参数，该字段只用于运营趋势，不作为安全信号
+- **发布与回滚**：旧域 nginx 在 API 部署后更新，备份为 `sleepno.cn.conf.v0812-20260917-015050`，`nginx -t` 和 reload 通过；发布与回滚 smoke 同时识别 200/403/307 并精确校验跳转目标
+- **发布证据**：69/69 专项与回归、三端构建、Cloudflare 构建与 Wrangler dry-run 通过；PR #84 合并提交 `b26eadee036c`，PR CI `35130012473`、合并后 Cloudflare 校验 `35130211209`、阿里云前端 `35130211238`、API `35130225850` 均成功，Cloudflare Worker `3f418c00-6141-4b88-85d4-748a5347652d`。双域首页/后台/API、旧域关闭态 200、源站匿名 403、`www` 单次 301 与生产 bundle 均通过；生产浏览器自动验收超时，未冒充真实浏览器通过。归档标签 `user-v0.8.12`、`admin-v0.4.24`、`api-v0.4.17`、`cloudflare-v0.8.12` 均指向合并提交；生产开关保持关闭，迁移阶段仍为阶段 1
+
 ### v0.8.11 / 运营后台 v0.4.23 / API v0.4.16 · 20260830 上线
 
 - **按域名配置 QQ 下载链接**：运营后台可分别保存 `shiyinmp3.com` 与 `sleepno.cn` 的 HTTPS 链接；公开 `/api/config` 只返回当前受信 Host 的 `qqInstallerUrl`，非法值、未知 Host 和接口失败均按未配置处理
 - **分阶段迁移**：`shiyinmp3.com` 的 QQ 使用说明与支持矩阵两个下载入口已切到项目主提供的外部网盘；`sleepno.cn` 暂时保持空配置并继续使用同源安装包，第二阶段必须在观察后由项目主再次确认
 - **失败安全与埋点**：两个入口复用统一解析函数；外部链接优先，阿里云空配置回退自托管 ZIP，Cloudflare 空配置显示不可用提示；外部跳转不携带自托管安装包 `sha256`，链接本身不写入埋点
 - **发布与验收**：专项及回归 59/59、三端构建、Cloudflare 构建与 Wrangler dry-run 通过；PR #82 合并提交 `5e00d7244e41`，CI `33312715230`、合并后校验 `33312767894`、阿里云前端 `33312767888`、API `33312793945` 均成功，Cloudflare Worker `5e13f488-1813-4742-80d5-ccc83aa8b6b9`。双域名 health 为 200；`shiyinmp3.com` config 返回外部链接、`sleepno.cn` 返回 `null`，落地页为 200。生产浏览器控制连续中断，未把接口与 bundle 验收冒充真实点击；归档标签 `user-v0.8.11`、`admin-v0.4.23`、`api-v0.4.16`、`cloudflare-v0.8.11` 均指向功能发布提交
-
-### v0.8.10 / 运营后台 v0.4.22 / API v0.4.15 · 20260829 上线
-
-- **双域名独立公告**：`sleepno.cn` 与 `shiyinmp3.com` 在共享 SQLite 内分别保存首页公告；正文不分主副标题，可选行动点必须成对配置文案与安全链接，关闭按钮按域名和公告版本记忆，同版本关闭后不重显、新版本自动恢复
-- **失败安全与运营闭环**：公开 `/api/config` 只返回当前 Host 的已启用公告，未知 Host、配置非法、未启用或接口异常均隐藏；运营后台配置中心可分别编辑、启停两个正式域名，生产最终状态为两边关闭，公开接口均返回 `homepageAnnouncement: null`
-- **埋点与视觉**：登记公告、行动点和关闭按钮的曝光/点击事件；主站按设计规范完成桌面与窄屏验收，后台双表单在桌面与窄屏无横向溢出；生产浏览器控制受安全策略阻断，未以静态或接口 smoke 冒充线上视觉验收
-- **发布与密钥收口**：PR #78 合并提交 `a66971ab688b`；CI `33247803403`、阿里云前端 `33247855431`、Cloudflare 校验 `33247855479`、API `33247879529`、Tunnel `33247932526` 均成功；初始 Worker `78ed84ba-510d-4898-a0ba-5c6d3ce9ca3f`。发布后立即轮换 Tunnel 与源站两枚生产密钥，最终 Tunnel 为 `healthy`，源站密钥配置 run `33257123548` 成功，Worker Secret 版本 `8ccc0b87-30d8-41cd-b7a1-5d50874d548d`；同时修复已运行 cloudflared 不会被 `enable --now` 重启的问题，后续配置统一显式 `restart`，合并后 main run `33258188877` 全部成功。归档标签 `user-v0.8.10`、`admin-v0.4.22`、`api-v0.4.15`、`cloudflare-v0.8.10` 均指向功能发布提交
 
 # 通用
 - 优先选择编辑而非重写整个文件
