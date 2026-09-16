@@ -6,6 +6,8 @@ import {
 } from './siteHost.js'
 
 export const HOMEPAGE_GUIDANCE_FLAG_KEY = 'homepage_guidance_visible'
+export const LEGACY_DOMAIN_REDIRECT_FLAG_KEY =
+  'legacy_domain_redirect_enabled'
 export const HOMEPAGE_ANNOUNCEMENT_KEYS: Record<TrackedSiteHost, string> = {
   'sleepno.cn': 'homepage_announcement_sleepno_cn',
   'shiyinmp3.com': 'homepage_announcement_shiyinmp3_com',
@@ -19,6 +21,8 @@ export type HomepageGuidanceFlag = {
   enabled: boolean
   updatedAt: number | null
 }
+
+export type LegacyDomainRedirectFlag = HomepageGuidanceFlag
 
 export type HomepageAnnouncementConfig = {
   siteHost: TrackedSiteHost
@@ -45,6 +49,8 @@ export type QqInstallerLinkInput = Pick<QqInstallerLinkConfig, 'url'>
 export type FeatureFlagStore = {
   getHomepageGuidance: () => HomepageGuidanceFlag
   setHomepageGuidance: (enabled: boolean) => HomepageGuidanceFlag
+  getLegacyDomainRedirect: () => LegacyDomainRedirectFlag
+  setLegacyDomainRedirect: (enabled: boolean) => LegacyDomainRedirectFlag
   getHomepageAnnouncement: (
     siteHost: TrackedSiteHost,
   ) => HomepageAnnouncementConfig
@@ -66,6 +72,10 @@ type FeatureFlagDatabase = Pick<Database.Database, 'prepare'>
 function parseHomepageGuidanceValue(value: string | undefined): boolean {
   if (value === 'false') return false
   return true
+}
+
+function parseSafeBooleanValue(value: string | undefined): boolean {
+  return value === 'true'
 }
 
 const DEFAULT_ANNOUNCEMENT: HomepageAnnouncementInput = {
@@ -150,6 +160,39 @@ function parseHomepageAnnouncementValue(
 export function createFeatureFlagStore(
   database: FeatureFlagDatabase,
 ): FeatureFlagStore {
+  const getBooleanFlag = (
+    key: string,
+    parseValue: (value: string | undefined) => boolean,
+  ): HomepageGuidanceFlag => {
+    const row = database
+      .prepare('SELECT value, updated_at FROM feature_flags WHERE key = ?')
+      .get(key) as
+      | { value: string; updated_at: number }
+      | undefined
+    return {
+      enabled: parseValue(row?.value),
+      updatedAt: row?.updated_at ?? null,
+    }
+  }
+
+  const setBooleanFlag = (
+    key: string,
+    enabled: boolean,
+  ): HomepageGuidanceFlag => {
+    const previous = getBooleanFlag(key, parseSafeBooleanValue)
+    const updatedAt = Math.max(Date.now(), (previous.updatedAt ?? 0) + 1)
+    database
+      .prepare(
+        `INSERT INTO feature_flags (key, value, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           value = excluded.value,
+           updated_at = excluded.updated_at`,
+      )
+      .run(key, enabled ? 'true' : 'false', updatedAt)
+    return { enabled, updatedAt }
+  }
+
   const getHomepageAnnouncement = (
     siteHost: TrackedSiteHost,
   ): HomepageAnnouncementConfig => {
@@ -182,16 +225,10 @@ export function createFeatureFlagStore(
 
   return {
     getHomepageGuidance() {
-      const row = database
-        .prepare('SELECT value, updated_at FROM feature_flags WHERE key = ?')
-        .get(HOMEPAGE_GUIDANCE_FLAG_KEY) as
-        | { value: string; updated_at: number }
-        | undefined
-
-      return {
-        enabled: parseHomepageGuidanceValue(row?.value),
-        updatedAt: row?.updated_at ?? null,
-      }
+      return getBooleanFlag(
+        HOMEPAGE_GUIDANCE_FLAG_KEY,
+        parseHomepageGuidanceValue,
+      )
     },
 
     setHomepageGuidance(enabled) {
@@ -211,6 +248,17 @@ export function createFeatureFlagStore(
         )
 
       return { enabled, updatedAt }
+    },
+
+    getLegacyDomainRedirect() {
+      return getBooleanFlag(
+        LEGACY_DOMAIN_REDIRECT_FLAG_KEY,
+        parseSafeBooleanValue,
+      )
+    },
+
+    setLegacyDomainRedirect(enabled) {
+      return setBooleanFlag(LEGACY_DOMAIN_REDIRECT_FLAG_KEY, enabled)
     },
 
     getHomepageAnnouncement,

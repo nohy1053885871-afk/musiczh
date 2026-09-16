@@ -5,13 +5,13 @@
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
 解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
-- Cloudflare 主站：https://shiyinmp3.com（用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 旧版客户端下载已使用按域名配置的外部网盘链接）
-- Cloudflare 运营后台：https://shiyinmp3.com/admin（与阿里云原站共用账号、API 和 SQLite）
-- 阿里云原站：https://sleepno.cn
+- 目标主域：https://shiyinmp3.com（Cloudflare 用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 旧版客户端下载已使用按域名配置的外部网盘链接）
+- 日常运营后台：https://shiyinmp3.com/admin（与迁移期旧域共用账号、API 和 SQLite）
+- 迁移期旧域：https://sleepno.cn（当前仍完整提供主站、后台与同源 API，不自动跳转）
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
-- 阿里云运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
+- 旧域应急运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.11（运营后台 v0.4.23，API v0.4.16）
+- 当前开发版本：v0.8.12（运营后台 v0.4.24，API v0.4.17）
 - 当前生产版本：Cloudflare/阿里云主站 v0.8.11 · 运营后台 v0.4.23 · API v0.4.16
 - 上线状态：Cloudflare/阿里云用户端 v0.8.11 ✅ · Cloudflare/阿里云运营后台 v0.4.23 ✅ · API v0.4.16 ✅
 
@@ -83,6 +83,7 @@ worker/                  # Cloudflare Worker：/api 同源代理，静态资源�
 docs/
   ARCHITECTURE.md        # 双域名生产拓扑、共享/隔离状态、安全与故障边界（唯一事实源）
   ANALYTICS_SPEC.md      # 埋点规范文档（事件全表 + 中文描述 + 字段白名单）
+  plans/19-primary-domain-migration.md # 目标主域、旧域生命周期、阶段门禁与未来待办
 
 public/
   favicon.svg            # 黑胶唱片 SVG 图标
@@ -111,11 +112,16 @@ vendor/libav/         # LibAV.js 固定配置、版本、哈希与可复现构�
 - 三个子项目互相**解耦**：改任一不重新构建另两个；跨端改动需明确列出每端的改动清单
 - “只构建/部署对应端”中的“端”指用户端、运营后台或 API 子项目，不是只选一个正式域名。
   用户端或后台一旦获准上线，默认必须从同一提交发布到 Cloudflare 与阿里云两个目标
-- **默认双域名同步发布**：项目主说“上线/发布”时，默认包含 `shiyinmp3.com` 与
-  `sleepno.cn`，两边功能、交互、文案、版本和 API 行为保持一致；只有项目主明确指定
-  “只上线某一域名、另一域名保持不变”才允许单域名发布，并必须记录原因、范围和恢复同步计划
+- **迁移期默认双域名同步发布**：长期目标主域是 `shiyinmp3.com`，`sleepno.cn` 是迁移中的
+  旧域；在 [主域迁移计划](docs/plans/19-primary-domain-migration.md)进入跳转或退役阶段前，
+  项目主说“上线/发布”仍默认包含两个域名，两边功能、交互、文案、版本和 API 行为保持一致。
+  只有项目主明确指定“只上线某一域名、另一域名保持不变”才允许单域名发布，并必须记录
+  原因、范围和恢复同步计划
 - 双域名发布只有在两边部署与 smoke 都通过后才算完成；任何一边失败都必须报告“发布未完成”
   或“临时不一致”，不得宣告上线完成或静默留下版本分叉
+- **域名阶段不能自行推进**：迁移提示、临时跳转、永久 301、停止旧域发布、关闭旧域后台/API
+  或删除下载回退，都必须由项目主根据真实业务情况逐阶段明确确认；不得因本文写明长期目标
+  就提前实施
 - 新增按钮 → 同时埋 `*_view`（曝光，用 `useImpression` hook）和 `*_click`（点击）
 - 新增异步流程 → 同时埋 `*_start` 与 `*_done` / `*_fail`，失败必走 `analytics.trackFailure`
 - 任何新增事件，先在 [docs/ANALYTICS_SPEC.md](docs/ANALYTICS_SPEC.md) 事件全表登记一行（含中文描述），再在 `admin/src/lib/format.ts` 的 `EVENT_LABELS` 加映射
@@ -184,7 +190,7 @@ npm run dev:server   # http://localhost:8787（tsx watch，热重载）
 | 运营后台前端 | `/www/wwwroot/musiczh-admin/` | `location ^~ /admin/`（alias + named location 处理 SPA fallback） |
 | 后端 API | `/www/wwwroot/musiczh-api/` （pm2 守护，Node 20+） | `location /api/` 反代 `127.0.0.1:8787` |
 
-Cloudflare 用户端与运营后台共享同一 Workers Static Assets 部署；`/api/*` 由 Worker 经
+目标主域的用户端与运营后台共享同一 Workers Static Assets 部署；`/api/*` 由 Worker 经
 Cloudflare Tunnel 转发到上述同一 API/SQLite。Cloudflare 构建命令为
 `npm run build:cloudflare`，其中后台产物写入 `dist/admin/`。完整 Host/路由矩阵、发布顺序
 与故障影响见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。

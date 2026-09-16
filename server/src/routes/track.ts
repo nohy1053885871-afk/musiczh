@@ -11,7 +11,7 @@ const ALLOWED_PROPS = new Set([
   'error_code', 'error_msg', 'error_stack',
   'count', 'total_size', 'format', 'source',
   'from_format', 'queue_size', 'action', 'status',
-  'referrer',
+  'referrer', 'migration_source',
   'reject_reason', 'download_kind',
   // v0.4.1 新增：file_id 关联上传 → 解密/转码 → 完成/失败/中止
   // progress_bucket（transcode_progress 心跳）；last_progress / stage（*_abandon 中止现场）

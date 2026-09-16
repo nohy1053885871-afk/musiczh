@@ -7,6 +7,7 @@ import type {
   FormatDistributionResp,
   FunnelResp,
   HomepageGuidanceFlag,
+  LegacyDomainRedirectFlag,
   HomepageAnnouncementInput,
   HomepageAnnouncementSite,
   HomepageAnnouncementConfig,
@@ -98,6 +99,15 @@ export const api = {
     request<HomepageGuidanceFlag>('/admin/feature-flags/homepage-guidance', {
       method: 'PUT', body: JSON.stringify({ enabled }),
     }),
+  legacyDomainRedirectFlag: () =>
+    request<LegacyDomainRedirectFlag>(
+      '/admin/feature-flags/legacy-domain-redirect',
+    ),
+  updateLegacyDomainRedirectFlag: (enabled: boolean) =>
+    request<LegacyDomainRedirectFlag>(
+      '/admin/feature-flags/legacy-domain-redirect',
+      { method: 'PUT', body: JSON.stringify({ enabled }) },
+    ),
   homepageAnnouncements: () =>
     request<HomepageAnnouncementsResponse>(
       '/admin/feature-flags/homepage-announcements',

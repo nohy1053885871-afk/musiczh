@@ -13,6 +13,10 @@ const UpdateHomepageGuidanceSchema = z
   .object({ enabled: z.boolean() })
   .strict()
 
+const UpdateLegacyDomainRedirectSchema = z
+  .object({ enabled: z.boolean() })
+  .strict()
+
 const UpdateHomepageAnnouncementSchema = z
   .object({
     enabled: z.boolean(),
@@ -96,6 +100,31 @@ export function createAdminFeatureFlagsRouter(
     }
 
     return c.json(store.setHomepageGuidance(parsed.data.enabled))
+  })
+
+  router.get('/legacy-domain-redirect', (c) => {
+    c.header('Cache-Control', 'no-store')
+    return c.json(store.getLegacyDomainRedirect())
+  })
+
+  router.put('/legacy-domain-redirect', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'invalid_json' }, 400)
+    }
+
+    const parsed = UpdateLegacyDomainRedirectSchema.safeParse(body)
+    if (!parsed.success) {
+      return c.json(
+        { error: 'invalid_payload', detail: parsed.error.issues },
+        400,
+      )
+    }
+
+    return c.json(store.setLegacyDomainRedirect(parsed.data.enabled))
   })
 
   router.get('/homepage-announcements', (c) => {

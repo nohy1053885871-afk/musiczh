@@ -108,6 +108,51 @@ test('管理员可写入并读回首页指引状态', async () => {
   database.close()
 })
 
+test('旧域跳转开关默认关闭、要求登录并严格校验布尔值', async () => {
+  const { app, database } = createTestApp()
+  const path = '/api/admin/feature-flags/legacy-domain-redirect'
+
+  assert.equal((await app.request(path)).status, 401)
+
+  const cookie = await adminCookie()
+  const headers = { 'Content-Type': 'application/json', Cookie: cookie }
+  const initial = await app.request(path, { headers })
+  assert.equal(initial.headers.get('Cache-Control'), 'no-store')
+  assert.deepEqual(await initial.json(), { enabled: false, updatedAt: null })
+
+  for (const body of [
+    { enabled: 'true' },
+    { enabled: true, target: 'https://attacker.example' },
+  ]) {
+    const invalid = await app.request(path, {
+      method: 'PUT', headers, body: JSON.stringify(body),
+    })
+    assert.equal(invalid.status, 400)
+  }
+
+  const enabled = await app.request(path, {
+    method: 'PUT', headers, body: JSON.stringify({ enabled: true }),
+  })
+  assert.equal(enabled.status, 200)
+  assert.equal(enabled.headers.get('Cache-Control'), 'no-store')
+  const enabledBody = await enabled.json() as {
+    enabled: boolean
+    updatedAt: number
+  }
+  assert.equal(enabledBody.enabled, true)
+  assert.equal(typeof enabledBody.updatedAt, 'number')
+
+  const reread = await app.request(path, { headers })
+  assert.deepEqual(await reread.json(), enabledBody)
+
+  const publicRead = await app.request('/api/config')
+  assert.equal(
+    Object.hasOwn(await publicRead.json() as object, 'legacyDomainRedirect'),
+    false,
+  )
+  database.close()
+})
+
 test('管理员可分别保存两个域名公告，公开接口只返回当前 Host 配置', async () => {
   const { app, database } = createTestApp()
   const cookie = await adminCookie()

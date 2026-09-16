@@ -58,6 +58,40 @@ test('开关使用原子 upsert 并在数据库重开后保持状态', () => {
   }
 })
 
+test('旧域跳转缺失或非法时默认关闭，且可跨数据库重开持久化', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'musiczh-legacy-redirect-'))
+  const databasePath = join(tempDir, 'flags.db')
+
+  try {
+    let database = new Database(databasePath)
+    database.exec(CREATE_TABLE_SQL)
+    const firstStore = createFeatureFlagStore(database)
+    assert.deepEqual(firstStore.getLegacyDomainRedirect(), {
+      enabled: false,
+      updatedAt: null,
+    })
+
+    database
+      .prepare('INSERT INTO feature_flags VALUES (?, ?, ?)')
+      .run('legacy_domain_redirect_enabled', 'invalid', 123)
+    assert.deepEqual(firstStore.getLegacyDomainRedirect(), {
+      enabled: false,
+      updatedAt: 123,
+    })
+    assert.equal(firstStore.setLegacyDomainRedirect(true).enabled, true)
+    database.close()
+
+    database = new Database(databasePath)
+    const reopenedStore = createFeatureFlagStore(database)
+    assert.equal(reopenedStore.getLegacyDomainRedirect().enabled, true)
+    assert.equal(reopenedStore.setLegacyDomainRedirect(false).enabled, false)
+    assert.equal(reopenedStore.getLegacyDomainRedirect().enabled, false)
+    database.close()
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
+  }
+})
+
 test('两个域名的首页公告默认关闭并独立持久化', () => {
   const database = new Database(':memory:')
   database.exec(CREATE_TABLE_SQL)

@@ -22,12 +22,14 @@ ssh -p "$ssh_port" "$remote" \
 # SSH_CONNECTION 的首段是本 Runner 的公网 IPv4；用同一地址询问内部判定，再核对公网结果。
 runner_ip=$(ssh -p "$ssh_port" "$remote" 'printf "%s\n" "$SSH_CONNECTION"' | awk '{print $1}')
 expected=$(ssh -p "$ssh_port" "$remote" \
-  "curl -sS -o /dev/null -w '%{http_code}' -H 'X-Real-IP: $runner_ip' http://127.0.0.1:8787/internal/site-access-check")
+  "curl -sS -o /dev/null -w '%{http_code}' -H 'X-Real-IP: $runner_ip' -H 'X-Original-Method: GET' -H 'X-Original-URI: /' http://127.0.0.1:8787/internal/site-access-check")
 
 response_file=$(mktemp)
-trap 'rm -f "$response_file"' EXIT
+headers_file=$(mktemp)
+probe_headers_file=$(mktemp)
+trap 'rm -f "$response_file" "$headers_file" "$probe_headers_file"' EXIT
 set +e
-actual=$(curl -4 -sS -o "$response_file" -w '%{http_code}' --max-time 20 "$public_url")
+actual=$(curl -4 -sS -D "$headers_file" -o "$response_file" -w '%{http_code}' --max-time 20 "$public_url")
 curl_status=$?
 set -e
 
@@ -49,6 +51,17 @@ case "$expected" in
     test "$actual" = 403
     grep -q '访问受限' "$response_file"
     echo "[smoke] restricted public response 403 for $runner_ip"
+    ;;
+  307)
+    test "$actual" = 307
+    location=$(awk 'tolower($1) == "location:" { sub(/\r$/, "", $2); print $2; exit }' "$headers_file")
+    test "$location" = 'https://shiyinmp3.com/?migration_source=sleepno'
+    probe_url="${public_url%/}/migration-smoke?existing=1"
+    probe_status=$(curl -4 -sS -D "$probe_headers_file" -o /dev/null -w '%{http_code}' --max-time 20 "$probe_url")
+    test "$probe_status" = 307
+    probe_location=$(awk 'tolower($1) == "location:" { sub(/\r$/, "", $2); print $2; exit }' "$probe_headers_file")
+    test "$probe_location" = 'https://shiyinmp3.com/migration-smoke?existing=1&migration_source=sleepno'
+    echo "[smoke] legacy-domain redirect 307 preserves path and query for $runner_ip"
     ;;
   404)
     # API 先于本功能升级时的兼容路径：此时 nginx 尚未启用 auth_request。

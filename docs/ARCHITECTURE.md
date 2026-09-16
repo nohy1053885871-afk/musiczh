@@ -8,11 +8,12 @@
 
 ## 1. 架构结论
 
-拾音当前是“**双公开入口、单后端、单数据库、两条接入链路**”，不是两套独立系统，
-也不是双活后端：
+拾音当前是“**过渡期双公开入口、单后端、单数据库、两条接入链路**”，不是两套独立系统，
+也不是双活后端。长期以 `shiyinmp3.com` 为目标主域，`sleepno.cn` 是迁移中的旧域；在项目主
+根据真实业务数据明确切换阶段前，两边仍完整提供服务：
 
-- `shiyinmp3.com` 是 Cloudflare 正式入口，静态资源位于 Workers Static Assets；
-- `sleepno.cn` 是阿里云原站，静态资源由 ECS 上的 nginx 提供；
+- `shiyinmp3.com` 是 Cloudflare 主入口和目标主域，静态资源位于 Workers Static Assets；
+- `sleepno.cn` 是阿里云旧域和迁移期兼容入口，静态资源由 ECS 上的 nginx 提供；
 - 两边的 `/api/*` 最终进入阿里云 ECS 上同一个 Hono 进程
   `127.0.0.1:8787`；
 - 所有运营数据、管理员账号、功能开关和访问控制规则都落在同一个 SQLite：
@@ -50,19 +51,26 @@ flowchart LR
 
 | Host | 定位 | `/` | `/admin/` | `/api/*` | 备注 |
 |---|---|---|---|---|---|
-| `shiyinmp3.com` | Cloudflare 正式入口 | Static Assets | Static Assets | Worker → Tunnel → ECS API | 公开、全站 `noindex` |
+| `shiyinmp3.com` | Cloudflare 主入口、目标主域 | Static Assets | Static Assets | Worker → Tunnel → ECS API | 公开、全站 `noindex` |
 | `www.shiyinmp3.com` | 别名 | 301 到裸域名 | 保留路径和查询参数后 301 | 同左 | Redirect Rule 在 Cloudflare 控制台，不在仓库 |
 | `preview.shiyinmp3.com` | Cloudflare 验收入口 | Static Assets | Static Assets | 同一 Worker 代理 | 非对外主入口、`noindex` |
 | `shiyinmp3.musiczh.workers.dev` | 技术恢复入口 | Static Assets | Static Assets | 同一 Worker 代理 | 不作为品牌正式地址 |
-| `sleepno.cn` | 阿里云原站 | nginx 静态目录 | nginx 静态目录 | nginx → ECS API | 保留原有 nginx/IP 访问控制 |
+| `sleepno.cn` | 阿里云旧域、迁移期兼容入口 | nginx 静态目录 | nginx 静态目录 | nginx → ECS API | 过渡期完整服务；保留原有 nginx/IP 访问控制 |
 | `origin.shiyinmp3.com` | Tunnel 专用源站 | 无用户页面 | 无用户页面 | Token 校验后进入 API | 不是公开产品入口；匿名请求必须 403 |
 
 Cloudflare Worker 仅先执行 `/api` 与 `/api/*`；其他路径交给 Static Assets 和 SPA
 fallback。API 代理失败必须返回明确的 502/503/504，不能回退成 `index.html`。
 
-`shiyinmp3.com` 与 `sleepno.cn` 当前是并行产品入口，不做彼此之间的强制跳转；只有
-`www.shiyinmp3.com` 是裸域名的纯别名。未来若调整主域、迁移节奏、canonical 或索引策略，
-必须作为独立产品/SEO 决策处理，不能在普通部署中顺手修改。
+仓库从 v0.8.12 起提供 `legacy_domain_redirect_enabled` 运行时开关，但数据库默认值为关闭，
+且只有 `sleepno.cn` 的 nginx 会消费该值。开启后只对旧域普通页面的 GET/HEAD 返回临时
+307；`/admin/*`、`/api/*`、静态资源、下载和证书验证路径继续兼容。目标固定为
+`https://shiyinmp3.com`，后台不能编辑，永久 301 不属于该开关能力。
+
+`shiyinmp3.com` 与 `sleepno.cn` 当前仍同时提供完整产品能力，不做彼此之间的强制跳转；
+但两者不是永久平级关系：前者是目标主域，后者进入可观测、可回滚的渐进迁移。只有
+`www.shiyinmp3.com` 是裸域名的纯别名。迁移阶段、重定向路径、兼容窗口与退役门禁以
+[主域迁移计划](plans/19-primary-domain-migration.md)为准，任何切换都必须由项目主根据实际
+业务情况明确确认，不能在普通部署中顺手修改。
 
 ## 4. 哪些状态共享，哪些不共享
 
@@ -75,6 +83,7 @@ fallback。API 代理失败必须返回明确的 502/503/504，不能回退成 `
 | 管理员账号 | 同一 `admins` 表和同一套 seed/密码哈希 |
 | 运营统计与失败日志 | 两个域名的事件写进同一批表 |
 | 首页运行时配置 | 同一 `feature_flags` 表；格式/QQ 指引开关全局共享，首页公告与 QQ 旧版客户端下载链接按两个正式域名使用独立键 |
+| 旧域临时跳转开关 | 同一 `feature_flags` 表保存；只有 `sleepno.cn` nginx 消费，默认关闭，目标主域与豁免路径由代码固定 |
 | IP 规则数据 | 同一 `site_access_ip_rules` 与开关数据 |
 | 数据保留与备份 | 同一 365 天清理任务和同一数据库备份链路 |
 
@@ -87,7 +96,7 @@ fallback。API 代理失败必须返回明确的 502/503/504，不能回退成 `
 | UV 口径 | 数据库虽共用，同一浏览器跨两个域名访问通常会形成两个 `visitor_id`，当前不能跨域去重 |
 | 静态资源 | Cloudflare 与阿里云是两次独立构建/部署；主站还因 QQ 安装包开关产生预期 bundle 差异 |
 | DNS、证书和边缘规则 | 分属 Cloudflare 与阿里云/nginx；Cloudflare 控制台规则不随 git 自动恢复 |
-| IP 访问控制效果 | 规则数据共享，但当前仅 `sleepno.cn` 的 nginx 对公开页面/API执行；Cloudflare 主站公开 |
+| IP 访问控制效果 | 规则数据共享，但当前仅 `sleepno.cn` 的 nginx 对公开页面/API执行；目标主域公开 |
 | QQ 旧版客户端下载 | 两个域名从当前 Host 的运行时配置读取外部 HTTPS 链接；阶段一仅 `shiyinmp3.com` 已配置外部网盘，`sleepno.cn` 空配置继续回退阿里云 `/downloads/`，第二阶段必须由项目主再次确认 |
 | 故障与回滚 | 两套静态入口可分别回滚；API/SQLite 故障会同时影响两边的动态能力 |
 
@@ -123,6 +132,8 @@ fallback。API 代理失败必须返回明确的 502/503/504，不能回退成 `
 ### 阿里云链路
 
 - `sleepno.cn` 经 nginx 直接反代本机 API，不经过 Tunnel Token 门禁；
+- 同一 nginx 的 Lua access phase 调内部判定 API；开关开启时普通页面优先返回临时 307，
+  其他请求继续执行既有 IP 访问控制；
 - 公开站点/IP 限制由 nginx 的 `access_by_lua_block` 调内部判定接口执行；
 - `/admin/`、管理 API 和健康检查按现有 nginx 规则豁免公开站点 IP 限制，管理数据仍由
  管理员 Cookie 保护。
@@ -132,12 +143,14 @@ fallback。API 代理失败必须返回明确的 502/503/504，不能回退成 `
 
 ## 7. 发布、回滚与故障边界
 
-### 7.1 默认双域名同步发布制度
+### 7.1 迁移期默认双域名同步发布制度
 
-`shiyinmp3.com` 与 `sleepno.cn` 共同组成一个生产发布单元。除非项目主明确指定单域名
-范围，否则“上线”“发布”“更新到生产”一律表示：在同一个发布窗口内把对应变更部署到
-两个正式域名，并完成两边验收。这里的“同步”是同一发布任务和同一完成门槛，不要求两个
-独立静态平台在同一秒完成部署。
+在[主域迁移计划](plans/19-primary-domain-migration.md)的阶段 1–2，`shiyinmp3.com` 与
+`sleepno.cn` 仍共同组成一个生产发布单元。除非项目主明确指定单域名范围，否则“上线”
+“发布”“更新到生产”一律表示：在同一个发布窗口内把对应变更部署到两个域名，并完成两边
+验收。这里的“同步”是同一发布任务和同一完成门槛，不要求两个独立静态平台在同一秒完成。
+进入阶段 3 后，旧域的验收目标将从“完整产品一致”逐步变为“跳转与兼容正确”，但必须先由
+项目主明确批准并同步修改本文、部署手册与发布清单；Agent 不得自行推断阶段已经切换。
 
 默认产品一致性要求：
 
@@ -172,6 +185,7 @@ Agent 不得从实现便利、故障状态或模糊表述推断单域名授权�
 | Tunnel/源站鉴权 | API → Configure Cloudflare Tunnel → Worker | 禁止先发布指向未受保护源站的 Worker |
 | Worker 路由/代理 | Cloudflare Worker | 先保证源站鉴权与 Tunnel 已连通 |
 | nginx/IP 访问控制 | 仅阿里云入口 | 不应假设 Cloudflare 自动继承 |
+| 旧域临时跳转 | API → sleepno.cn nginx → 双域条件 smoke | 必须先部署 API；代码发布时默认关闭，阶段确认后再由后台开启 |
 
 `.github/workflows/validate-cloudflare.yml` 只负责测试、双前端构建和 Wrangler dry-run，
 不会自动发布 Cloudflare。阿里云前端由 `deploy.yml` 发布；`server/**` 合并后仍必须手动
@@ -193,7 +207,7 @@ dispatch 后端部署。实际命令、Secret 名和恢复步骤以本地 `DEPLO
 
 涉及主站、后台、API、Cookie、埋点、部署或域名时，合并前逐项确认：
 
-- [ ] 本次发布默认包含两个正式域名；如为单域名例外，已有项目主明确授权和书面差异记录。
+- [ ] 当前迁移阶段已经核对；阶段 1–2 默认发布两个域名，任何单域或跳转例外都有项目主明确授权和书面记录。
 - [ ] 两边来自同一提交、版本一致，产品功能和行为一致；构建差异均已登记。
 - [ ] 前端仍使用相对 `/api`，没有把任一公开域名硬编码成唯一 API 地址。
 - [ ] 新的 Host/Origin/referrer allowlist 同时考虑 `shiyinmp3.com` 与 `sleepno.cn`，并说明
@@ -203,7 +217,8 @@ dispatch 后端部署。实际命令、Secret 名和恢复步骤以本地 `DEPLO
 - [ ] 访问控制变化分别说明 Cloudflare 与 nginx 的执行位置，不能只改共享数据库开关。
 - [ ] 静态功能同时构建 Cloudflare 产物和对应阿里云产物；允许差异必须登记为部署变量。
 - [ ] API/schema 只部署到唯一后端、迁移唯一数据库，并先做可恢复备份。
-- [ ] Smoke 至少覆盖两个正式域名的 `/`、`/admin/`、`/api/health`；Cloudflare 额外覆盖
+- [ ] Smoke 至少覆盖两个正式域名的 `/`、`/admin/`、`/api/health`；旧域跳转关闭时 `/`
+      保持既有 200/403，开启时为保留路径和查询参数的 307；Cloudflare 额外覆盖
       API `no-store` 和专用源站匿名 403。
 - [ ] 两边部署与验收都成功后才宣告完成；任一失败均明确报告“发布未完成/临时不一致”。
 - [ ] `www` 跳转继续保持单次 301，并保留路径与查询参数。
@@ -218,6 +233,7 @@ dispatch 后端部署。实际命令、Secret 名和恢复步骤以本地 `DEPLO
 | 历史事件没有 `site_host` | v0.8.8 前流量只能计入整体曲线，不能回溯拆分 | 保持空值，不按域名上线时间或 referrer 猜测回填 |
 | `www` Redirect Rule 和 Tunnel ingress 是控制台状态 | 仅从 git 无法完整重建 | 每次域名/路由变更后导出或人工复核并记录证据 |
 | QQ 外部链接仍处于阶段一 | `shiyinmp3.com` 已使用外部网盘；`sleepno.cn` 仍保留自托管回退，两个域名的下载路径有意不同 | 回填 1h、24h、7d 观测；项目主确认后再配置 `sleepno.cn`，稳定后另行移除自托管资产与 nginx 例外 |
+| 旧域生命周期处于阶段 1 | 仓库已有默认关闭的临时跳转能力；生产 `sleepno.cn` 仍需完整发布和验收，尚不能开启跳转、停止静态站、后台、API 或下载回退 | 按迁移计划建立观测后，由项目主逐阶段确认主动迁移、开启临时跳转、永久跳转与退役 |
 
 这些项目不是再建第二套数据库或共享跨域 Cookie 的理由；修复必须继续遵守前述单后端、
 同源 API 和浏览器本地处理边界。
@@ -231,5 +247,6 @@ dispatch 后端部署。实际命令、Secret 名和恢复步骤以本地 `DEPLO
 | [README.md](../README.md) | 面向开发者的项目总览和最短部署认知 |
 | 本地 `DEPLOY.md` | 可执行命令、服务器路径、Secret 位置、发布与回滚手册 |
 | [ANALYTICS_SPEC.md](ANALYTICS_SPEC.md) | 事件、字段、指标和多域名统计口径 |
+| [主域迁移计划](plans/19-primary-domain-migration.md) | 目标主域、旧域生命周期、阶段门禁、路径兼容与未来待办 |
 | [实施计划](plans/14-cloudflare-backup-site.md) | 本次 Cloudflare 改造的范围、阶段和验收记录 |
 | [复盘 #15](retrospectives/15-cloudflare-api-admin-tunnel-20260828.md) | 上线证据、事故过程和待观察事项 |

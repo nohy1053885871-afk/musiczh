@@ -1,7 +1,7 @@
 # 运营后台首页查询性能优化
 
 > `shiyinmp3.com` 与 `sleepno.cn` 的运营后台共用同一 API 和 SQLite。下列生产示例优先
-> 使用 Cloudflare 正式入口；从阿里云原站执行时只替换 Origin，数据源不变。架构边界见
+> 使用目标主域 `shiyinmp3.com`；从迁移期旧域 `sleepno.cn` 执行时只替换 Origin，数据源不变。架构边界见
 > [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 架构与读取策略

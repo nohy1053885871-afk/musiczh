@@ -1,4 +1,4 @@
-# 拾音公开站点 IP 访问控制。以下内容放在 sleepno.cn 的 server { ... } 内，
+# 拾音旧域临时跳转与公开站点 IP 访问控制。以下内容放在 sleepno.cn 的 server { ... } 内，
 # 并替换现有同名 location；应用前必须备份原配置并执行 nginx -t。
 #
 # 生产宝塔 nginx 未编译 auth_request，但已内置 ngx_http_lua。这里使用
@@ -10,6 +10,8 @@ add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
 # 管理后台、管理 API、健康检查、内部判定和证书验证永久豁免。
 access_by_lua_block {
     local uri = ngx.var.uri
+    local request_uri = ngx.var.request_uri or uri
+    local request_method = ngx.req.get_method()
 
     local function deny_request()
         ngx.status = 403
@@ -28,6 +30,13 @@ access_by_lua_block {
             end
         end
         return ngx.exit(403)
+    end
+
+    local function redirect_to_primary_domain()
+        local separator = request_uri:find("?", 1, true) and "&" or "?"
+        local target = "https://shiyinmp3.com" .. request_uri
+            .. separator .. "migration_source=sleepno"
+        return ngx.redirect(target, 307)
     end
 
     if uri == "/__site_access_check"
@@ -51,6 +60,8 @@ access_by_lua_block {
     local request = "GET /internal/site-access-check HTTP/1.1\r\n"
         .. "Host: 127.0.0.1\r\n"
         .. "X-Real-IP: " .. ngx.var.remote_addr .. "\r\n"
+        .. "X-Original-Method: " .. request_method .. "\r\n"
+        .. "X-Original-URI: " .. request_uri .. "\r\n"
         .. "Connection: close\r\n\r\n"
     local sent = socket:send(request)
     if not sent then
@@ -67,6 +78,9 @@ access_by_lua_block {
     local status = tonumber(status_line:match("^HTTP/%d+%.%d+%s+(%d+)") or "")
     if status == 204 then
         return
+    end
+    if status == 307 then
+        return redirect_to_primary_domain()
     end
     if status == 403 then
         return deny_request()
