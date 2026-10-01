@@ -10,6 +10,7 @@
 
 | # | 主题 | 日期 | 文件 |
 |---|---|---|---|
+| #20 | v0.8.13 CBR 转码时长修复 | 2026-10-01 | [20-v0.8.13-cbr-duration-20261001.md](20-v0.8.13-cbr-duration-20261001.md) |
 | #19 | v0.8.12 旧域临时跳转开关 | 2026-09-17 | [19-v0.8.12-legacy-domain-redirect-20260917.md](19-v0.8.12-legacy-domain-redirect-20260917.md) |
 | #18 | v0.8.11 QQ 旧版客户端外部链接阶段一 | 2026-08-31 | [18-v0.8.11-qq-installer-external-link-20260831.md](18-v0.8.11-qq-installer-external-link-20260831.md) |
 | #17 | v0.8.10 首页双域名公告与生产密钥轮换 | 2026-08-29 | [17-v0.8.10-homepage-announcements-20260829.md](17-v0.8.10-homepage-announcements-20260829.md) |
