@@ -669,7 +669,7 @@ function FileRow({
               boxShadow:
                 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 1px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.1)',
             }}
-            title={`将当前 ${format} 转码为 MP3（~190 kbps VBR，接近无损）`}
+            title={`将当前 ${format} 转码为 MP3（最高 192 kbps CBR，兼容性优先）`}
           >
             转 MP3
           </button>
