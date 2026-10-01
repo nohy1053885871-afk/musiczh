@@ -5,13 +5,13 @@
  *   1. 按 2MB 分块读入源字节，喂给 WASM 流式解码器
  *      （@wasm-audio-decoders/flac / ogg-vorbis，libFLAC / libvorbis 编译版，动态导入）
  *   2. 每块解出的 Float32 PCM 立刻喂给 LAME 编码、随即丢弃——内存峰值与文件大小解耦
- *   3. wasm-media-encoders（动态导入）按 LAME -V 2 编码，平均 ~190 kbps VBR
+ *   3. wasm-media-encoders（动态导入）按 LAME 最高 192 kbps CBR 编码
  *
  * v0.6.x 用 AudioContext.decodeAudioData 一次性整段解码（200MB FLAC → ~1GB PCM 峰值），
  * 本版换流式后峰值降到几十 MB；Hi-Res（24-bit / ≥96kHz）从拦截转为支持，
  * >48kHz 输入显式钉 48kHz 输出、走 LAME 内部重采样。
  *
- * 注意：转码仍是有损的，但 -V 2 接近无损（普通耳几乎 ABX 失败）。
+ * 注意：转码仍是有损的。CBR 用于保证未写 Xing 头的流式 MP3 仍能被播放器准确计算时长。
  */
 
 import {
@@ -22,9 +22,9 @@ import {
 import { sniffAudioFormat } from './sniff'
 import type { AudioChunkConsumer, DecodedAudioChunk } from './m4a'
 
-const VBR_QUALITY = 2 // LAME -V 2，平均 ~190 kbps
+const TARGET_BITRATE_KBPS = 192
 const DECODE_CHUNK_BYTES = 2 * 1024 * 1024 // 压缩域切块；解出的 PCM 瞬时占用 ~10MB 级，即用即弃
-const ENCODER_TAG = 'wasm-lame-v2'
+const ENCODER_TAG = 'wasm-lame-cbr-192'
 // WASM decoder 堆上 _decode() 的输入 buffer 有泄漏（allocateTypedArray setPointer=false 且无手动 free），
 // 堆固定 16MB 不可增长。每处理 DECODER_RESET_BYTES 重建 WASM 实例回收堆。
 const DECODER_RESET_BYTES = 12 * 1024 * 1024
@@ -82,7 +82,7 @@ class Mp3Sink {
       this.encoder.configure({
         channels: this.channels,
         sampleRate: decoded.sampleRate,
-        vbrQuality: VBR_QUALITY,
+        bitrate: TARGET_BITRATE_KBPS,
         // MP3 输出采样率上限 48k：Hi-Res 输入显式钉死，不赌 LAME 缺省启发式选率
         ...(decoded.sampleRate > 48000 ? { outputSampleRate: 48000 as const } : {}),
       })

@@ -3,7 +3,7 @@
 加密音乐文件 → MP3/FLAC/OGG/M4A 本地转换工具，纯前端，文件全部在浏览器内处理，不上传任何服务器。
 
 支持格式：网易云 .ncm，酷狗 .kgm / .vpr（v2，离线密钥），QQ 音乐 .mflac / .mgg / .qmcflac / .qmcogg 等 QMCv2 系列（**仅 v19.51 旧版 Windows** 客户端下载的文件；新版 STag 标记会精准拦截并引导），喜马拉雅 .xm（v2）；以及原始 .flac / .ogg / .m4a（自动转 MP3）。
-解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM VBR -V 2，平均 ~190 kbps；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
+解密后按真实字节保持 MP3/FLAC/OGG/M4A 原格式；FLAC/OGG/M4A 可一键二次转码为 MP3（WASM 流式解码 + LAME WASM 最高 192 kbps CBR；支持 Hi-Res，>48kHz 输出钉 48kHz 重采样）。M4A 只在实际进入转码时动态加载 Mediabunny，并优先用 WebCodecs 解 AAC，失败再加载裁剪版 LibAV.js。解密与转码计算全部跑在 Web Worker（v0.7.0 起），主线程只管 UI。
 
 - 目标主域：https://shiyinmp3.com（Cloudflare 用户端、`/admin/` 与 `/api/` 已上线且全站 `noindex`；QQ 旧版客户端下载已使用按域名配置的外部网盘链接）
 - 日常运营后台：https://shiyinmp3.com/admin（与迁移期旧域共用账号、API 和 SQLite）
@@ -11,7 +11,7 @@
 - Cloudflare 预览站：https://preview.shiyinmp3.com（`noindex`）
 - 旧域应急运营后台：https://sleepno.cn/admin（仅项目主登录，账号在 server `.env` 里 seed）
 - GitHub：https://github.com/nohy1053885871-afk/musiczh
-- 当前开发版本：v0.8.12（运营后台 v0.4.24，API v0.4.17）
+- 当前开发版本：v0.8.13（运营后台 v0.4.24，API v0.4.17）
 - 当前生产版本：Cloudflare/阿里云主站 v0.8.12 · 运营后台 v0.4.24 · API v0.4.17
 - 上线状态：Cloudflare/阿里云用户端 v0.8.12 ✅ · Cloudflare/阿里云运营后台 v0.4.24 ✅ · API v0.4.17 ✅
 
@@ -25,7 +25,7 @@
 - Vite 8
 - JSZip（打包下载）
 - aes-js + browser-id3-writer（NCM 解密 + ID3 标签）
-- wasm-media-encoders（LAME 3.100 的 WebAssembly 编译版，强制转 MP3 时动态加载；v0.6.2 起从 lamejs 换过来，拿到 LAME VBR 模式，输出 -V 2 ~190 kbps）
+- wasm-media-encoders（LAME 3.100 的 WebAssembly 编译版，强制转 MP3 时动态加载；当前使用最高 192 kbps CBR，避免无 Xing 头的 VBR 产物被播放器误算时长）
 - @wasm-audio-decoders/flac + ogg-vorbis（libFLAC / libvorbis 的 WASM 流式解码器，v0.7.0 起取代 AudioContext.decodeAudioData：2MB 分块解码、PCM 即用即弃，内存峰值与文件大小解耦，并解锁 Hi-Res FLAC）
 - Mediabunny（M4A/MP4 解封装 + WebCodecs AAC 解码，用户主动转 M4A 时动态加载）
 - LibAV.js 6.9.8.1 自定义 LGPL WASM fallback（仅 MOV/MP4 demux + AAC decoder + 重采样；本站托管，构建配置见 `vendor/libav/`）
