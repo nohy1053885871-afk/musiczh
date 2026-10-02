@@ -39,6 +39,30 @@ export type QqInstallerLinksResponse = {
   links: QqInstallerLinkConfig[]
 }
 
+export type FooterHoverCardImage = {
+  url: string
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp'
+  byteSize: number
+  width: number
+  height: number
+  sha256: string
+  updatedAt: number
+}
+
+export type FooterHoverCardConfig = {
+  enabled: boolean
+  label: string
+  image: FooterHoverCardImage | null
+  updatedAt: number | null
+}
+
+export type FooterHoverCardInput = {
+  enabled: boolean
+  label: string
+  image?: File
+  removeImage: boolean
+}
+
 export type IpRuleKind = 'allow' | 'deny'
 
 export type SiteAccessIpRule = {
@@ -89,6 +113,9 @@ export type OverviewResp = {
   uv: number
   upload_uv: number
   download_uv: number
+  // 前端可能先于 API 部署；缺失时 Overview 卡片显示部署提示，不能伪装为 0。
+  footer_hover_card_pv?: number
+  footer_hover_card_uv?: number
   upload_files: number
   dismissed_files: number
   confirmed_upload_files: number

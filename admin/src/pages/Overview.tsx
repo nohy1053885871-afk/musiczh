@@ -47,6 +47,10 @@ export function OverviewPage() {
   }, [loadBundle])
 
   const overview = bundle?.overview ?? null
+  const footerHoverStatsUnavailable = bundle !== null && (
+    overview?.footer_hover_card_pv === undefined
+    || overview.footer_hover_card_uv === undefined
+  )
   const siteAccess = bundle?.site_access ?? null
   const siteAccessUnavailable = bundle !== null && bundle.site_access === undefined
   return (
@@ -55,7 +59,7 @@ export function OverviewPage() {
         <div>
           <Title level={4} style={{ margin: 0 }}>数据概览</Title>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            站点 PV / UV、人维度、件维度核心 8 指标
+            站点流量、打赏浮层曝光及人维度、件维度核心指标
           </Text>
         </div>
         <Space wrap size={[8, 8]}>
@@ -103,6 +107,42 @@ export function OverviewPage() {
         </Col>
         <Col xs={12} md={6}><Card><Statistic title="上传过的人 UV" value={overview?.upload_uv ?? 0} /></Card></Col>
         <Col xs={12} md={6}><Card><Statistic title="下载过的人 UV" value={overview?.download_uv ?? 0} /></Card></Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Space size={6} style={{ marginBottom: 8, color: 'rgba(0,0,0,0.45)' }}>
+              <span>打赏浮层曝光</span>
+              <AntTooltip
+                title={(
+                  <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                    PV = 图片浮层每次由关闭变为打开的次数；UV = 按 visitor_id 去重的访客数。
+                    <br />同一浏览器跨 sleepno.cn 与 shiyinmp3.com 访问时通常会被计为两个 UV。
+                  </div>
+                )}
+              >
+                <InfoCircleOutlined style={{ color: '#999' }} />
+              </AntTooltip>
+            </Space>
+            <Row gutter={12}>
+              <Col span={12}>
+                <Statistic
+                  title="PV"
+                  value={footerHoverStatsUnavailable ? '-' : (overview?.footer_hover_card_pv ?? 0)}
+                  valueStyle={{ fontSize: 24 }}
+                />
+              </Col>
+              <Col span={12}>
+                <Statistic
+                  title="UV"
+                  value={footerHoverStatsUnavailable ? '-' : (overview?.footer_hover_card_uv ?? 0)}
+                  valueStyle={{ fontSize: 24 }}
+                />
+              </Col>
+            </Row>
+            {footerHoverStatsUnavailable && (
+              <Text type="warning" style={{ fontSize: 12 }}>API 待更新</Text>
+            )}
+          </Card>
+        </Col>
       </Row>
 
       {/* 第二组：件维度 - 成功口径（上传 → 确认上传 → 转换 → 解密 → 转码） */}

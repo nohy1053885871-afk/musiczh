@@ -89,7 +89,10 @@ jobs:
       - name: TypeScript 构建
         run: npm run build:server
       - name: 运行时配置测试
-        run: npm --prefix server run test:feature-flags
+        run: |
+          npm --prefix server run test:feature-flags
+          npm --prefix server run test:footer-hover
+          npm --prefix server run test:overview
       - name: 源站鉴权测试
         run: npm --prefix server run test:cloudflare-origin
       - name: 访问控制回归

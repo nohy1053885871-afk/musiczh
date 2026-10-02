@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { migrateConfigAssetsLimits } from './lib/configAssetsMigration.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -14,6 +15,7 @@ db.pragma('foreign_keys = ON')
 
 const schemaSQL = readFileSync(resolve(__dirname, 'schema.sql'), 'utf8')
 db.exec(schemaSQL)
+migrateConfigAssetsLimits(db)
 
 function addColumn(sql: string) {
   try {
@@ -32,8 +34,10 @@ addColumn(
 addColumn('ALTER TABLE events ADD COLUMN site_host TEXT')
 addColumn('ALTER TABLE overview_daily_metrics ADD COLUMN pv_sleepno_cn INTEGER NOT NULL DEFAULT 0')
 addColumn('ALTER TABLE overview_daily_metrics ADD COLUMN pv_shiyinmp3_com INTEGER NOT NULL DEFAULT 0')
+addColumn('ALTER TABLE overview_daily_metrics ADD COLUMN footer_hover_card_pv INTEGER NOT NULL DEFAULT 0')
 addColumn('ALTER TABLE overview_daily_visitors ADD COLUMN has_pageview_sleepno_cn INTEGER NOT NULL DEFAULT 0')
 addColumn('ALTER TABLE overview_daily_visitors ADD COLUMN has_pageview_shiyinmp3_com INTEGER NOT NULL DEFAULT 0')
+addColumn('ALTER TABLE overview_daily_visitors ADD COLUMN has_footer_hover_card_view INTEGER NOT NULL DEFAULT 0')
 db.exec(
   'CREATE INDEX IF NOT EXISTS idx_events_file_id ON events(file_id) WHERE file_id IS NOT NULL',
 )

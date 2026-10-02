@@ -14,10 +14,19 @@ export type PublicHomepageAnnouncement = {
   updatedAt: number
 }
 
+export type PublicFooterHoverCard = {
+  label: string
+  imageUrl: string
+  imageWidth: number
+  imageHeight: number
+  updatedAt: number
+}
+
 export type PublicConfig = {
   homepageGuidanceVisible: boolean
   homepageAnnouncement: PublicHomepageAnnouncement | null
   qqInstallerUrl: string | null
+  footerHoverCard: PublicFooterHoverCard | null
 }
 
 type FetchPublicConfigOptions = {
@@ -29,6 +38,7 @@ const DEFAULT_PUBLIC_CONFIG: PublicConfig = {
   homepageGuidanceVisible: DEFAULT_HOMEPAGE_GUIDANCE_VISIBLE,
   homepageAnnouncement: null,
   qqInstallerUrl: null,
+  footerHoverCard: null,
 }
 
 function safeActionUrl(value: string): boolean {
@@ -95,6 +105,36 @@ function parseQqInstallerUrl(value: unknown): string | null {
   }
 }
 
+function parseFooterHoverCard(value: unknown): PublicFooterHoverCard | null {
+  if (typeof value !== 'object' || value === null) return null
+  const item = value as Record<string, unknown>
+  if (
+    typeof item.label !== 'string' ||
+    item.label.trim() !== item.label ||
+    Array.from(item.label).length === 0 ||
+    Array.from(item.label).length > 10 ||
+    typeof item.imageUrl !== 'string' ||
+    !item.imageUrl.startsWith('/api/config/footer-hover-card/image?') ||
+    item.imageUrl.includes('\\') ||
+    typeof item.imageWidth !== 'number' ||
+    !Number.isSafeInteger(item.imageWidth) ||
+    item.imageWidth <= 0 ||
+    typeof item.imageHeight !== 'number' ||
+    !Number.isSafeInteger(item.imageHeight) ||
+    item.imageHeight <= 0 ||
+    typeof item.updatedAt !== 'number' ||
+    !Number.isSafeInteger(item.updatedAt) ||
+    item.updatedAt <= 0
+  ) return null
+  return {
+    label: item.label,
+    imageUrl: item.imageUrl,
+    imageWidth: item.imageWidth,
+    imageHeight: item.imageHeight,
+    updatedAt: item.updatedAt,
+  }
+}
+
 export async function fetchPublicConfig({
   fetchImpl = fetch,
   timeoutMs = CONFIG_TIMEOUT_MS,
@@ -121,6 +161,7 @@ export async function fetchPublicConfig({
         config.homepageAnnouncement,
       ),
       qqInstallerUrl: parseQqInstallerUrl(config.qqInstallerUrl),
+      footerHoverCard: parseFooterHoverCard(config.footerHoverCard),
     }
   } catch {
     return DEFAULT_PUBLIC_CONFIG

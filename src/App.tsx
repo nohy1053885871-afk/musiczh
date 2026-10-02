@@ -45,6 +45,7 @@ import {
 } from './components/support-matrix'
 import { DownloadHelp } from './components/download-help'
 import { HomepageAnnouncement } from './components/homepage-announcement'
+import { FooterHoverCard } from './components/footer-hover-card'
 import {
   detectBrowserCompatibility,
   type BrowserCompatibility,
@@ -2003,7 +2004,15 @@ function App() {
           className="mt-12 sm:mt-16 text-center text-[11px]"
           style={{ color: '#A0988E' }}
         >
-          仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
+          {publicConfig?.footerHoverCard && (
+            <FooterHoverCard
+              key={publicConfig.footerHoverCard.updatedAt}
+              config={publicConfig.footerHoverCard}
+            />
+          )}
+          <div>
+            仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
+          </div>
         </footer>
       </div>
 

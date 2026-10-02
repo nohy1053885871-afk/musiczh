@@ -44,6 +44,7 @@ test('公开配置解析当前域名公告和可选行动点', async () => {
       updatedAt: 123,
     },
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
 })
 
@@ -55,6 +56,7 @@ test('旧 API 缺少公告字段时保持现有指引并隐藏公告', async () 
     homepageGuidanceVisible: false,
     homepageAnnouncement: null,
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
 })
 
@@ -83,6 +85,57 @@ test('公开配置只接受完整 HTTPS QQ 安装包跳转链接', async () => {
     })
     assert.equal(result.qqInstallerUrl, null)
   }
+})
+
+test('公开配置解析完整的底部悬浮图配置', async () => {
+  const footerHoverCard = {
+    label: '关注拾音',
+    imageUrl: '/api/config/footer-hover-card/image?v=123',
+    imageWidth: 800,
+    imageHeight: 1000,
+    updatedAt: 123,
+  }
+  const result = await fetchPublicConfig({
+    fetchImpl: async () => jsonResponse({
+      homepageGuidanceVisible: true,
+      footerHoverCard,
+    }),
+  })
+  assert.deepEqual(result.footerHoverCard, footerHoverCard)
+})
+
+test('公开配置丢弃不完整或危险的底部悬浮图配置', async () => {
+  for (const footerHoverCard of [
+    { label: '一二三四五六七八九十一', imageUrl: '/api/config/footer-hover-card/image?v=1', imageWidth: 1, imageHeight: 1, updatedAt: 1 },
+    { label: '关注拾音', imageUrl: '//evil.example/image.png', imageWidth: 1, imageHeight: 1, updatedAt: 1 },
+    { label: '关注拾音', imageUrl: '/api/config/footer-hover-card/image?\\evil', imageWidth: 1, imageHeight: 1, updatedAt: 1 },
+    { label: '关注拾音', imageUrl: '/api/config/footer-hover-card/image?v=1', imageWidth: 0, imageHeight: 1, updatedAt: 1 },
+  ]) {
+    const result = await fetchPublicConfig({
+      fetchImpl: async () => jsonResponse({
+        homepageGuidanceVisible: true,
+        footerHoverCard,
+      }),
+    })
+    assert.equal(result.footerHoverCard, null)
+  }
+})
+
+test('公开配置接受 10 字文案和任意正整数图片宽高', async () => {
+  const footerHoverCard = {
+    label: '一二三四五六七八九十',
+    imageUrl: '/api/config/footer-hover-card/image?v=999',
+    imageWidth: 12000,
+    imageHeight: 48000,
+    updatedAt: 999,
+  }
+  const result = await fetchPublicConfig({
+    fetchImpl: async () => jsonResponse({
+      homepageGuidanceVisible: true,
+      footerHoverCard,
+    }),
+  })
+  assert.deepEqual(result.footerHoverCard, footerHoverCard)
 })
 
 test('公开配置丢弃危险行动点但保留合法纯文本公告', async () => {
@@ -128,6 +181,7 @@ test('公开配置 404 时回退为显示', async () => {
     homepageGuidanceVisible: true,
     homepageAnnouncement: null,
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
 })
 

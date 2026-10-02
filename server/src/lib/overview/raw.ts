@@ -5,6 +5,7 @@ import type { BundleRequest, OverviewBundle, OverviewMetric, OverviewStats } fro
 
 type MainRow = {
   pv: number; uv: number; upload_uv: number; download_uv: number; convert_uv: number
+  footer_hover_card_pv: number; footer_hover_card_uv: number
   upload_files: number; upload_files_legacy: number; upload_reject: number; dismissed_files: number
   decrypt_done: number; decrypt_fail: number; transcode_done: number; transcode_fail: number
   raw_transcode_done: number; raw_transcode_fail: number
@@ -38,6 +39,8 @@ function buildMainSql(withMaxId: boolean): string {
     COUNT(DISTINCT CASE WHEN event = 'pageview' THEN visitor_id END) AS uv,
     COUNT(DISTINCT CASE WHEN event IN (${UPLOAD_EVENTS}) THEN visitor_id END) AS upload_uv,
     COUNT(DISTINCT CASE WHEN event IN (${DOWNLOAD_EVENTS}) THEN visitor_id END) AS download_uv,
+    SUM(event = 'footer_hover_card_view') AS footer_hover_card_pv,
+    COUNT(DISTINCT CASE WHEN event = 'footer_hover_card_view' THEN visitor_id END) AS footer_hover_card_uv,
     COUNT(DISTINCT CASE WHEN event = 'decrypt_done'
       OR (event = 'transcode_done' AND json_extract(props,'$.source') IS NULL)
       THEN visitor_id END) AS convert_uv,
@@ -138,6 +141,8 @@ function makeOverview(request: BundleRequest, main: MainRow, states: StateRow): 
   return {
     range: request.range, from: request.from, to: request.to,
     pv: n(main.pv), uv: n(main.uv), upload_uv: n(main.upload_uv), download_uv: n(main.download_uv),
+    footer_hover_card_pv: n(main.footer_hover_card_pv),
+    footer_hover_card_uv: n(main.footer_hover_card_uv),
     upload_files: n(main.upload_files), dismissed_files: n(main.dismissed_files),
     confirmed_upload_files: n(main.upload_files) - n(main.dismissed_files),
     upload_files_legacy: n(main.upload_files_legacy),
