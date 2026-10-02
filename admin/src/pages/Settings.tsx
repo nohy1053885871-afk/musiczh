@@ -15,6 +15,7 @@ import { SiteAccessCard } from '../components/settings/SiteAccessCard'
 import { HomepageAnnouncementsCard } from '../components/settings/HomepageAnnouncementsCard'
 import { QqInstallerLinksCard } from '../components/settings/QqInstallerLinksCard'
 import { LegacyDomainRedirectCard } from '../components/settings/LegacyDomainRedirectCard'
+import { FooterHoverCard } from '../components/settings/FooterHoverCard'
 
 const { Title, Text } = Typography
 
@@ -97,6 +98,8 @@ export function SettingsPage() {
       <LegacyDomainRedirectCard />
 
       <HomepageAnnouncementsCard />
+
+      <FooterHoverCard />
 
       <QqInstallerLinksCard />
 

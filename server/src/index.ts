@@ -14,6 +14,7 @@ import adminUploads from './routes/adminUploads.js'
 import adminDownloads from './routes/adminDownloads.js'
 import adminOverview from './routes/adminOverview.js'
 import adminFeatureFlags from './routes/adminFeatureFlags.js'
+import adminFooterHoverCard from './routes/adminFooterHoverCard.js'
 import publicConfig from './routes/publicConfig.js'
 import adminSiteAccess from './routes/adminSiteAccess.js'
 import internalSiteAccess from './routes/internalSiteAccess.js'
@@ -76,6 +77,7 @@ app.route('/api/admin/visitors', adminVisitors)
 app.route('/api/admin/uploads', adminUploads)
 app.route('/api/admin/downloads', adminDownloads)
 app.route('/api/admin/feature-flags', adminFeatureFlags)
+app.route('/api/admin/footer-hover-card', adminFooterHoverCard)
 app.route('/api/admin/site-access', adminSiteAccess)
 
 // 启动时执行一次保留策略 + 安排每日 cron

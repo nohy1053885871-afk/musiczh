@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS overview_daily_metrics (
   pv                        INTEGER NOT NULL DEFAULT 0,
   pv_sleepno_cn             INTEGER NOT NULL DEFAULT 0,
   pv_shiyinmp3_com          INTEGER NOT NULL DEFAULT 0,
+  footer_hover_card_pv      INTEGER NOT NULL DEFAULT 0,
   upload_files              INTEGER NOT NULL DEFAULT 0,
   upload_files_legacy       INTEGER NOT NULL DEFAULT 0,
   upload_reject             INTEGER NOT NULL DEFAULT 0,
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS overview_daily_visitors (
   has_pageview INTEGER NOT NULL DEFAULT 0,
   has_pageview_sleepno_cn    INTEGER NOT NULL DEFAULT 0,
   has_pageview_shiyinmp3_com INTEGER NOT NULL DEFAULT 0,
+  has_footer_hover_card_view INTEGER NOT NULL DEFAULT 0,
   has_upload   INTEGER NOT NULL DEFAULT 0,
   has_convert  INTEGER NOT NULL DEFAULT 0,
   has_download INTEGER NOT NULL DEFAULT 0,
@@ -137,6 +139,18 @@ CREATE TABLE IF NOT EXISTS feature_flags (
   value       TEXT NOT NULL,
   updated_at  INTEGER NOT NULL
 );
+-- 运营配置上传的静态图片。当前仅保存 footer 悬浮图，key 保留扩展能力；
+-- 单图上限由 API 强制为 20 MiB；宽高只记录、不设上限；替换使用 upsert，不积累历史二进制。
+CREATE TABLE IF NOT EXISTS config_assets (
+  key         TEXT PRIMARY KEY,
+  data        BLOB NOT NULL,
+  mime_type   TEXT NOT NULL CHECK (mime_type IN ('image/jpeg', 'image/png', 'image/webp')),
+  byte_size   INTEGER NOT NULL CHECK (byte_size > 0 AND byte_size <= 20971520),
+  width       INTEGER NOT NULL CHECK (width > 0),
+  height      INTEGER NOT NULL CHECK (height > 0),
+  sha256      TEXT NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
 INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
 VALUES (
   'homepage_guidance_visible',
@@ -183,6 +197,12 @@ INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
 VALUES (
   'qq_installer_link_shiyinmp3_com',
   '',
+  CAST(strftime('%s', 'now') AS INTEGER) * 1000
+);
+INSERT OR IGNORE INTO feature_flags (key, value, updated_at)
+VALUES (
+  'footer_hover_card',
+  '{"enabled":false,"label":""}',
   CAST(strftime('%s', 'now') AS INTEGER) * 1000
 );
 -- 公开站点 IP 访问规则。同一规范化地址只能属于白名单或黑名单之一。

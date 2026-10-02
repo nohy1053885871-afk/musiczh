@@ -51,6 +51,47 @@ test('API 保留路径、查询、方法、请求体和 Cookie', async () => {
   assert.equal(response.headers.get('cache-control'), 'no-store')
 })
 
+test('API 原样透传带图片的 multipart 配置请求', async () => {
+  const form = new FormData()
+  form.set('enabled', 'true')
+  form.set('label', '关注拾音')
+  form.set('removeImage', 'false')
+  form.set(
+    'image',
+    new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'card.png', {
+      type: 'image/png',
+    }),
+  )
+  let proxiedForm: FormData | null = null
+  await handleRequest(
+    new Request('https://shiyinmp3.com/api/admin/footer-hover-card', {
+      method: 'PUT',
+      headers: {
+        'CF-Connecting-IP': '198.51.100.12',
+        Cookie: 'admin_token=local',
+      },
+      body: form,
+    }),
+    createEnv(),
+    async (request) => {
+      proxiedForm = await request.formData()
+      return Response.json({ ok: true })
+    },
+  )
+
+  assert.ok(proxiedForm)
+  assert.equal(proxiedForm.get('enabled'), 'true')
+  assert.equal(proxiedForm.get('label'), '关注拾音')
+  const image = proxiedForm.get('image')
+  assert.ok(image instanceof File)
+  assert.equal(image.name, 'card.png')
+  assert.equal(image.type, 'image/png')
+  assert.deepEqual(
+    [...new Uint8Array(await image.arrayBuffer())],
+    [0x89, 0x50, 0x4e, 0x47],
+  )
+})
+
 test('Worker 清除浏览器伪造的源站与转发头', async () => {
   const requests: Request[] = []
   const incoming = new Request('https://shiyinmp3.com/api/config', {

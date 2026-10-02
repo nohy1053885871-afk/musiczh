@@ -3,6 +3,7 @@ import test from 'node:test'
 import Database from 'better-sqlite3'
 import { Hono } from 'hono'
 import { createFeatureFlagStore } from '../lib/featureFlags.js'
+import { createFooterHoverCardStore } from '../lib/footerHoverCard.js'
 import { signAdminToken } from '../middleware/auth.js'
 import { createAdminFeatureFlagsRouter } from './adminFeatureFlags.js'
 import { createPublicConfigRouter } from './publicConfig.js'
@@ -16,11 +17,22 @@ function createTestApp() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
       updated_at INTEGER NOT NULL
-    )
+    );
+    CREATE TABLE config_assets (
+      key TEXT PRIMARY KEY,
+      data BLOB NOT NULL,
+      mime_type TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      sha256 TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `)
   const store = createFeatureFlagStore(database)
+  const footerStore = createFooterHoverCardStore(database)
   const app = new Hono()
-  app.route('/api/config', createPublicConfigRouter(store))
+  app.route('/api/config', createPublicConfigRouter(store, footerStore))
   app.route(
     '/api/admin/feature-flags',
     createAdminFeatureFlagsRouter(store),
@@ -43,6 +55,7 @@ test('公开配置只返回允许公开的字段并禁止缓存', async () => {
     homepageGuidanceVisible: true,
     homepageAnnouncement: null,
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
   database.close()
 })
@@ -104,6 +117,7 @@ test('管理员可写入并读回首页指引状态', async () => {
     homepageGuidanceVisible: false,
     homepageAnnouncement: null,
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
   database.close()
 })
@@ -199,6 +213,7 @@ test('管理员可分别保存两个域名公告，公开接口只返回当前 H
       updatedAt: savedSleepno.updatedAt,
     },
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
 
   const cloudflarePublic = await app.request('/api/config', {
@@ -208,6 +223,7 @@ test('管理员可分别保存两个域名公告，公开接口只返回当前 H
     homepageGuidanceVisible: true,
     homepageAnnouncement: null,
     qqInstallerUrl: null,
+    footerHoverCard: null,
   })
   database.close()
 })

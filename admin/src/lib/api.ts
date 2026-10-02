@@ -5,6 +5,8 @@ import type {
   CreateIpRuleInput,
   DevicesResp,
   FormatDistributionResp,
+  FooterHoverCardConfig,
+  FooterHoverCardInput,
   FunnelResp,
   HomepageGuidanceFlag,
   LegacyDomainRedirectFlag,
@@ -60,13 +62,15 @@ export class ApiError extends Error {
 const BASE = '/api'
 
 async function request<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers)
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+    headers,
   })
   if (res.status === 401) throw new UnauthorizedError()
   if (!res.ok) {
@@ -130,6 +134,19 @@ export const api = {
     `/admin/feature-flags/qq-installer-links/${encodeURIComponent(siteHost)}`,
     { method: 'PUT', body: JSON.stringify(input) },
   ),
+  footerHoverCard: () =>
+    request<FooterHoverCardConfig>('/admin/footer-hover-card'),
+  updateFooterHoverCard: (input: FooterHoverCardInput) => {
+    const form = new FormData()
+    form.set('enabled', String(input.enabled))
+    form.set('label', input.label)
+    form.set('removeImage', String(input.removeImage))
+    if (input.image) form.set('image', input.image, input.image.name)
+    return request<FooterHoverCardConfig>('/admin/footer-hover-card', {
+      method: 'PUT',
+      body: form,
+    })
+  },
   siteAccess: () => request<SiteAccessSnapshot>('/admin/site-access'),
   ensureCurrentIpRule: () =>
     request<SiteAccessSnapshot>('/admin/site-access/ip-rules/current', { method: 'POST' }),

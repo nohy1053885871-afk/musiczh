@@ -14,6 +14,8 @@ export type OverviewStats = {
   uv: number
   upload_uv: number
   download_uv: number
+  footer_hover_card_pv: number
+  footer_hover_card_uv: number
   upload_files: number
   dismissed_files: number
   confirmed_upload_files: number
