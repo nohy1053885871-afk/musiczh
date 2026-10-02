@@ -48,6 +48,7 @@ function rawBoundaryMetrics(
        SUM(event = 'pageview') AS pv,
        SUM(event = 'pageview' AND site_host = 'sleepno.cn') AS pv_sleepno_cn,
        SUM(event = 'pageview' AND site_host = 'shiyinmp3.com') AS pv_shiyinmp3_com,
+       SUM(event = 'footer_hover_card_view') AS footer_hover_card_pv,
        SUM(event IN ('upload_attempt','upload_reject')) AS upload_files,
        COALESCE(SUM(CASE WHEN event IN ('upload_drop','upload_pick')
          THEN CAST(json_extract(props,'$.count') AS INTEGER) ELSE 0 END), 0) AS upload_files_legacy,
@@ -81,6 +82,7 @@ function rawBoundaryVisitors(
          MAX(event = 'pageview') AS has_pageview,
          MAX(event = 'pageview' AND site_host = 'sleepno.cn') AS has_pageview_sleepno_cn,
          MAX(event = 'pageview' AND site_host = 'shiyinmp3.com') AS has_pageview_shiyinmp3_com,
+         MAX(event = 'footer_hover_card_view') AS has_footer_hover_card_view,
          MAX(event IN ('upload_drop','upload_pick','upload_attempt','upload_reject')) AS has_upload,
          MAX(event = 'decrypt_done' OR
              (event = 'transcode_done' AND json_extract(props,'$.source') IS NULL)) AS has_convert,
@@ -111,6 +113,7 @@ function mergeMetrics(target: DailyMetrics, source: DailyMetrics): void {
 function emptyMetrics(day: number): DailyMetrics {
   return {
     day, pv: 0, pv_sleepno_cn: 0, pv_shiyinmp3_com: 0,
+    footer_hover_card_pv: 0,
     upload_files: 0, upload_files_legacy: 0, upload_reject: 0,
     dismissed_files: 0, decrypt_done: 0, decrypt_fail: 0, transcode_done: 0,
     transcode_fail: 0, raw_transcode_done: 0, raw_transcode_fail: 0,
@@ -127,6 +130,10 @@ function mergeVisitor(target: DailyVisitor, source: DailyVisitor): void {
   target.has_pageview_shiyinmp3_com = Math.max(
     target.has_pageview_shiyinmp3_com,
     source.has_pageview_shiyinmp3_com,
+  )
+  target.has_footer_hover_card_view = Math.max(
+    target.has_footer_hover_card_view,
+    source.has_footer_hover_card_view,
   )
   target.has_upload = Math.max(target.has_upload, source.has_upload)
   target.has_convert = Math.max(target.has_convert, source.has_convert)
@@ -146,17 +153,20 @@ function statsFrom(
   visitors: Map<string, DailyVisitor>,
   states: Record<string, number>,
 ): OverviewStats {
-  let uv = 0; let uploadUv = 0; let downloadUv = 0
+  let uv = 0; let uploadUv = 0; let downloadUv = 0; let footerHoverCardUv = 0
   for (const visitor of visitors.values()) {
     uv += visitor.has_pageview
     uploadUv += visitor.has_upload
     downloadUv += visitor.has_download
+    footerHoverCardUv += visitor.has_footer_hover_card_view
   }
   const decryptTotal = totals.decrypt_done + totals.decrypt_fail
   const transcodeTotal = totals.transcode_done + totals.transcode_fail
   return {
     range: request.range, from: request.from, to: request.to,
     pv: totals.pv, uv, upload_uv: uploadUv, download_uv: downloadUv,
+    footer_hover_card_pv: totals.footer_hover_card_pv,
+    footer_hover_card_uv: footerHoverCardUv,
     upload_files: totals.upload_files, dismissed_files: totals.dismissed_files,
     confirmed_upload_files: totals.upload_files - totals.dismissed_files,
     upload_files_legacy: totals.upload_files_legacy,

@@ -100,7 +100,7 @@ v0.8.12 起，旧域临时 307 会给目标 URL 追加 `migration_source=sleepno
 | `progress_bucket` | number | **v0.4.1 起新增** · `transcode_progress` 心跳的进度桶，仅取 `0.1 / 0.3 / 0.5 / 0.7 / 0.9` 五值，桶内去重 |
 | `last_progress` | number | **v0.4.1 起新增** · `*_abandon` 中止事件的最近一次 progress 值（0-1），辅助定位中止发生在哪一段 |
 | `stage` | string | **v0.4.1 起新增** · `*_abandon` 中止事件的阶段，`decrypt` / `transcode` |
-| `trigger` | string | **v0.6.0 起新增** · QQ 引导弹窗触发来源：`entry` / `failure` / `auto` / `matrix`。`qq_guide_view` / `qq_guide_dismiss` / `qq_download_click` 都带，用来评估各入口的转化效率 |
+| `trigger` | string | **v0.6.0 起新增** · 交互触发来源。QQ 引导使用 `entry` / `failure` / `auto` / `matrix`；v0.8.14 底部悬浮图展开使用 `hover` / `focus` / `click` |
 | `sha256` | string | **v0.6.0 起新增** · 自托管 QQ 安装包文件的 SHA-256（小写 hex，长度 64），仅走同源 ZIP 的 `qq_download_click` 携带。**v0.8.11 起**外部网盘跳转与不可用点击不携带，避免把本地安装包哈希错误归因给外部文件 |
 | `encoder` | string | **v0.6.2 起新增** · 转码编码器标识，命名约定 `<encoder>-<mode>-<param>`。当前枚举值：`wasm-lame-cbr-192`（默认，LAME 目标 192 kbps CBR；低于 32kHz 的输入由 LAME 限制到 MPEG 对应的合法固定码率）。历史值：`wasm-lame-v2`（LAME VBR -V 2，平均 ~190 kbps）；规划值：`wasm-lame-v0` / `wasm-lame-cbr-320`。`transcode_start` / `transcode_done` 携带 |
 | `output_size` | number | **v0.6.2 起新增** · 转码产物 MP3 的字节数；配合 file_size（源大小）和 sourceDuration 可推算平均码率分布。仅 `transcode_done` 携带 |
@@ -177,6 +177,8 @@ v0.8.12 起，旧域临时 307 会给目标 URL 追加 `migration_source=sleepno
 | `homepage_announcement_view` | **v0.8.10** 主站 - 首页公告曝光 | [src/components/homepage-announcement.tsx](../src/components/homepage-announcement.tsx) 公告容器 | — | 仅当前域名有启用公告、且当前浏览器未关闭这一版本时挂载 |
 | `homepage_announcement_action_view` / `homepage_announcement_action_click` | **v0.8.10** 主站 - 首页公告行动点 | [src/components/homepage-announcement.tsx](../src/components/homepage-announcement.tsx) 可选 CTA | — | 仅公告配置包含行动点时挂载；链接地址不进入埋点 props |
 | `homepage_announcement_close_view` / `homepage_announcement_close_click` | **v0.8.10** 主站 - 首页公告关闭按钮 | [src/components/homepage-announcement.tsx](../src/components/homepage-announcement.tsx) 关闭按钮 | — | 关闭后按当前域名和 `updatedAt` 在浏览器本地记录；公告更新后重新显示 |
+| `footer_hover_entry_view` / `footer_hover_entry_click` | **v0.8.14** 主站 - 页脚悬浮图入口 | [src/components/footer-hover-card.tsx](../src/components/footer-hover-card.tsx) 入口按钮 | — | 仅后台启用且配置完整时挂载；入口文案和图片内容不进入埋点 props |
+| `footer_hover_card_view` | **v0.8.14** 主站 - 打赏图片浮层曝光 | [src/components/footer-hover-card.tsx](../src/components/footer-hover-card.tsx) 桌面浮层 / 移动底部弹层 | `trigger: 'hover' \| 'focus' \| 'click'` | 桌面支持悬浮、键盘聚焦和点击，触屏设备仅点击；每次由关闭变为展开时计 1 PV，后台按 `visitor_id` 去重计算 UV |
 | `support_matrix_entry_view` / `support_matrix_entry_click` | **v0.6.0** 主站 - 拖拽区下方「查看全部格式」入口 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixEntry` | — | **v0.8.5 起**受 `homepage_guidance_visible` 控制；关闭时组件不挂载，因此不产生入口曝光/点击 |
 | `support_matrix_view` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 曝光 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` mount | — | |
 | `support_matrix_dismiss` | **v0.6.0** 主站 - 平台/格式总览弹窗 - 关闭 | [src/components/support-matrix.tsx](../src/components/support-matrix.tsx) `SupportMatrixModal` close | — | |
