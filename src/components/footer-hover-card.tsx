@@ -140,15 +140,9 @@ export function FooterHoverCard({
 
   return (
     <div
-      className="relative mb-2 flex justify-center"
-      onMouseEnter={() => {
-        if (!touchPresentation) show('hover')
-      }}
+      className="relative mb-2 inline-flex justify-center"
       onMouseLeave={() => {
         if (!touchPresentation) hide(120)
-      }}
-      onFocus={() => {
-        if (!touchPresentation) show('focus')
       }}
       onBlur={(event) => {
         if (
@@ -164,6 +158,12 @@ export function FooterHoverCard({
         aria-controls={panelId}
         className="rounded px-2 py-1 text-[12px] font-medium underline decoration-dotted underline-offset-[3px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D94B20]/35"
         style={{ color: open ? '#9E3518' : '#766E66' }}
+        onMouseEnter={() => {
+          if (!touchPresentation) show('hover')
+        }}
+        onFocus={() => {
+          if (!touchPresentation) show('focus')
+        }}
         onClick={() => {
           analytics.track('footer_hover_entry_click', {
             trigger: 'click',
