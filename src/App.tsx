@@ -46,6 +46,7 @@ import {
 import { DownloadHelp } from './components/download-help'
 import { HomepageAnnouncement } from './components/homepage-announcement'
 import { FooterHoverCard } from './components/footer-hover-card'
+import { IcpFilingLink } from './components/icp-filing-link'
 import {
   detectBrowserCompatibility,
   type BrowserCompatibility,
@@ -2012,6 +2013,9 @@ function App() {
           )}
           <div>
             仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
+          </div>
+          <div className="mt-1.5">
+            <IcpFilingLink />
           </div>
         </footer>
       </div>
