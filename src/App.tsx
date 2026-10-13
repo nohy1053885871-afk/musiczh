@@ -1647,7 +1647,7 @@ function App() {
 
   return (
     <div
-      className="min-h-screen w-full"
+      className="flex min-h-screen w-full flex-col"
       style={{
         background:
           'radial-gradient(ellipse 140% 100% at 50% -10%, #F0EEE9 0%, #ECEAE6 40%, #E4E2DC 100%)',
@@ -1718,7 +1718,7 @@ function App() {
         </div>
       </div>
 
-      <div className="relative max-w-5xl mx-auto px-5 sm:px-8 pt-8 pb-16">
+      <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 pb-16 pt-8 sm:px-8">
         {publicConfig?.homepageAnnouncement && (
           <HomepageAnnouncement
             key={`${publicConfig.homepageAnnouncement.siteHost}:${publicConfig.homepageAnnouncement.updatedAt}`}
@@ -2002,7 +2002,7 @@ function App() {
         )}
 
         <footer
-          className="mt-12 sm:mt-16 text-center text-[11px]"
+          className="mt-auto flex flex-col items-center gap-2 pt-12 text-center text-[11px] sm:pt-16"
           style={{ color: '#A0988E' }}
         >
           {publicConfig?.footerHoverCard && (
@@ -2011,10 +2011,13 @@ function App() {
               config={publicConfig.footerHoverCard}
             />
           )}
-          <div>
-            仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
-          </div>
-          <div className="mt-1.5">
+          <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:gap-2">
+            <span>
+              仅用于处理你合法持有的音乐文件 · 本网站不上传、不存储任何文件
+            </span>
+            <span className="hidden sm:inline" aria-hidden>
+              ·
+            </span>
             <IcpFilingLink />
           </div>
         </footer>
