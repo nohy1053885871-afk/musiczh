@@ -140,7 +140,7 @@ export function FooterHoverCard({
 
   return (
     <div
-      className="relative mb-2 inline-flex justify-center"
+      className="relative inline-flex justify-center"
       onMouseLeave={() => {
         if (!touchPresentation) hide(120)
       }}
