@@ -1603,6 +1603,8 @@ function App() {
       notify('ZIP 已开始下载')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'ZIP 打包失败'
+      const isMemoryExhausted =
+        /(?:array\s*buffer|arraybuffer).*(?:alloc|memory)|out of memory|invalid typed array length/i.test(msg)
       analytics.trackFailure('download', {
         error_code: 'ZIP_FAILED',
         error_msg: msg,
@@ -1610,7 +1612,11 @@ function App() {
         file_size: doneFiles.reduce((sum, f) => sum + f.result!.audio.size, 0),
         download_kind: 'zip',
       })
-      setTextWarning(msg)
+      setTextWarning(
+        isMemoryExhausted
+          ? 'ZIP 打包失败：浏览器可用内存不足。请改用“下载全部”逐个下载；如需 ZIP，请清空列表后减少每批音频文件的数量或总大小，再分批打包。'
+          : 'ZIP 打包失败。请改用“下载全部”逐个下载，或清空列表后减少每批音频文件的数量或总大小再试。',
+      )
     } finally {
       setIsZipping(false)
       setZipProgress(0)
