@@ -10,6 +10,7 @@
 
 | # | 主题 | 日期 | 文件 |
 |---|---|---|---|
+| #25 | v0.8.18 ZIP 内存错误提示与分批下载引导 | 2026-10-17 | [25-v0.8.18-zip-memory-guidance-20261017.md](25-v0.8.18-zip-memory-guidance-20261017.md) |
 | #24 | v0.8.17 空态页脚吸底与备案样式 | 2026-10-14 | [24-v0.8.17-sticky-footer-layout-20261014.md](24-v0.8.17-sticky-footer-layout-20261014.md) |
 | #23 | v0.8.16 双域备案页脚 | 2026-10-13 | [23-v0.8.16-icp-filing-footer-20261013.md](23-v0.8.16-icp-filing-footer-20261013.md) |
 | #22 | v0.8.15 页脚悬浮热区收缩 | 2026-10-02 | [22-v0.8.15-footer-hover-hitbox-20261002.md](22-v0.8.15-footer-hover-hitbox-20261002.md) |
